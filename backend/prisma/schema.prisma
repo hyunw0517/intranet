@@ -1,0 +1,191 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 권한 구분 (DB에는 PostgreSQL enum 타입으로 생성됨)
+enum Role {
+  USER
+  ADMIN
+}
+
+model Users {
+  id        Int      @id @default(autoincrement())
+  email     String   //@unique
+  password  String   // 해시된 값만 저장
+  name      String
+  role      Role     @default(USER)
+  isActive  Boolean  @default(true) @map("is_active") // 활성화 여부(0: 비활성화, 1: 활성화)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deleted   Boolean  @default(false) // soft delete
+  deletedAt DateTime? @map("deleted_at") // soft delete
+  deletedId Int?     @map("deleted_id") // 삭제자 id
+
+  @@map("users_model") // 실제 테이블 이름
+}
+
+// =====================================================================
+// 선언 방식 참고 (전부 주석이라 마이그레이션에 영향 없음)
+// =====================================================================
+//
+// ---------- 1. 스칼라 타입 ----------
+// String    문자열 (PostgreSQL: text)
+// Int       정수 (integer)
+// BigInt    큰 정수 (bigint)
+// Float     실수 (double precision)
+// Decimal   정확한 소수 - 금액 등 (decimal)
+// Boolean   참/거짓 (boolean)
+// DateTime  날짜+시간 (timestamp)
+// Json      JSON 데이터 (jsonb)
+// Bytes     바이너리 (bytea)
+//
+// ---------- 2. 타입 수식어 ----------
+// name   String     필수 (NOT NULL)
+// phone  String?    선택 (NULL 허용)
+// tags   String[]   배열 (PostgreSQL 배열 타입)
+//
+// ---------- 3. 필드 속성 (@ 하나) ----------
+// id    Int     @id @default(autoincrement())   기본 키, 자동 증가
+// id    String  @id @default(uuid())            기본 키, UUID 문자열
+// id    String  @id @default(cuid())            기본 키, CUID 문자열
+// email String  @unique                         중복 불가
+// count Int     @default(0)                     기본값
+// at    DateTime @default(now())                생성 시각 자동 입력
+// at    DateTime @updatedAt                     수정 시각 자동 갱신
+// isActive Boolean @map("is_active")            DB 컬럼명 지정
+// title   String @db.VarChar(100)               DB 타입 직접 지정 (길이 제한)
+// content String @db.Text
+// price   Decimal @db.Decimal(10, 2)
+//
+// ---------- 4. 모델 속성 (@@ 두 개, 모델 맨 아래에 작성) ----------
+// @@map("users_model")              테이블명 지정
+// @@id([userId, postId])            복합 기본 키
+// @@unique([email, deleted])        복합 unique (조합이 중복 불가)
+// @@index([createdAt])              인덱스
+// @@index([name, email])            복합 인덱스
+//
+// ---------- 5. 관계: 1:N (사용자 1명 - 게시글 여러 개) ----------
+// FK 컬럼(authorId)은 N쪽 모델에 둔다.
+// 관계 필드(author, posts)는 DB 컬럼이 아니라 코드에서 조회할 때만 쓰인다.
+//
+// model Users {
+//   ...
+//   posts Post[]                    // 1쪽: 배열로 선언
+// }
+//
+// model Post {
+//   id       Int    @id @default(autoincrement())
+//   title    String
+//   authorId Int    @map("author_id")                              // 실제 FK 컬럼
+//   author   Users  @relation(fields: [authorId], references: [id]) // 관계 필드
+//
+//   @@index([authorId])             // PostgreSQL은 FK에 인덱스를 자동 생성하지 않음
+//   @@map("posts")
+// }
+//
+// ---------- 6. 관계: 1:1 (사용자 1명 - 프로필 1개) ----------
+// 1:N과 같지만 FK에 @unique를 붙이고, 반대쪽은 배열 대신 ?로 선언한다.
+//
+// model Users {
+//   ...
+//   profile Profile?
+// }
+//
+// model Profile {
+//   id     Int    @id @default(autoincrement())
+//   bio    String?
+//   userId Int    @unique @map("user_id")
+//   user   Users  @relation(fields: [userId], references: [id])
+// }
+//
+// ---------- 7. 관계: N:M 암시적 (중간 테이블을 Prisma가 자동 생성) ----------
+// 양쪽 모두 배열로만 선언. 중간 테이블(_PostToTag)이 자동으로 만들어진다.
+// 중간 테이블에 추가 컬럼을 둘 수 없다.
+//
+// model Post {
+//   ...
+//   tags Tag[]
+// }
+//
+// model Tag {
+//   id    Int    @id @default(autoincrement())
+//   name  String @unique
+//   posts Post[]
+// }
+//
+// ---------- 8. 관계: N:M 명시적 (중간 테이블을 직접 모델로 선언) ----------
+// 가입일, 역할 등 추가 컬럼이 필요할 때 사용. 1:N 두 개로 구성된다.
+//
+// model Users {
+//   ...
+//   memberships ProjectMember[]
+// }
+//
+// model Project {
+//   id      Int    @id @default(autoincrement())
+//   name    String
+//   members ProjectMember[]
+// }
+//
+// model ProjectMember {
+//   userId    Int      @map("user_id")
+//   projectId Int      @map("project_id")
+//   joinedAt  DateTime @default(now()) @map("joined_at")   // 추가 컬럼
+//   user      Users    @relation(fields: [userId], references: [id])
+//   project   Project  @relation(fields: [projectId], references: [id])
+//
+//   @@id([userId, projectId])       // 복합 기본 키
+//   @@map("project_members")
+// }
+//
+// ---------- 9. 관계: 자기 참조 (상사 - 부하) ----------
+// 같은 모델끼리의 관계는 @relation에 이름을 붙여 양쪽을 짝지어야 한다.
+//
+// model Users {
+//   ...
+//   managerId Int?    @map("manager_id")
+//   manager   Users?  @relation("ManagerReports", fields: [managerId], references: [id])
+//   reports   Users[] @relation("ManagerReports")
+// }
+//
+// ---------- 10. 같은 두 모델 사이에 관계가 2개 이상일 때 ----------
+// 어느 필드끼리 짝인지 구분하기 위해 관계 이름이 필수다.
+//
+// model Users {
+//   ...
+//   writtenPosts  Post[] @relation("PostAuthor")
+//   reviewedPosts Post[] @relation("PostReviewer")
+// }
+//
+// model Post {
+//   ...
+//   authorId   Int
+//   author     Users  @relation("PostAuthor", fields: [authorId], references: [id])
+//   reviewerId Int?
+//   reviewer   Users? @relation("PostReviewer", fields: [reviewerId], references: [id])
+// }
+//
+// ---------- 11. 참조 동작 (부모 행이 삭제/수정될 때) ----------
+// author Users @relation(fields: [authorId], references: [id], onDelete: Cascade)
+//
+// Cascade    부모가 삭제되면 자식도 함께 삭제
+// Restrict   자식이 있으면 부모 삭제를 막음
+// SetNull    자식의 FK를 NULL로 변경 (FK가 ? 선택 필드여야 함)
+// NoAction   DB 기본 동작에 맡김
+// SetDefault 자식의 FK를 기본값으로 변경
+// onUpdate 에도 같은 값을 쓸 수 있다.
+//
+// ---------- 12. 주석 종류 ----------
+// //  일반 주석 - 이 파일에서만 보임
+// /// 문서 주석 - 생성되는 클라이언트 타입에 설명으로 포함됨 (필드/모델 바로 윗줄에 작성)

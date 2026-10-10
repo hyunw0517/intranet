@@ -7,6 +7,7 @@ generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
   moduleFormat = "cjs"
+  previewFeatures = ["partialIndexes"] // 부분 인덱스 허용 (삭제되지 않은 계정끼리만 이메일이 겹치면 안 됨)
 }
 
 datasource db {
@@ -15,24 +16,59 @@ datasource db {
 
 // 권한 구분 (DB에는 PostgreSQL enum 타입으로 생성됨)
 enum Role {
+  GUEST
   USER
   ADMIN
 }
 
+// 파일 사용 구분 
+enum FileTargetType {
+  USER_PROFILE
+  POST
+}
+
+// 회원 스키마
 model Users {
   id        Int      @id @default(autoincrement())
   email     String   //@unique
   password  String   // 해시된 값만 저장
-  name      String
+  name      String   // 이름
+  nickname  String?  // 닉네임
+  birthday  DateTime? @db.Date // 생일 @db.Date: 날짜만 저장
   role      Role     @default(USER)
-  isActive  Boolean  @default(true) @map("is_active") // 활성화 여부(0: 비활성화, 1: 활성화)
+  isActive  Boolean  @default(true) @map("is_active") // 활성화 여부(false: 비활성화, true: 활성화)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   deleted   Boolean  @default(false) // soft delete
   deletedAt DateTime? @map("deleted_at") // soft delete
   deletedId Int?     @map("deleted_id") // 삭제자 id
 
+  @@unique([email], where: { deleted: false }) // 삭제되지 않은 계정만 이메일이 겹치지 않도록 설정
   @@map("users_model") // 실제 테이블 이름
+}
+
+model Files {
+  id        Int      @id @default(autoincrement())
+  targetType FileTargetType? @map("target_type") // 파일이 속한 대상 타입 (예: USER_PROFILE, POST 등)
+  targetId Int? @map("target_id") // 파일이 속한 대상의 ID
+  originalName String   @map("original_name")  // 사용자가 올린 파일명
+  storedName   String   @unique @map("stored_name")    // 서버에 저장된 파일명 (uuid 등)
+  path      String   // 파일 경로
+  size      Int      // 파일 크기
+  mimeType      String   @map("mime_type")  // 파일 타입 (예: image/png, application/pdf 등)
+  order     Int     @default(0) // 파일 순서 (예: 1, 2, 3 등)
+
+  createdId Int    @map("created_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedId Int    @map("updated_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deleted   Boolean  @default(false) // soft delete
+  deletedAt DateTime? @map("deleted_at") // soft delete
+  deletedId Int?     @map("deleted_id") // 삭제자 id
+  
+  @@index([targetType, targetId])
+  @@map("files_model") // 실제 테이블 이름
 }
 
 // =====================================================================

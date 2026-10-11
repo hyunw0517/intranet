@@ -30,6 +30,7 @@ enum FileTargetType {
 // 회원 스키마
 model Users {
   id        Int      @id @default(autoincrement())
+  empNo     String   @map("emp_no") // 사번
   email     String   //@unique
   password  String   // 해시된 값만 저장
   name      String   // 이름
@@ -45,6 +46,7 @@ model Users {
   deletedId Int?     @map("deleted_id") // 삭제자 id
 
   @@unique([email], where: { deleted: false }) // 삭제되지 않은 계정만 이메일이 겹치지 않도록 설정
+  @@unique([empNo], where: { deleted: false }) // 삭제되지 않은 계정만 사번이 겹치지 않도록 설정
   @@map("users_model") // 실제 테이블 이름
 }
 

@@ -1,8 +1,11 @@
-import { IsEmail, IsString, Length, IsOptional, IsDateString, IsNumber } from 'class-validator';
+import { IsEmail, IsString, IsOptional, IsDateString, IsNumber } from 'class-validator';
 
 export class ReadUserDto {
     @IsNumber()
     id: number;
+
+    @IsString()
+    empNo: string;
 
     @IsEmail()
     email: string;

@@ -2,6 +2,10 @@ import { IsEmail, IsString, Length, IsOptional, IsDateString } from 'class-valid
 import { Transform } from 'class-transformer';
 
 export class CreateUserDto {
+    @IsString()
+    @Length(7, 7)
+    empNo: string;
+
     @IsEmail()
     email: string;
 

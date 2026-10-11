@@ -1,46 +1,71 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Headers, Post, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterUserDto } from './dto/register-user.dto';
+import { IsPublic } from 'src/common/decorator/is-public.decorator';
+import { RefreshTokenGuard } from './guard/bearer-token.guard';
+import { BasicTokenGuard } from './guard/basic-token.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register/email')
-  //@IsPublic()
-  postRegisterEmail(
-    // @Body('nickname') nickname: string,
-    // @Body('email') email: string,
-    // @Body('password', new MaxLengthPipe(8, '비밀번호'), new MinLengthPipe(4, '비밀번호')) password: string,
+  //* Bearer -> Access 토큰 재발급 
+  @Post('token/access')
+  @IsPublic()
+  @UseGuards(RefreshTokenGuard)
+  postTokenAccess( @Headers('authorization') rawToken: string ){
+    const token = this.authService.extractTokenFromHeader(rawToken, true);
+
+    // { accessToken: {token} }
+    const newToken = this.authService.rotateToken(token, false);
+
+    return {
+      accessToken: newToken, 
+    };
+  }
+  
+  //* Bearer -> Refresh 토큰 재발급 
+  @Post('token/refresh')
+  @IsPublic()
+  @UseGuards(RefreshTokenGuard)
+  postTokenRefresh( @Headers('authorization') rawToken: string ){
+    const token = this.authService.extractTokenFromHeader(rawToken, true);
+
+    // { refreshToken: {token} }
+    const newToken = this.authService.rotateToken(token, true);
+
+    return {
+      refreshToken: newToken, 
+    };
+  }
+
+  //* 회원 로그인 요청
+  @Post('login/emp')
+  @IsPublic()
+  @UseGuards(BasicTokenGuard)
+  postLoginEmpNo(
+    // @Body('empNo') empNo: string, 
+    // @Body('password') password: string, 
+    @Headers( 'authorization' ) rawToken: string, 
+    // @Request() req, 
+  ){
+    // empNo:password -> base64
+    const token = this.authService.extractTokenFromHeader(rawToken, false); 
+
+    const credentials = this.authService.decodeBasicToken(token); 
+    //credentials -> { empNo: empNo, password: password }; 
+
+    return this.authService.loginWithEmpNo( credentials );
+  }
+
+  @Post('register/emp')
+  @IsPublic()
+  postRegisterEmpNo(
     @Body() body: RegisterUserDto
   ){
-    return this.authService.registerWithEmail(
+    return this.authService.registerWithEmpNo(
       body,
     );
   }
 
-  /*@Post()
-  create(@Body() createAuthDto: CreateAuthDto) {
-    return this.authService.create(createAuthDto);
-  }
-
-  @Get()
-  findAll() {
-    return this.authService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.authService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateAuthDto: UpdateAuthDto) {
-    return this.authService.update(+id, updateAuthDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.authService.remove(+id);
-  }*/
 }

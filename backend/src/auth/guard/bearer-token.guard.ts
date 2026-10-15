@@ -59,6 +59,14 @@ export class BearerTokenGuard implements CanActivate {
             return true;
         }
 
+        await this.authenticate(req);
+
+        return true;
+    }
+
+    //* 토큰 검증 -> 사용자 조회 -> 상태 체크 -> req에 저장
+    //      - public 여부와 상관없이 무조건 검증한다. (RefreshTokenGuard에서도 사용)
+    protected async authenticate(req: any): Promise<void> {
         const rawToken = req.headers['authorization'];
 
         if(!rawToken){
@@ -86,11 +94,16 @@ export class BearerTokenGuard implements CanActivate {
             throw new UnauthorizedException('존재하지 않는 사용자입니다.');
         }
 
+        // 비밀번호 변경 등으로 tokenVersion이 올라갔으면 이전에 발급된 토큰은 거부한다.
+        if( result.ver !== user.tokenVersion ){
+            throw new UnauthorizedException('만료된 로그인 정보입니다. 다시 로그인해 주세요.');
+        }
+
+        this.authService.checkUserStatus(user); // 회원 상태 값 체크
+
         req.token = token;
         req.tokenType = result.type;
         req.user = user;
-        
-        return true;
     }
 }
 
@@ -115,14 +128,12 @@ export class AccessTokenGuard extends BearerTokenGuard {
 
 @Injectable()
 export class RefreshTokenGuard extends BearerTokenGuard {
+    // 토큰 재발급 라우트는 전역 AccessTokenGuard를 건너뛰기 위해 @IsPublic()을 붙이므로,
+    // public 여부와 상관없이 항상 검증한다.
     async canActivate(context: ExecutionContext): Promise<boolean> {
-        await super.canActivate(context);
-
         const req = context.switchToHttp().getRequest();
 
-        if( req.isRoutePublic ){
-            return true;
-        }
+        await this.authenticate(req);
 
         if(req.tokenType !== 'refresh'){
             throw new UnauthorizedException('Refresh Token이 아닙니다.'); 

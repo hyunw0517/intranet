@@ -21,6 +21,13 @@ enum Role {
   ADMIN
 }
 
+// 상태 구분
+enum UserStatus {
+  ACTIVE     // 재직
+  INACTIVE   // 휴직/잠금 (로그인만 차단)
+  RESIGNED   // 퇴사 (탈퇴)
+}
+
 // 파일 사용 구분 
 enum FileTargetType {
   USER_PROFILE
@@ -36,8 +43,12 @@ model Users {
   name      String   // 이름
   nickname  String?  // 닉네임
   birthday  DateTime? @db.Date // 생일 @db.Date: 날짜만 저장
-  role      Role     @default(USER)
-  isActive  Boolean  @default(true) @map("is_active") // 활성화 여부(false: 비활성화, true: 활성화)
+  hp        String?  @db.VarChar(20) // 휴대폰 번호
+  tel       String?  @db.VarChar(20) // 전화번호
+
+  role      Role     @default(GUEST)
+  status     UserStatus @default(ACTIVE)
+  tokenVersion Int    @default(0) @map("token_version") // 토큰 버전 (올리면 기존 발급 토큰 전부 무효화)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

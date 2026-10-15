@@ -1,29 +1,47 @@
-import { IsEmail, IsString, Length, IsOptional, IsDateString } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { IsEmail, IsString, Length, IsOptional, IsDateString, IsNotEmpty } from 'class-validator';
+import { EmptyToNull } from "src/common/decorator/empty-to-null.decorator";
 
 export class CreateUserDto {
+
     @IsString()
-    @Length(7, 7)
+    //@Length(7, 7)
+    @IsNotEmpty()
     empNo: string;
 
     @IsEmail()
+    @IsNotEmpty()
     email: string;
 
     @IsString()
     @Length(8, 20)
+    @IsNotEmpty()
     password: string;
 
     @IsString()
     @Length(1, 30)
+    @IsNotEmpty()
     name: string;
 
-    @IsOptional()
     @IsString()
     @Length(1, 20)
-    nickname?: string;
-
-    @Transform( ({ value }) => ( value === "" ? null : value ) )
     @IsOptional()
+    @EmptyToNull()
+    nickname?: string | null;
+
     @IsDateString()
-    birthday?: string;
+    @IsOptional()
+    @EmptyToNull()
+    birthday?: string | null;
+    
+    @IsString()
+    @Length(10, 11)
+    @IsOptional()
+    @EmptyToNull()
+    hp?: string | null;
+
+    @IsString()
+    @Length(10, 11)
+    @IsOptional()
+    @EmptyToNull()
+    tel?: string | null;
 }

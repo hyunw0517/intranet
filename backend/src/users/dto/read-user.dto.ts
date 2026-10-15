@@ -23,4 +23,12 @@ export class ReadUserDto {
     @IsOptional()
     @IsDateString()
     birthday?: string;
+    
+    @IsString()
+    @IsOptional()
+    hp?: string;
+
+    @IsString()
+    @IsOptional()
+    tel?: string;
 }

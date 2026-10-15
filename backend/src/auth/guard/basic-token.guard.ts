@@ -10,7 +10,10 @@ export class BasicTokenGuard implements CanActivate {
     async canActivate(context: ExecutionContext): Promise<boolean> {
         
         const req = context.switchToHttp().getRequest();
+        // NestJS가 canActivate에 넘겨주는 context에서 요청 객체를 꺼냄
+
         const rawToken = req.headers['authorization'];
+        // "Basic {인코딩}" 형태"
 
         if( !rawToken ){
             throw new UnauthorizedException('토큰이 없습니다.'); 
@@ -25,7 +28,9 @@ export class BasicTokenGuard implements CanActivate {
             password, 
         });
 
-        req.user = user; 
+        this.authService.checkUserStatus(user);
+
+        req.user = user;
 
         return true; 
 

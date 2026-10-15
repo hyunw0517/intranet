@@ -1,6 +1,9 @@
-import { Body, Controller, Headers, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Headers, Patch, Post, Request, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterUserDto } from './dto/register-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { User } from 'src/users/decorator/user.decorator';
+import type { Users } from 'src/generated/prisma/client';
 import { IsPublic } from 'src/common/decorator/is-public.decorator';
 import { RefreshTokenGuard } from './guard/bearer-token.guard';
 import { BasicTokenGuard } from './guard/basic-token.guard';
@@ -46,18 +49,13 @@ export class AuthController {
   postLoginEmpNo(
     // @Body('empNo') empNo: string, 
     // @Body('password') password: string, 
-    @Headers( 'authorization' ) rawToken: string, 
-    // @Request() req, 
+    //@Headers( 'authorization' ) rawToken: string, 
+    @Request() req: any, 
   ){
-    // empNo:password -> base64
-    const token = this.authService.extractTokenFromHeader(rawToken, false); 
-
-    const credentials = this.authService.decodeBasicToken(token); 
-    //credentials -> { empNo: empNo, password: password }; 
-
-    return this.authService.loginWithEmpNo( credentials );
+    return this.authService.loginUser( req.user );
   }
 
+  //* 회원가입
   @Post('register/emp')
   @IsPublic()
   postRegisterEmpNo(
@@ -66,6 +64,15 @@ export class AuthController {
     return this.authService.registerWithEmpNo(
       body,
     );
+  }
+
+  //* 비밀번호 변경
+  @Patch('change/pw')
+  patchPassword(
+    @User() user: Pick<Users, 'id'>,
+    @Body() body: ChangePasswordDto,
+  ){
+    return this.authService.changePassword(user, body);
   }
 
 }

@@ -75,5 +75,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .windsurf/
 skills-lock.json
 
-claude_guide[0-9]*.md
 .claude/
+claude_guide[0-9]*.md
+CLAUDE.md
+Plan.md
+docs/*

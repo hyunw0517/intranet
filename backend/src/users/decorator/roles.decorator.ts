@@ -1,7 +1,7 @@
 import { SetMetadata } from "@nestjs/common";
-import { RolesEnum } from "../const/roles.const";
+import { Role } from "src/generated/prisma/client";
 
 export const ROLES_KEY = 'user_roles';
 
-// @Roles(RolesEnum.ADMIN)
-export const Roles = (role: RolesEnum) => SetMetadata(ROLES_KEY, role); 
+// @Roles(Role.ADMIN)
+export const Roles = (role: Role) => SetMetadata(ROLES_KEY, role); 

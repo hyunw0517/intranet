@@ -11,7 +11,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             connectionString: configService.getOrThrow<string>('DATABASE_URL'),
         });
 
-        super({ adapter });
+        super({ 
+            adapter, 
+            omit: {
+                users: {
+                    password: true, // 패스워드는 조회에서 기본으로 제외되도록 (필요하면 service에서 명시)
+                },
+            },
+        });
     }
 
     async onModuleInit() {

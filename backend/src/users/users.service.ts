@@ -120,6 +120,7 @@ export class UsersService {
         tel: body.tel,
         // null: 값 지우기, undefined: 변경 안 함
         birthday: ( body.birthday ) ? new Date(body.birthday) : body.birthday,
+        updatedAt: new Date(),
       },
       omit: {
         password: true,
@@ -192,6 +193,7 @@ export class UsersService {
       data: {
         password: hash,
         tokenVersion: { increment: 1 },
+        updatedAt: new Date(),
       },
       select: {
         id: true,

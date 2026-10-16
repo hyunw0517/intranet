@@ -30,11 +30,11 @@ enum UserStatus {
 
 // 파일 사용 구분 
 enum FileTargetType {
-  USER_PROFILE
-  POST
+  USER_PROFILE  // 회원 프로필 사진
+  POST          // 게시글 첨부파일
 }
 
-// 회원 스키마
+// 회원 - 대상: Users, Auth
 model Users {
   id        Int      @id @default(autoincrement())
   empNo     String   @map("emp_no") // 사번
@@ -61,6 +61,7 @@ model Users {
   @@map("users_model") // 실제 테이블 이름
 }
 
+// 파일 - 대상: 공용
 model Files {
   id        Int      @id @default(autoincrement())
   targetType FileTargetType? @map("target_type") // 파일이 속한 대상 타입 (예: USER_PROFILE, POST 등)
@@ -72,10 +73,10 @@ model Files {
   mimeType      String   @map("mime_type")  // 파일 타입 (예: image/png, application/pdf 등)
   order     Int     @default(0) // 파일 순서 (예: 1, 2, 3 등)
 
-  createdId Int    @map("created_id")
   createdAt DateTime @default(now()) @map("created_at")
-  updatedId Int    @map("updated_id")
+  createdId Int    @map("created_id")
   updatedAt DateTime @updatedAt @map("updated_at")
+  updatedId Int    @map("updated_id")
   deleted   Boolean  @default(false) // soft delete
   deletedAt DateTime? @map("deleted_at") // soft delete
   deletedId Int?     @map("deleted_id") // 삭제자 id

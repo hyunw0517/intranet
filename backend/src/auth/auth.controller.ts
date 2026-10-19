@@ -2,7 +2,7 @@ import { Body, Controller, Headers, Patch, Post, Request, UseGuards } from '@nes
 import { AuthService } from './auth.service';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { User } from 'src/users/decorator/user.decorator';
+import { User } from './decorator/user.decorator';
 import type { Users } from 'src/generated/prisma/client';
 import { IsPublic } from 'src/common/decorator/is-public.decorator';
 import { RefreshTokenGuard } from './guard/bearer-token.guard';

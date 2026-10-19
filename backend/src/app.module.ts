@@ -8,7 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { AccessTokenGuard } from './auth/guard/bearer-token.guard';
 import { APP_GUARD } from '@nestjs/core/constants';
-import { RolesGuard } from './users/guard/roles.guard';
+import { RolesGuard } from './auth/guard/roles.guard';
+import { OrganizationModule } from './organization/organization.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { RolesGuard } from './users/guard/roles.guard';
     CommonModule, 
     UsersModule, 
     AuthModule, 
+    OrganizationModule, 
   ],
   controllers: [AppController],
   providers: [

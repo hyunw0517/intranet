@@ -1,8 +1,8 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { User } from './decorator/user.decorator';
-import { Role, type Users } from 'src/generated/prisma/client';
-import { Roles } from './decorator/roles.decorator';
+import { User } from 'src/auth/decorator/user.decorator';
+import { UserRole, type Users } from 'src/generated/prisma/client';
+import { Roles } from 'src/auth/decorator/roles.decorator';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 
@@ -12,15 +12,14 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  @Roles(Role.ADMIN)
+  @Roles(UserRole.ADMIN)
   getAllUsers() {
-    return this.usersService.getAllUsers();
+    return this.usersService.readAllUsers();
   }
 
   //* 회원 개인정보 조회
   @Get('me')
   getMe( @User() user: Users ) {
-    
     return user;
   }
 

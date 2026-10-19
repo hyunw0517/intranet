@@ -59,7 +59,7 @@ export class UsersService {
   }
 
   //* 전체 회원 조회
-  async getAllUsers() {
+  async readAllUsers() {
     return await this.prisma.users.findMany({
       select: {
         empNo: true, 
@@ -224,6 +224,8 @@ export class UsersService {
         deletedId: user.id,
       },
     });
+
+    return true;
   }
 
 }

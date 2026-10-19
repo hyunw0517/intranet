@@ -398,7 +398,7 @@ model Post {
   deletedId Int?     @map("deleted_id")
 
   @@index([boardId, deleted, createdAt(sort: Desc)])  // 게시판별 최신글 목록
-  @@index([createdId, deleted, createdAt(sort: Desc)]) // 내가 쓴 글 목록
+  @@index([authorId, deleted, createdAt(sort: Desc)]) // 내가 쓴 글 목록
   @@index([boardId, deleted, eventStartAt]) // 월간 캘린더 조회 (캘린더 게시판용)
 
   @@map("post_model")

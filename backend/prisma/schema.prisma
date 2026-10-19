@@ -76,11 +76,12 @@ enum MeetingReservationStatus {
 
 //? 전자결재 문서 상태 -> 모델: ApprovalDocument
 enum ApprovalStatus {
-  DRAFT        // 작성중
-  REQUESTED    // 결재요청
-  IN_PROGRESS  // 결재중
-  APPROVED     // 승인
-  REJECTED     // 반려
+  DRAFT         // 작성중
+  CANCELLED     // 회수(작성중/결재요청만 가능)
+  REQUESTED     // 결재요청
+  IN_PROGRESS   // 결재중
+  APPROVED      // 승인
+  REJECTED      // 반려
 }
 
 //? 전자결재 문서 타입 -> 모델: ApprovalDocument
@@ -269,6 +270,7 @@ model UserDepartment {
   deletedAt DateTime? @map("deleted_at")
   deletedId Int?     @map("deleted_id")
   
+  @@unique([userId], where: { isPrimary: true, deleted: false }) // 회원 1명당 주 소속을 1개로 제한
   @@index([userId, deleted])
   @@index([departmentId, deleted])
   @@index([positionId, deleted])
@@ -315,11 +317,11 @@ model Notification {
 
   user       Users    @relation(fields: [userId], references: [id]) // 수신자
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id") // 발신자 id
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int?      @map("created_id") // 발신자 id
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([userId, deleted, createdAt(sort: Desc), id(sort: Desc)]) // 내 알림 목록 (커서 페이지네이션)
   @@index([targetType, targetId, createdAt(sort: Desc)])
@@ -338,8 +340,8 @@ model Audit {
   ipAddress  String?  @db.VarChar(45) @map("ip_address") // IPv6 방식 사용을 고려한 길이
   userAgent  String?  @map("user_agent") // 사용자 접속 환경
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id") // 작업자 id
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int?      @map("created_id") // 작업자 id
 
   @@index([createdId, createdAt(sort: Desc)])
   @@index([targetType, targetId, createdAt(sort: Desc)])
@@ -375,6 +377,7 @@ model Board {
 model Post {
   id        Int      @id @default(autoincrement())
   boardId   Int      @map("board_id") // 게시판 id
+  authorId  Int      @map("author_id") // 작성자 id
   title     String   // 게시글 제목
   content   String?   // 게시글 본문
 
@@ -383,7 +386,7 @@ model Post {
   isAllDay      Boolean?  @map("is_all_day")  // 시간 미선택 (캘린더 게시판용)
 
   board     Board     @relation(fields: [boardId], references: [id])
-  author    Users     @relation("PostAuthor", fields: [createdId], references: [id]) // 작성자
+  author    Users     @relation("PostAuthor", fields: [authorId], references: [id]) // 작성자
   comments  Comment[] // 댓글 목록
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -406,10 +409,11 @@ model Comment {
   id              Int      @id @default(autoincrement())
   postId          Int      @map("post_id") // 게시글 id
   parentCommentId Int?     @map("parent_comment_id") // 상위 댓글 id (일반 댓글은 NULL, 대댓글만 값 있음)
+  authorId        Int      @map("author_id") // 작성자 id
   comment         String   // 댓글 내용
 
   post      Post      @relation(fields: [postId], references: [id])
-  author    Users     @relation("CommentAuthor", fields: [createdId], references: [id]) // 작성자
+  author    Users     @relation("CommentAuthor", fields: [authorId], references: [id]) // 작성자
   parent    Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id]) // 상위 댓글
   replies   Comment[] @relation("CommentReplies") // 대댓글 목록
 
@@ -553,7 +557,6 @@ model ApprovalLineTemplate {
   ownerUserId  Int? @map("owner_user_id") // PERSONAL인 경우 소유 사용자
 
   department Department? @relation(fields: [departmentId], references: [id])
-
   ownerUser Users? @relation("ApprovalLineOwner", fields: [ownerUserId], references: [id])
 
   steps     ApprovalLineTemplateStep[]
@@ -714,6 +717,10 @@ model ChatRoom {
   // GROUP 채팅방에서 사용
   name String?
 
+  // DIRECT 채팅방 중복 방지 키: "userId:userId", GROUP은 NULL
+  // 생성 시 type=DIRECT인 경우 저장한다. (방 타입도 바뀌지 않음)
+  directKey String? @map("direct_key") //(예: "3:17")
+
   // 채팅방 목록 최신순 정렬용
   lastMessageAt DateTime? @map("last_message_at")
 
@@ -727,6 +734,7 @@ model ChatRoom {
   deletedAt DateTime? @map("deleted_at")
   deletedId Int?     @map("deleted_id")
 
+  @@unique([directKey], where: { deleted: false }) // 1:1 채팅방은 하나만 (동시 생성 방지, 단체 채팅방에서 2명만 남는 경우 중복 허용)
   @@index([type, deleted])
   @@index([lastMessageAt(sort: Desc)])
   @@map("chat_room_model")
@@ -759,12 +767,12 @@ model ChatRoomMember {
 model ChatMessage {
   id         Int             @id @default(autoincrement())
   chatRoomId Int             @map("chat_room_id")
-  senderId   Int             @map("sender_id")
+  senderId   Int?             @map("sender_id")
   type       ChatMessageType @default(TEXT)
   content    String?
 
   chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id])
-  sender Users @relation("ChatMessageSender", fields: [senderId], references: [id])
+  sender Users? @relation("ChatMessageSender", fields: [senderId], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

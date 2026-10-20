@@ -24,4 +24,10 @@ export class PaginateUserQueryDto {
     @StringToBoolean()
     allDepartments?: boolean;
 
+    // true면 관리자 삭제(deleted)된 회원만 조회 (복구 대상 확인용)
+    @IsOptional()
+    @IsBoolean()
+    @StringToBoolean()
+    deletedOnly?: boolean;
+
 }

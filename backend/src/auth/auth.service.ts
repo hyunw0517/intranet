@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, UnauthorizedExcept
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from 'src/users/users.service';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'crypto';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ConfigService } from '@nestjs/config';
@@ -57,7 +58,7 @@ export class AuthService {
      * * Basic 토큰 decode
      * - empNo:password -> [empNo, password]
      */
-    decodeBasicToken(base64String: string){
+    decodeBasicToken( base64String: string ){
         const decoded = Buffer.from(base64String, 'base64').toString('utf8'); // base64를 utf8로 디코딩
 
         const idx = decoded.indexOf(':');
@@ -76,7 +77,7 @@ export class AuthService {
     }
 
     //* 토큰 검증
-    verifyToken(token: string){
+    verifyToken( token: string ){
       try{
         return this.jwtService.verify(token, {
           secret: this.configService.get<string>(ENV_JWT_SECRET), 
@@ -87,7 +88,7 @@ export class AuthService {
     }
 
     //* 토큰 재발급
-    rotateToken(token: string, isRefreshToken: boolean){
+    rotateToken( token: string, isRefreshToken: boolean ){
 
       const decoded = this.verifyToken(token);
 
@@ -108,7 +109,10 @@ export class AuthService {
 
   //* 토큰 생성
   //      - 3)에서 필요한 accessToken, refreshToken을 sign하는 로직 (토큰 생성)
-  signToken( user: Pick<Users, 'id' | 'empNo' | 'tokenVersion'>, isRefreshToken: boolean ){
+  signToken( 
+    user: Pick<Users, 'id' | 'empNo' | 'tokenVersion'>, 
+    isRefreshToken: boolean 
+  ){
     const payload = {
         empNo: user.empNo,
         sub: user.id,
@@ -124,7 +128,7 @@ export class AuthService {
   }
 
   //* 로그인 시 accessToken, refreshToken 발급
-  loginUser(user: Pick<Users, 'id' | 'empNo' | 'tokenVersion'>) {
+  loginUser( user: Pick<Users, 'id' | 'empNo' | 'tokenVersion'> ) {
       return {
           accessToken: this.signToken(user, false), 
           refreshToken: this.signToken(user, true), 
@@ -132,7 +136,9 @@ export class AuthService {
   }
 
   //* 로그인 시 사번/패스워드 검증
-  async authenticateWithEmpNoAndPassword(user: Pick<Users, 'empNo' | 'password'>) {
+  async authenticateWithEmpNoAndPassword(
+    user: Pick<Users, 'empNo' | 'password'>
+  ){
       // 1. 사용자가 존재하는지 확인 (empNo)
       // 2. 비밀번호가 맞는지 확인 
       // 3. 모두 통과되면 찾은 사용자 정보 반환
@@ -148,9 +154,10 @@ export class AuthService {
       return existingUser;
   }
 
-  // checkUserStatus
-  //    - 재직(ACTIVE) 상태인 사용자만 로그인 허용
-  checkUserStatus(user: Pick<Users, 'status'>) {
+  //* 사용자 상태 체크 -> 재직(ACTIVE) 상태만 로그인 허용
+  checkUserStatus(
+    user: Pick<Users, 'status'>
+  ){
       switch( user.status ) {
           case UserStatus.ACTIVE:
               return;
@@ -163,9 +170,11 @@ export class AuthService {
       }
   }
 
-  // 비밀번호 해시 생성
+  //* 비밀번호 해시 생성
   //    - 회원가입, 비밀번호 변경에서 공통으로 사용
-  hashPassword(password: string){
+  hashPassword(
+    password: string
+  ){
     return bcrypt.hash(
         password,
         parseInt(
@@ -174,8 +183,10 @@ export class AuthService {
     );
   }
 
-  // 회원가입
-  async registerWithEmpNo(user: RegisterUserDto){
+  //* 회원가입
+  async registerWithEmpNo(
+    user: RegisterUserDto
+  ){
 
     const hash = await this.hashPassword(user.password);
 
@@ -193,12 +204,15 @@ export class AuthService {
     return this.loginUser(newUser);
   }
 
-  // 비밀번호 변경
+  //* 비밀번호 변경
   //    - 본인 확인을 위해 현재 비밀번호를 먼저 검증한다.
   //    - 새 비밀번호가 현재 비밀번호와 같으면 변경하지 않는다.
   //    - tokenVersion이 올라가 기존 토큰(다른 기기 포함)은 모두 무효가 되므로,
   //      현재 사용자에게는 새 토큰을 발급해 응답한다.
-  async changePassword(user: Pick<Users, 'id'>, body: ChangePasswordDto){
+  async changePassword(
+    user: Pick<Users, 'id'>, 
+    body: ChangePasswordDto
+  ){
     const hash = await this.usersService.getPasswordHashById(user.id);
     await this.usersService.verifyPassword({ password: hash }, body.currentPassword);
 
@@ -211,6 +225,37 @@ export class AuthService {
     const updatedUser = await this.usersService.updatePassword(user.id, newHash);
 
     return this.loginUser(updatedUser);
+  }
+
+  //* (관리자) 비밀번호 초기화
+  //    - 서버가 임시 비밀번호를 생성해 저장하고, 평문은 응답으로 한 번만 돌려준다. (DB에는 해시만 저장)
+  //    - updatePassword가 tokenVersion을 올리므로 대상 회원의 기존 토큰은 모두 무효가 된다.
+  //    - 변경 대상이 관리자 본인이 아니므로 토큰을 발급하지 않는다.
+  async resetPassword( 
+    userId: number 
+  ){
+    await this.usersService.getUserDetail(userId);
+
+    const temporaryPassword = this.generateTemporaryPassword();
+
+    const newHash = await this.hashPassword(temporaryPassword);
+
+    await this.usersService.updatePassword(userId, newHash);
+
+    return { temporaryPassword };
+  }
+
+  //* 임시 비밀번호 생성 (12자리)
+  //    - Math.random()은 예측 가능하므로 비교적 안전한 crypto.randomInt 사용.
+  private generateTemporaryPassword(){
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890';
+
+    let password = '';
+    for( let i = 0; i < 12; i++ ){
+      password += chars[randomInt(chars.length)];
+    }
+
+    return password;
   }
 
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, Query, ParseIntPipe } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from 'src/auth/decorator/user.decorator';
 import { UserRole, type Users } from 'src/generated/prisma/client';
@@ -6,6 +6,9 @@ import { Roles } from 'src/auth/decorator/roles.decorator';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import { PaginateUserQueryDto } from './dto/paginate-user-query.dto';
+import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 
 @Controller('users')
 export class UsersController {
@@ -44,6 +47,58 @@ export class UsersController {
     @Body() body: DeleteUserDto,
   ) {
     return this.usersService.deleteUser(user, body);
+  }
+
+  // 관리자 라우트는 'me' 라우트 아래에 둔다. (':id'가 먼저 선언되면 'me' 요청이 ':id'로 매칭됨)
+
+  //* (관리자) 회원 상세 조회
+  @Get(':id')
+  @Roles(UserRole.ADMIN)
+  getUserDetail(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.usersService.getUserDetail(id);
+  }
+
+  //* (관리자) 회원 정보 수정
+  @Patch(':id')
+  @Roles(UserRole.ADMIN)
+  patchUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: AdminUpdateUserDto,
+  ) {
+    return this.usersService.adminUpdateUser(id, body);
+  }
+
+  //* (관리자) 가입 승인 및 권한 변경
+  @Patch(':id/role')
+  @Roles(UserRole.ADMIN)
+  patchUserRole(
+    @User() user: Pick<Users, 'id'>,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateUserRoleDto,
+  ) {
+    return this.usersService.updateUserRole(user, id, body);
+  }
+
+  //* (관리자) 회원 상태 변경
+  @Patch(':id/status')
+  @Roles(UserRole.ADMIN)
+  patchUserStatus(
+    @User() user: Pick<Users, 'id'>,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateUserStatusDto,
+  ) {
+    return this.usersService.updateUserStatus(user, id, body);
+  }
+
+  //* (관리자) 삭제 회원 복구
+  @Patch(':id/restore')
+  @Roles(UserRole.ADMIN)
+  patchRestoreUser(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.usersService.restoreUser(id);
   }
 
 }

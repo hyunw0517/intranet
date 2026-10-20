@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Users } from 'src/generated/prisma/client';
+import { Users, UserStatus } from 'src/generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
@@ -13,14 +13,18 @@ export class DepartmentsService {
     ){}
     
     //* 전체 부서 조회
-    async paginateDepartment(query: PaginateDepartmentQueryDto) {
+    async paginateDepartment(
+        query: PaginateDepartmentQueryDto, 
+    ) {
         return await this.prisma.department.findMany({
             where: {
                 deleted: false,
                 // 값이 없으면 undefined -> Prisma가 조건에서 제외
                 name: query.name ? { contains: query.name } : undefined,
             },
-            orderBy: { sortOrder: 'asc' },
+            orderBy: { 
+                sortOrder: 'asc',
+            },
         });
     }
 
@@ -210,7 +214,37 @@ export class DepartmentsService {
         if( !thisDepartment ){
             throw new BadRequestException('존재하지 않는 부서입니다.');
         }
-        
+
+        // 하위 부서 확인
+        const childDepartmentCount = await this.prisma.department.count({
+            where: {
+                parentDepartmentId: thisDepartment.id,
+                deleted: false,
+            }
+        });
+
+        if( childDepartmentCount > 0 ){
+            throw new BadRequestException('하위 부서가 있는 부서는 삭제할 수 없습니다.');
+        }
+
+        // 소속 인원 확인 
+        const memberCount = await this.prisma.userDepartment.count({
+            where: {
+                departmentId: thisDepartment.id,
+                deleted: false,
+                user: { 
+                    status: { 
+                        not: UserStatus.RESIGNED // 퇴사자는 검증 인원에서 제외
+                    }, 
+                    deleted: false, 
+                },
+            }
+        });
+
+        if( memberCount > 0 ){
+            throw new BadRequestException('소속 인원이 있는 부서는 삭제할 수 없습니다.');
+        }
+
         // DELETE (트랜잭션: 삭제+재정렬)
         await this.prisma.$transaction([
             // 대상 부서 삭제

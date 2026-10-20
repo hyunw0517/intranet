@@ -6,6 +6,7 @@ import { DeleteUserDto } from './dto/delete-user.dto';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { Users } from 'src/generated/prisma/client';
+import { PaginateUserQueryDto } from './dto/paginate-user-query.dto';
 
 @Injectable()
 export class UsersService {
@@ -14,6 +15,74 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
   ){}
+  
+  //* 전체 회원 조회
+  async paginateUser( 
+    query: PaginateUserQueryDto, 
+  ) {
+    return await this.prisma.users.findMany({
+      select: {
+        empNo: true, 
+        email: true, 
+        name: true, 
+        nickname: true, 
+        birthday: true,
+        status: true,
+        role: true,
+
+        // 직급
+        position: { 
+            select: { 
+                id: true, 
+                name: true, 
+            } 
+        },
+
+        // 소속 (부서+직책)
+        departments: {
+            select: {
+                id: true,
+                isPrimary: true,
+                // 부서
+                department: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                },
+                // 직책
+                jobTitle: {
+                    select: {
+                        id: true,
+                        name: true,
+                    } 
+                },
+            },
+            where: { 
+              deleted: false, 
+              isPrimary: ( query.allDepartments === true ) ? false : true, // 대표 소속만 표시
+            },
+            orderBy: [
+                // orderBy 배열 이유: Prisma는 orderBy 객체 하나에 필드가 정확히 1개만 있어야 함
+                { isPrimary: 'desc' }, //1순위(대표 지정 소속)
+                { createdAt: 'asc' } //2순위(등록순)
+            ], 
+        },
+      },
+
+      where: {
+        deleted: false,
+        empNo: query.empNo ? { contains: query.empNo } : undefined,
+        email: query.email ? { contains: query.email } : undefined,
+        name: query.name ? { contains: query.name } : undefined,
+        nickname: query.nickname ? { contains: query.nickname } : undefined,
+      },
+      orderBy: [
+        { createdAt: 'asc' }, 
+        { id: 'asc' }
+      ],
+    });
+  }
 
   //* 회원 생성
   async createUser( user: CreateUserDto ){
@@ -56,23 +125,6 @@ export class UsersService {
     });
 
     return newUser;
-  }
-
-  //* 전체 회원 조회
-  async readAllUsers() {
-    return await this.prisma.users.findMany({
-      select: {
-        empNo: true, 
-        email: true, 
-        name: true, 
-        nickname: true, 
-        birthday: true,
-        role: true,
-      },
-      where: {
-        deleted: false,
-      },
-    });
   }
 
   //* 비밀번호 확인

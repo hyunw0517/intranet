@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { ROLES_KEY } from "../decorator/roles.decorator";
-import { Role } from "src/generated/prisma/client";
+import { UserRole } from "src/generated/prisma/client";
 
 //* 로그인한 사용자의 role(권한)이 특정 라우트에 접근할 수 있는지 확인하는 Guard
 @Injectable()
@@ -18,7 +18,7 @@ export class RolesGuard implements CanActivate {
          * Reflector
          * getAllAndOverride()
          */
-        const requiredRole = this.reflector.getAllAndOverride<Role>(
+        const requiredRole = this.reflector.getAllAndOverride<UserRole>(
             ROLES_KEY, 
             [
                 context.getHandler(), 

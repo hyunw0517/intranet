@@ -1,30 +1,33 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { User } from './decorator/user.decorator';
-import { Role, type Users } from 'src/generated/prisma/client';
-import { Roles } from './decorator/roles.decorator';
+import { User } from 'src/auth/decorator/user.decorator';
+import { UserRole, type Users } from 'src/generated/prisma/client';
+import { Roles } from 'src/auth/decorator/roles.decorator';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
+import { PaginateUserQueryDto } from './dto/paginate-user-query.dto';
 
 @Controller('users')
 export class UsersController {
 
   constructor(private readonly usersService: UsersService) {}
 
+  //* (관리자) 회원 전체 조회
   @Get()
-  @Roles(Role.ADMIN)
-  getAllUsers() {
-    return this.usersService.getAllUsers();
+  @Roles(UserRole.ADMIN)
+  getAllUsers(
+      @Query() query: PaginateUserQueryDto,
+  ) {
+    return this.usersService.paginateUser( query );
   }
 
-  //* 회원 개인정보 조회
+  //* (개인) 회원 개인정보 조회
   @Get('me')
   getMe( @User() user: Users ) {
-    
     return user;
   }
 
-  //* 회원 개인정보 수정(UPDATE)
+  //* (개인) 회원 개인정보 수정(UPDATE)
   @Patch('me')
   patchMe(
     //@User('id') userId: number,
@@ -34,7 +37,7 @@ export class UsersController {
     return this.usersService.updateUser(user, body);
   }
 
-  //* 회원 삭제(soft delete)
+  //* (개인) 회원 삭제(soft delete)
   @Delete('me')
   deleteMe(
     @User() user: Pick<Users, 'id'>,

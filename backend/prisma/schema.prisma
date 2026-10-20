@@ -157,7 +157,9 @@ model Users {
   role      UserRole     @default(GUEST)  // 회원 권한
   status     UserStatus @default(ACTIVE)  // 회원 상태
   tokenVersion Int    @default(0) @map("token_version") // 토큰 버전 (올리면 기존 로그인 발급 토큰 전부 무효화)
+  positionId Int?   @map("position_id") // 직급 id (관리자 지정 전 신규 가입자는 NULL)
 
+  position                Position?        @relation(fields: [positionId], references: [id]) // 직급
   departments             UserDepartment[] // 소속 목록 (겸직 시 여러 개)
   notifications           Notification[]  // 받은 알림 목록
   posts                   Post[]                      @relation("PostAuthor")    // 작성한 게시글 목록
@@ -180,6 +182,7 @@ model Users {
 
   @@unique([email], where: { deleted: false }) // 삭제되지 않은 계정만 이메일이 겹치지 않도록 설정
   @@unique([empNo], where: { deleted: false }) // 삭제되지 않은 계정만 사번이 겹치지 않도록 설정
+  @@index([positionId, deleted])
   @@map("users_model")
 }
 
@@ -214,7 +217,7 @@ model Position {
   name      String   // 직급명
   sortOrder Int      @default(0) @map("sort_order") // 정렬 순서 + 직급 순위 비교
 
-  members   UserDepartment[] // 해당 직급 소속 목록
+  users     Users[] // 해당 직급 회원 목록
   boardAuths BoardAuth[] // 게시판 권한 목록
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -248,18 +251,16 @@ model JobTitle {
   @@map("job_title_model")
 }
 
-//* 회원 소속 (회원-부서-직급-직책) -> 모듈: Organization
+//* 회원 소속 (회원-부서-직책, 직급은 Users에서 관리) -> 모듈: Organization
 model UserDepartment {
   id           Int      @id @default(autoincrement())
   userId       Int      @map("user_id") // 회원 id
   departmentId Int      @map("department_id") // 부서 id
-  positionId   Int      @map("position_id") // 직급 id
-  jobTitleId   Int?     @map("job_title_id") // 직책 id (직책이 없는 팀원은 NULL)
+  jobTitleId   Int?     @map("job_title_id") // 직책 id (직책이 없다면 NULL)
   isPrimary    Boolean  @default(false) @map("is_primary") // 주 소속 여부
 
   user         Users      @relation(fields: [userId], references: [id])
   department   Department @relation(fields: [departmentId], references: [id])
-  position     Position   @relation(fields: [positionId], references: [id])
   jobTitle     JobTitle?  @relation(fields: [jobTitleId], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -273,7 +274,6 @@ model UserDepartment {
   @@unique([userId], where: { isPrimary: true, deleted: false }) // 회원 1명당 주 소속을 1개로 제한
   @@index([userId, deleted])
   @@index([departmentId, deleted])
-  @@index([positionId, deleted])
   @@index([jobTitleId, deleted])
   @@map("user_department_model")
 }
@@ -430,13 +430,15 @@ model Comment {
   @@map("comment_model")
 }
 
-//* 게시판 권한 (게시판-부서-직급-직책) -> 모듈: Boards
+//* 게시판 권한 (게시판-부서-직급-직책)
+// -> 부서/직책: UserDepartment 기준
+// -> 직급: Users.positionId 기준
 model BoardAuth {
   id                   Int     @id @default(autoincrement())
   boardId              Int     @map("board_id") // 게시판 id
   departmentId         Int?    @map("department_id") // 부서 id (NULL이면 부서 조건 없음)
   includeSubDepartment Boolean @default(false) @map("include_sub_department") // 하위 부서 포함 여부
-  positionId           Int?    @map("position_id") // 최소 직급 id - 이 직급 이상 허용 (Position.sortOrder 기준, NULL이면 직급 조건 없음)
+  positionId           Int?    @map("position_id") // 직급 id - 기준 직급 이상 허용 (Position.sortOrder 기준, NULL이면 직급 조건 없음)
 
   authAdmin   Boolean @default(false)  @map("auth_admin") // 게시판 관리 권한 (다른 사람이 작성한 게시글/댓글 삭제 권한만)
   authRead    Boolean @default(true)  @map("auth_read")
@@ -445,8 +447,8 @@ model BoardAuth {
 
   board      Board               @relation(fields: [boardId], references: [id])
   department Department?         @relation(fields: [departmentId], references: [id])
-  position   Position?           @relation(fields: [positionId], references: [id])
   jobTitles  BoardAuthJobTitle[] // 허용 직책 목록 (비어 있으면 직책 조건 없음)
+  position   Position?           @relation(fields: [positionId], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")

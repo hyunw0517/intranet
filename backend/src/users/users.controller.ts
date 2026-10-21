@@ -60,6 +60,17 @@ export class UsersController {
     return this.usersService.getUserDetail(id);
   }
 
+  //* (관리자) 가입 승인 및 권한 변경 + 입사일 설정
+  @Patch(':id/agree')
+  @Roles(UserRole.ADMIN)
+  patchUserRole(
+    @User() user: Pick<Users, 'id'>,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateUserRoleDto,
+  ) {
+    return this.usersService.updateUserRole(user, id, body);
+  }
+
   //* (관리자) 회원 정보 수정
   @Patch(':id')
   @Roles(UserRole.ADMIN)
@@ -68,17 +79,6 @@ export class UsersController {
     @Body() body: AdminUpdateUserDto,
   ) {
     return this.usersService.adminUpdateUser(id, body);
-  }
-
-  //* (관리자) 가입 승인 및 권한 변경
-  @Patch(':id/role')
-  @Roles(UserRole.ADMIN)
-  patchUserRole(
-    @User() user: Pick<Users, 'id'>,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: UpdateUserRoleDto,
-  ) {
-    return this.usersService.updateUserRole(user, id, body);
   }
 
   //* (관리자) 회원 상태 변경
@@ -93,12 +93,12 @@ export class UsersController {
   }
 
   //* (관리자) 삭제 회원 복구
-  @Patch(':id/restore')
+  @Patch(':id/delete_recovery')
   @Roles(UserRole.ADMIN)
   patchRestoreUser(
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.usersService.restoreUser(id);
+    return this.usersService.recoveryUser(id);
   }
 
 }

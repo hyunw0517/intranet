@@ -37,41 +37,41 @@ export class UsersService {
 
         // 직급
         position: {
-            select: {
-                id: true,
-                name: true,
-            }
+          select: {
+            id: true,
+            name: true,
+          }
         },
 
         // 소속 (부서+직책)
         departments: {
-            select: {
+          select: {
+            id: true,
+            isPrimary: true,
+            // 부서
+            department: {
+              select: {
                 id: true,
-                isPrimary: true,
-                // 부서
-                department: {
-                    select: {
-                        id: true,
-                        name: true,
-                    }
-                },
-                // 직책
-                jobTitle: {
-                    select: {
-                        id: true,
-                        name: true,
-                    } 
-                },
+                name: true,
+              }
             },
-            where: { 
-              deleted: false, 
-              isPrimary: ( query.allDepartments === true ) ? undefined : true, // 전체 소속 조회 true 플래그가 없다면 대표 소속만 표시
+            // 직책
+            jobTitle: {
+              select: {
+                id: true,
+                name: true,
+              } 
             },
-            orderBy: [
-                // orderBy 배열 이유: Prisma는 orderBy 객체 하나에 필드가 정확히 1개만 있어야 함
-                { isPrimary: 'desc' }, //1순위(대표 지정 소속)
-                { createdAt: 'asc' } //2순위(등록순)
-            ], 
+          },
+          where: { 
+            deleted: false, 
+            isPrimary: ( query.allDepartments === true ) ? undefined : true, // 전체 소속 조회 true 플래그가 없다면 대표 소속만 표시
+          },
+          orderBy: [
+            // orderBy 배열 이유: Prisma는 orderBy 객체 하나에 필드가 정확히 1개만 있어야 함
+            { isPrimary: 'desc' }, //1순위(대표 지정 소속)
+            { createdAt: 'asc' } //2순위(등록순)
+          ], 
         },
       },
 
@@ -90,7 +90,7 @@ export class UsersService {
   }
 
   //* (관리자) 회원 상세 조회
-  //      - 개인정보(hp, tel, birthday)를 포함하므로 관리자 API에서만 사용한다.
+  // - 개인정보(hp, tel, birthday)를 포함하므로 관리자 API에서만 사용한다.
   async getUserDetail(userId: number) {
     const user = await this.prisma.users.findFirst({
       select: {
@@ -109,25 +109,35 @@ export class UsersService {
 
         // 직급
         position: {
-            select: {
-                id: true,
-                name: true,
-            }
+          select: {
+            id: true,
+            name: true,
+          }
         },
 
         // 소속 (부서+직책), 대표 소속 먼저
         departments: {
-            select: {
-                id: true,
-                isPrimary: true,
-                department: { select: { id: true, name: true } },
-                jobTitle: { select: { id: true, name: true } },
+          select: {
+            id: true,
+            isPrimary: true,
+            department: { 
+              select: { 
+                id: true, 
+                name: true 
+              } 
             },
-            where: { deleted: false },
-            orderBy: [
-                { isPrimary: 'desc' },
-                { createdAt: 'asc' }
-            ],
+            jobTitle: { 
+              select: { 
+                id: true, 
+                name: true 
+              } 
+            },
+          },
+          where: { deleted: false },
+          orderBy: [
+            { isPrimary: 'desc' },
+            { createdAt: 'asc' }
+          ],
         },
       },
       where: {
@@ -144,7 +154,7 @@ export class UsersService {
   }
 
   //* (관리자) 회원 정보 수정
-  //      - 본인 수정(updateUser)과 달리 현재 비밀번호 확인이 없고, 사번·입사일도 수정할 수 있다.
+  // - 본인 수정(updateUser)과 달리 현재 비밀번호 확인이 없고, 사번·입사일도 수정할 수 있다.
   async adminUpdateUser(
     userId: number,
     body: AdminUpdateUserDto,
@@ -197,8 +207,8 @@ export class UsersService {
   }
 
   //* (관리자) 가입 승인 및 권한 변경
-  //      - GUEST -> USER/ADMIN 변경이 가입 승인이다.
-  //      - 승인하는 회원의 입사일이 없으면 입사일을 함께 입력해야 한다. (연차 계산에 필요)
+  // - GUEST -> USER/ADMIN 변경이 가입 승인이다.
+  // - 승인하는 회원의 입사일이 없으면 입사일을 함께 입력해야 한다. (연차 계산에 필요)
   async updateUserRole(
     user: Pick<Users, 'id'>,
     userId: number,
@@ -231,7 +241,7 @@ export class UsersService {
   }
 
   //* (관리자) 회원 상태 변경
-  //      - 가드가 요청마다 status를 확인하므로 변경 즉시 로그인·API 접근이 막힌다.
+  // - 가드가 요청마다 status를 확인하므로 변경 즉시 로그인·API 접근이 막힌다.
   async updateUserStatus(
     user: Pick<Users, 'id'>,
     userId: number,
@@ -254,9 +264,9 @@ export class UsersService {
   }
 
   //* (관리자) 삭제 회원 복구
-  //      - 삭제된 동안 다른 회원이 같은 이메일·사번으로 가입했을 수 있으므로 중복을 확인한다.
-  //      - 삭제 전에 발급된 토큰이 다시 유효해지지 않도록 tokenVersion을 올린다.
-  async restoreUser(userId: number) {
+  // - 삭제된 동안 다른 회원이 같은 이메일·사번으로 가입했을 수 있으므로 중복을 확인한다.
+  // - 삭제 전에 발급된 토큰이 다시 유효해지지 않도록 tokenVersion을 올린다.
+  async recoveryUser(userId: number) {
     const deletedUser = await this.prisma.users.findFirst({
       where: {
         id: userId,
@@ -305,9 +315,8 @@ export class UsersService {
     return this.getUserDetail(userId);
   }
 
-  // 관리자 본인을 대상으로 하는 권한·상태 변경 차단
-  //      - 실수로 자기 권한을 잃는 것을 막는다.
-  //      - 변경을 요청한 관리자는 항상 ADMIN으로 남으므로 "마지막 관리자" 보호도 함께 된다.
+  //* 관리자 본인을 대상으로 하는 권한·상태 변경 차단
+  //  - 실수로 자기 권한을 잃는 것을 방지.
   private checkNotSelf(user: Pick<Users, 'id'>, userId: number) {
     if( user.id === userId ){
       throw new BadRequestException('본인 계정의 권한·상태는 변경할 수 없습니다.');
@@ -317,13 +326,13 @@ export class UsersService {
   //* 회원 생성
   async createUser( user: CreateUserDto ){
 
-    // nickname은 표시 이름(display name)이므로 중복을 허용하며 별도 검사를 하지 않는다.
+    // nickname은 중복을 허용하며 별도 검사를 하지 않는다.
     // exist() -> 만약 조건에 해당하는 값이 있으면 true 반환
     const emailExists = await this.prisma.users.findFirst({
-        where: {
-          email: user.email, 
-          deleted: false, 
-        }
+      where: {
+        email: user.email, 
+        deleted: false, 
+      }
     });
     
     if( emailExists ){
@@ -331,10 +340,10 @@ export class UsersService {
     }
     
     const empNoExists = await this.prisma.users.findFirst({
-        where: {
-          empNo: user.empNo, 
-          deleted: false, 
-        }
+      where: {
+        empNo: user.empNo, 
+        deleted: false, 
+      }
     });
 
     if( empNoExists ){
@@ -358,7 +367,7 @@ export class UsersService {
   }
 
   //* 비밀번호 확인
-  //      - 입력된 비밀번호와 사용자 정보에 저장되어 있는 hash를 비교한다.
+  //  - 입력된 비밀번호와 사용자 정보에 저장되어 있는 hash를 비교한다.
   async verifyPassword(user: Pick<Users, 'password'>, password: string) {
     const passOk = await bcrypt.compare( password, user.password );
 
@@ -368,8 +377,8 @@ export class UsersService {
   }
 
   //* 회원 개인정보 수정
-  //      - 본인 확인을 위해 현재 비밀번호를 먼저 검증한다.
-  //      - 비밀번호 변경은 별도 요청으로 처리하므로 password는 수정 대상에서 제외한다.
+  //  - 본인 확인을 위해 현재 비밀번호를 먼저 검증.
+  //  - 비밀번호 변경은 별도 요청으로 처리하므로 password는 수정 대상에서 제외한다.
   async updateUser(
     user: Pick<Users, 'id'>, 
     body: UpdateUserDto,
@@ -431,7 +440,6 @@ export class UsersService {
   }
 
   //* 사원번호로 회원 조회 (비밀번호 해시 포함)
-  //      - prisma 모듈 전역 설정으로 password는 기본 제외되므로, 로그인 검증에서만 명시적으로 포함.
   async getUserWithPasswordByEmpNo(empNo: string){
     return await this.prisma.users.findFirst({
       where: {
@@ -445,7 +453,7 @@ export class UsersService {
   }
 
   //* 비밀번호 해시 조회
-  //      - 로그인한 사용자의 비밀번호 확인(정보 수정, 탈퇴, 비밀번호 변경)에서 사용.
+  //  - 사용자 비밀번호 확인(정보 수정, 탈퇴, 비밀번호 변경 등)에서 사용.
   async getPasswordHashById(id: number){
     const user = await this.prisma.users.findFirst({
       where: {
@@ -465,8 +473,8 @@ export class UsersService {
   }
 
   //* 비밀번호 변경
-  //      - 해시는 AuthService에서 생성하고, 여기서는 저장만 한다.
-  //      - tokenVersion을 올려 기존에 발급된 토큰을 모두 무효화한다.
+  //  - 해시는 Auth 모듈에서 생성하고 update는 이곳에서 진행. 
+  //  - tokenVersion -> 기존에 발급된 토큰을 무효화하는 용도. 
   async updatePassword(id: number, hash: string){
     return await this.prisma.users.update({
       where: {
@@ -486,9 +494,8 @@ export class UsersService {
   }
 
   //* 회원 삭제 (soft delete)
-  //      - 로그인한 본인 계정만 삭제한다.
-  //      - 본인 확인을 위해 현재 비밀번호를 먼저 검증한다.
-  //      - 실제로 행을 지우지 않고 deleted 플래그와 삭제 시각, 삭제자 id를 기록한다.
+  //  - 회원 탈퇴
+  //  - 본인 확인을 위해 현재 비밀번호를 먼저 검증한다.
   async deleteUser(
     user: Pick<Users, 'id'>,
     body: DeleteUserDto,

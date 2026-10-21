@@ -4,6 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { PaginateDepartmentQueryDto } from './dto/paginate-department-query.dto';
+import { toTreeList } from 'src/common/util/tree.util';
 
 @Injectable()
 export class DepartmentsService {
@@ -13,19 +14,31 @@ export class DepartmentsService {
     ){}
     
     //* 전체 부서 조회
+    // 트리 순서(상위 부서 → 하위 부서들 → 다음 상위 부서)의 평평한 목록으로 반환
+    // ex) 경영지원본부 / 경영지원본부/인사팀 / 경영지원본부/총무팀 / 사업본부 / 사업본부/영업팀 ...
     async paginateDepartment(
-        query: PaginateDepartmentQueryDto, 
+        query: PaginateDepartmentQueryDto,
     ) {
-        return await this.prisma.department.findMany({
-            where: {
-                deleted: false,
-                // 값이 없으면 undefined -> Prisma가 조건에서 제외
-                name: query.name ? { contains: query.name } : undefined,
+        // 전체를 한 번만 조회 (순서는 toTreeList에서 정함)
+        const departments = await this.prisma.department.findMany({
+            select: {
+                id: true,
+                name: true,
+                parentDepartmentId: true,
+                sortOrder: true,
             },
-            orderBy: { 
-                sortOrder: 'asc',
+            where: {
+                deleted: false 
             },
         });
+
+        // 전체 부서 리스트를 루트 부서에서 하위 부서까지 전위순회 방식으로 표시
+        const result = toTreeList( departments, ( department ) => department.parentDepartmentId );
+
+        // 부서명 검색: 경로 기준이라 상위 부서명으로 검색하면 하위 부서까지 함께 조회됨
+        return query.name
+            ? result.filter( ( department ) => department.path.includes( query.name as string ) )
+            : result;
     }
 
     //* 부서 생성

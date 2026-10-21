@@ -1,7 +1,15 @@
-import { IsString, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsEnum } from 'class-validator';
 import { StringToBoolean } from 'src/common/decorator/string-to-boolean.decorator';
+import { PagePaginationDto } from 'src/common/dto/page-pagination.dto';
 
-export class PaginateUserQueryDto {
+//* 정렬 가능 컬럼
+export enum UserSortBy {
+    CREATED_AT = 'createdAt',
+    NAME = 'name',
+}
+
+//* 회원 목록 조회 DTO (GET query string)
+export class PaginateUserQueryDto extends PagePaginationDto {
 
     @IsOptional()
     @IsString()
@@ -29,5 +37,10 @@ export class PaginateUserQueryDto {
     @IsBoolean()
     @StringToBoolean()
     deletedOnly?: boolean;
+    
+    // 정렬 기준 컬럼
+    @IsOptional()
+    @IsEnum( UserSortBy )
+    sortBy: UserSortBy = UserSortBy.CREATED_AT;
 
 }

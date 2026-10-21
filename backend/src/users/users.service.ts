@@ -10,6 +10,7 @@ import { PaginateUserQueryDto } from './dto/paginate-user-query.dto';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { PageArgs, PageResult } from 'src/common/util/pagination.util';
 
 @Injectable()
 export class UsersService {
@@ -20,73 +21,85 @@ export class UsersService {
   ){}
   
   //* 전체 회원 조회
-  async paginateUser( 
-    query: PaginateUserQueryDto, 
+  async paginateUser(
+    query: PaginateUserQueryDto,
   ) {
-    return await this.prisma.users.findMany({
-      select: {
-        id: true,
-        empNo: true, 
-        email: true, 
-        name: true, 
-        nickname: true, 
-        birthday: true,
-        status: true,
-        role: true,
-        deletedAt: true, // 삭제된 회원 조회(deletedOnly) 시 삭제 시각
+    
+    const where = {
+      deleted: ( query.deletedOnly === true ) ? true : false, // 삭제 회원 조회 true 플래그가 있다면 삭제된 회원만 표시
+      empNo: query.empNo ? { contains: query.empNo } : undefined,
+      email: query.email ? { contains: query.email } : undefined,
+      name: query.name ? { contains: query.name } : undefined,
+      nickname: query.nickname ? { contains: query.nickname } : undefined,
+    };
 
-        // 직급
-        position: {
-          select: {
-            id: true,
-            name: true,
-          }
+    // 목록과 전체 개수 조회 -> Promise.all로 병렬 처리
+    const [result, total] = await Promise.all([
+      // list
+      this.prisma.users.findMany({
+        select: {
+          id: true,
+          empNo: true, 
+          email: true, 
+          name: true, 
+          nickname: true, 
+          birthday: true,
+          status: true,
+          role: true,
+          deletedAt: true, // 삭제된 회원 조회(deletedOnly) 시 삭제 시각
+
+          // 직급
+          position: {
+            select: {
+              id: true,
+              name: true,
+            }
+          },
+
+          // 소속 (부서+직책)
+          departments: {
+            select: {
+              id: true,
+              isPrimary: true,
+              // 부서
+              department: {
+                select: {
+                  id: true,
+                  name: true,
+                }
+              },
+              // 직책
+              jobTitle: {
+                select: {
+                  id: true,
+                  name: true,
+                } 
+              },
+            },
+            where: { 
+              deleted: false, 
+              isPrimary: ( query.allDepartments === true ) ? undefined : true, // 전체 소속 조회 true 플래그가 없다면 대표 소속만 표시
+            },
+            orderBy: [
+              // orderBy 배열 이유: Prisma는 orderBy 객체 하나에 필드가 정확히 1개만 있어야 함
+              { isPrimary: 'desc' }, //1순위(대표 지정 소속)
+              { createdAt: 'asc' } //2순위(등록순)
+            ], 
+          },
         },
 
-        // 소속 (부서+직책)
-        departments: {
-          select: {
-            id: true,
-            isPrimary: true,
-            // 부서
-            department: {
-              select: {
-                id: true,
-                name: true,
-              }
-            },
-            // 직책
-            jobTitle: {
-              select: {
-                id: true,
-                name: true,
-              } 
-            },
-          },
-          where: { 
-            deleted: false, 
-            isPrimary: ( query.allDepartments === true ) ? undefined : true, // 전체 소속 조회 true 플래그가 없다면 대표 소속만 표시
-          },
-          orderBy: [
-            // orderBy 배열 이유: Prisma는 orderBy 객체 하나에 필드가 정확히 1개만 있어야 함
-            { isPrimary: 'desc' }, //1순위(대표 지정 소속)
-            { createdAt: 'asc' } //2순위(등록순)
-          ], 
-        },
-      },
+        where,
+        orderBy: [
+          { [query.sortBy]: query.order },
+          { id: query.order }
+        ],
+        ...PageArgs( query ),
+      }),
+      // total
+      this.prisma.users.count({ where })
+    ]);
 
-      where: {
-        deleted: ( query.deletedOnly === true ) ? true : false, // 삭제 회원 조회 true 플래그가 있다면 삭제된 회원만 표시
-        empNo: query.empNo ? { contains: query.empNo } : undefined,
-        email: query.email ? { contains: query.email } : undefined,
-        name: query.name ? { contains: query.name } : undefined,
-        nickname: query.nickname ? { contains: query.nickname } : undefined,
-      },
-      orderBy: [
-        { createdAt: 'asc' }, 
-        { id: 'asc' }
-      ],
-    });
+    return PageResult( result, total, query );
   }
 
   //* (관리자) 회원 상세 조회

@@ -4,6 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
 import { PaginatePositionQueryDto } from './dto/paginate-position-query.dto';
+import { PageArgs, PageResult } from 'src/common/util/pagination.util';
 
 @Injectable()
 export class PositionsService {
@@ -14,14 +15,26 @@ export class PositionsService {
     
     //* 전체 직급 조회
     async paginatePosition(query: PaginatePositionQueryDto) {
-        return await this.prisma.position.findMany({
-            where: {
-                deleted: false,
-                // 값이 없으면 undefined -> Prisma가 조건에서 제외
-                name: query.name ? { contains: query.name } : undefined,
-            },
-            orderBy: { sortOrder: 'asc' },
-        });
+        
+        const where = {
+            deleted: false,
+            // 값이 없으면 undefined -> Prisma가 조건에서 제외
+            name: query.name ? { contains: query.name } : undefined,
+        }
+
+        const [result, total] = await Promise.all([
+            this.prisma.position.findMany({
+                where,
+                orderBy: [
+                    { [query.sortBy]: query.order },
+                    { id: query.order }
+                ],
+                ...PageArgs( query ),
+            }),
+            this.prisma.position.count({ where })
+        ]);
+
+        return PageResult( result, total, query );
     }
 
     //* 직급 생성

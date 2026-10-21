@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, Query, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Body, Patch, Param, Delete, Query, ParseIntPipe } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from 'src/auth/decorator/user.decorator';
 import { UserRole, type Users } from 'src/generated/prisma/client';
@@ -26,7 +26,9 @@ export class UsersController {
 
   //* (개인) 회원 개인정보 조회
   @Get('me')
-  getMe( @User() user: Users ) {
+  getMe( 
+    @User() user: Users 
+  ) {
     return user;
   }
 

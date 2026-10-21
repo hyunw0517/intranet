@@ -4,6 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateJobTitleDto } from './dto/create-job-title.dto';
 import { UpdateJobTitleDto } from './dto/update-job-title.dto';
 import { PaginateJobTitleQueryDto } from './dto/paginate-job-title-query.dto';
+import { PageArgs, PageResult } from 'src/common/util/pagination.util';
 
 @Injectable()
 export class JobTitlesService {
@@ -14,14 +15,27 @@ export class JobTitlesService {
     
     //* 전체 직책 조회
     async paginateJobTitle(query: PaginateJobTitleQueryDto) {
-        return await this.prisma.jobTitle.findMany({
-            where: {
-                deleted: false,
-                // 값이 없으면 undefined -> Prisma가 조건에서 제외
-                name: query.name ? { contains: query.name } : undefined,
-            },
-            orderBy: { sortOrder: 'asc' },
-        });
+        
+        const where = {
+            deleted: false, 
+            name: query.name ? { contains: query.name } : undefined,
+        };
+
+        const [result, total] = await Promise.all([
+            // list
+            this.prisma.jobTitle.findMany({
+                where,
+                orderBy: [
+                    { [query.sortBy]: query.order },
+                    { id: query.order }
+                ],
+                ...PageArgs( query ),
+            }),
+            // count
+            this.prisma.jobTitle.count({ where })
+        ]) 
+
+        return PageResult( result, total, query );
     }
 
     //* 직책 생성

@@ -1,9 +1,15 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // 응답 JSON의 BigInt를 문자열로 변환 (JSON.stringify BigInt 문제 해결용)
+  app.set('json replacer', ( _key: string, value: unknown ) =>
+    typeof value === 'bigint' ? value.toString() : value,
+  );
 
   app.useGlobalPipes( new ValidationPipe({
     transform: true, // 요청 데이터를 DTO 타입으로 변환

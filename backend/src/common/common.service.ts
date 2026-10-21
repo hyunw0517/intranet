@@ -4,9 +4,9 @@ import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class CommonService {
-
     constructor(
         private readonly configService: ConfigService, 
     ){}
+
 }
 

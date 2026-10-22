@@ -8,6 +8,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { ConfigService } from '@nestjs/config';
 import { ENV_HASH_ROUNDS_KEY, ENV_JWT_SECRET } from 'src/common/const/env-keys.const';
 import { Users, UserStatus } from 'src/generated/prisma/client';
+import { REFRESH_TOKEN_EXPIRES_IN } from './const/refresh-cookie-const';
 
 @Injectable()
 export class AuthService {
@@ -123,7 +124,7 @@ export class AuthService {
     return this.jwtService.sign(payload, {
         secret: this.configService.get<string>(ENV_JWT_SECRET), 
         // 유효시간 (unit: seconds) 
-        expiresIn: isRefreshToken ? 3600 : 600, 
+        expiresIn: isRefreshToken ? REFRESH_TOKEN_EXPIRES_IN : 600, 
     });
   }
 
@@ -185,7 +186,7 @@ export class AuthService {
 
   //* 회원가입
   async registerWithEmpNo(
-    user: RegisterUserDto
+    user: RegisterUserDto, 
   ){
 
     const hash = await this.hashPassword(user.password);

@@ -59,22 +59,24 @@ export class BearerTokenGuard implements CanActivate {
             return true;
         }
 
-        await this.authenticate(req);
+        // access token은 Authorization 헤더에서 꺼낸다.
+        const rawToken = req.headers['authorization'];
+
+        if(!rawToken){
+            throw new UnauthorizedException('토큰이 없습니다.');
+        }
+
+        const token = this.authService.extractTokenFromHeader(rawToken, true);
+
+        await this.authenticate(req, token);
 
         return true;
     }
 
     //* 토큰 검증 -> 사용자 조회 -> 상태 체크 -> req에 저장
+    //      - 토큰을 어디서 꺼낼지(헤더/쿠키)는 호출하는 쪽이 정하고, 여기서는 검증만 한다.
     //      - public 여부와 상관없이 무조건 검증한다. (RefreshTokenGuard에서도 사용)
-    protected async authenticate(req: any): Promise<void> {
-        const rawToken = req.headers['authorization'];
-
-        if(!rawToken){
-            throw new UnauthorizedException('토큰이 없습니다.'); 
-        }
-
-        const token = this.authService.extractTokenFromHeader(rawToken, true);
-
+    protected async authenticate(req: any, token: string): Promise<void> {
         const result = await this.authService.verifyToken(token);
 
         /**
@@ -133,7 +135,14 @@ export class RefreshTokenGuard extends BearerTokenGuard {
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const req = context.switchToHttp().getRequest();
 
-        await this.authenticate(req);
+        // refresh token은 HttpOnly 쿠키에서 꺼낸다. (cookie-parser 필요)
+        const token = req.cookies?.refreshToken;
+
+        if(!token){
+            throw new UnauthorizedException('토큰이 없습니다.');
+        }
+
+        await this.authenticate(req, token);
 
         if(req.tokenType !== 'refresh'){
             throw new UnauthorizedException('Refresh Token이 아닙니다.'); 

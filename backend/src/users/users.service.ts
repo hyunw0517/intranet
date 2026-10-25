@@ -381,11 +381,18 @@ export class UsersService {
 
   //* 비밀번호 확인
   //  - 입력된 비밀번호와 사용자 정보에 저장되어 있는 hash를 비교한다.
-  async verifyPassword(user: Pick<Users, 'password'>, password: string) {
+  async verifyPassword(user: Pick<Users, 'password'>, password: string, purpose: 'login' | 'confirm' = 'confirm') {
     const passOk = await bcrypt.compare( password, user.password );
 
     if( !passOk ){
-      throw new UnauthorizedException('비밀번호가 일치하지 않습니다.');
+      // 예외처리 분리
+      if( purpose === 'login' ){
+        // 로그인 -> 401
+        throw new UnauthorizedException('비밀번호가 일치하지 않습니다.');
+      }else{
+        // 비밀번호 체크 -> 400
+        throw new BadRequestException('비밀번호가 일치하지 않습니다.');
+      }
     }
   }
 
@@ -397,7 +404,7 @@ export class UsersService {
     body: UpdateUserDto,
   ) {
     const hash = await this.getPasswordHashById(user.id);
-    await this.verifyPassword({ password: hash }, body.currentPassword);
+    await this.verifyPassword({ password: hash }, body.currentPassword, 'confirm');
 
     // 본인을 제외한 다른 회원이 이미 사용 중인 이메일인지 확인한다.
     const emailExists = await this.prisma.users.findFirst({
@@ -514,7 +521,7 @@ export class UsersService {
     body: DeleteUserDto,
   ) {
     const hash = await this.getPasswordHashById(user.id);
-    await this.verifyPassword({ password: hash }, body.password);
+    await this.verifyPassword({ password: hash }, body.password, 'confirm');
 
     await this.prisma.users.update({
       where: {

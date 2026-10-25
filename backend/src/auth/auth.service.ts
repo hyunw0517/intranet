@@ -150,7 +150,7 @@ export class AuthService {
           throw new UnauthorizedException('존재하지 않는 사용자입니다.'); 
       }
 
-      await this.usersService.verifyPassword( existingUser, user.password );
+      await this.usersService.verifyPassword( existingUser, user.password, 'login' );
 
       return existingUser;
   }
@@ -215,7 +215,7 @@ export class AuthService {
     body: ChangePasswordDto
   ){
     const hash = await this.usersService.getPasswordHashById(user.id);
-    await this.usersService.verifyPassword({ password: hash }, body.currentPassword);
+    await this.usersService.verifyPassword({ password: hash }, body.currentPassword, 'confirm');
 
     if( body.currentPassword === body.newPassword ){
       throw new BadRequestException('새 비밀번호가 현재 비밀번호와 같습니다.');

@@ -16,11 +16,13 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { navByVariant, type ShellVariant } from "./nav-items";
+import { useAuth } from "@/providers/auth-provider";
+import { filterNavForRole, navByVariant, type ShellVariant } from "./nav-items";
 import { isActivePath } from "./is-active-path";
 
 export function AppSidebar({ variant }: { variant: ShellVariant }) {
-  const nav = navByVariant[variant];
+  const { user } = useAuth();
+  const nav = filterNavForRole(navByVariant[variant], user?.role);
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
   const isAdmin = variant === "admin";
@@ -76,19 +78,21 @@ export function AppSidebar({ variant }: { variant: ShellVariant }) {
         ))}
       </SidebarContent>
 
-      {/* 관리자 화면 ↔ 직원 화면 이동. 권한별 노출은 인증(FE-01) 이후 role 기준으로 제한한다. */}
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip={isAdmin ? "직원 화면" : "관리자 화면"}>
-              <Link href={isAdmin ? "/" : "/admin"} onClick={closeOnMobile}>
-                <ArrowLeftRight />
-                <span>{isAdmin ? "직원 화면으로" : "관리자 화면으로"}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+      {/* 관리자 화면 ↔ 직원 화면 이동은 ADMIN에게만 보여 준다. */}
+      {user?.role === "ADMIN" && (
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip={isAdmin ? "직원 화면" : "관리자 화면"}>
+                <Link href={isAdmin ? "/" : "/admin"} onClick={closeOnMobile}>
+                  <ArrowLeftRight />
+                  <span>{isAdmin ? "직원 화면으로" : "관리자 화면으로"}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      )}
 
       <SidebarRail />
     </Sidebar>

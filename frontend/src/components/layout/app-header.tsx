@@ -6,8 +6,9 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { navByVariant, type ShellVariant } from "./nav-items";
 import { isActivePath } from "./is-active-path";
 import { ThemeToggle } from "./theme-toggle";
+import { UserMenu } from "./user-menu";
 
-// 알림·사용자 메뉴는 해당 기능 구현 시 추가한다. (미구현 기능을 동작하는 것처럼 표시하지 않음)
+// 알림은 해당 기능 구현 시 추가한다. (미구현 기능을 동작하는 것처럼 표시하지 않음)
 export function AppHeader({ variant }: { variant: ShellVariant }) {
   const pathname = usePathname();
   const current = navByVariant[variant].flatMap((group) => group.items).find((item) => isActivePath(pathname, item.href));
@@ -19,6 +20,7 @@ export function AppHeader({ variant }: { variant: ShellVariant }) {
       <span className="truncate font-medium">{current?.title}</span>
       <div className="ml-auto flex items-center gap-1">
         <ThemeToggle />
+        <UserMenu />
       </div>
     </header>
   );

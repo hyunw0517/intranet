@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/layout/app-shell";
-import { AuthGate } from "@/features/auth/components/auth-gate";
-import { AdminGate } from "@/features/auth/components/role-gate";
+import { AuthGate } from "@/features/auth/guards/auth-gate";
+import { AdminGate } from "@/features/auth/guards/role-gate";
 
 export const metadata: Metadata = {
   title: { default: "관리자", template: "%s | Intranet 관리자" },

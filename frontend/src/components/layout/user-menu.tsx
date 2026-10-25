@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { LogOut, UserRound } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -14,24 +13,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { UserRole } from "@/features/auth/types";
+import { ROLE_LABEL } from "@/types/user";
 import { useAuth } from "@/providers/auth-provider";
-
-const ROLE_LABEL: Record<UserRole, string> = {
-  GUEST: "승인 대기",
-  USER: "직원",
-  ADMIN: "관리자",
-};
 
 export function UserMenu() {
   const { user, logout } = useAuth();
-  const router = useRouter();
 
   if (!user) return null;
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace("/login");
+  // 로그인 페이지 이동은 AuthGate가 처리한다. (로그인 상태가 풀리면 /login?next=현재경로)
+  const handleLogout = () => {
+    void logout();
   };
 
   return (

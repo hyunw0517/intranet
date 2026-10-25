@@ -2,15 +2,10 @@
 
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/providers/auth-provider";
-import type { UserRole } from "@/features/auth/types";
+import { ROLE_LABEL } from "@/types/user";
 import { ChangePasswordForm } from "./change-password-form";
 import { ProfileForm } from "./profile-form";
 
-const ROLE_LABEL: Record<UserRole, string> = {
-  GUEST: "승인 대기",
-  USER: "직원",
-  ADMIN: "관리자",
-};
 
 function formatDate(value: string | null) {
   return value ? value.slice(0, 10) : "-";

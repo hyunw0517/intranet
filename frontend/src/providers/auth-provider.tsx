@@ -3,8 +3,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import * as authApi from "@/features/auth/api";
-import type { CurrentUser, RegisterInput } from "@/features/auth/types";
+import * as authApi from "@/services/api/auth";
+import type { ChangePasswordInput, RegisterInput } from "@/services/api/auth";
+import { fetchMe } from "@/services/api/users";
+import type { CurrentUser } from "@/types/user";
 import {
   refreshAccessToken,
   setAccessToken,
@@ -19,6 +21,7 @@ interface AuthContextValue {
   login: (empNo: string, password: string) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
+  changePassword: (input: ChangePasswordInput) => Promise<void>;
   setUser: (user: CurrentUser) => void;
 }
 
@@ -41,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // 토큰을 받은 뒤 내 정보를 불러와 로그인 상태로 전환
   const loadUser = useCallback(async () => {
-    const me = await authApi.fetchMe();
+    const me = await fetchMe();
     setUserState(me);
     setStatus("authenticated");
   }, []);
@@ -96,6 +99,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [loadUser],
   );
 
+  // 비밀번호 변경 → 서버가 tokenVersion을 올려 기존 토큰이 모두 무효가 되므로 응답의 새 access token으로 교체한다.
+  // (새 refresh 쿠키는 서버가 저장) 토큰을 새로 받는 동작은 login·register와 같이 이곳에서만 처리한다.
+  const changePassword = useCallback(async (input: ChangePasswordInput) => {
+    const { accessToken } = await authApi.changePassword(input);
+    setAccessToken(accessToken);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
@@ -106,8 +116,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearSession]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, register, logout, setUser: setUserState }),
-    [status, user, login, register, logout],
+    () => ({ status, user, login, register, logout, changePassword, setUser: setUserState }),
+    [status, user, login, register, logout, changePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

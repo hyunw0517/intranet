@@ -1,12 +1,11 @@
 import type { LucideIcon } from "lucide-react";
 import { LayoutDashboard, Settings, UserRound } from "lucide-react";
+import { isGuestAllowedPath } from "@/lib/guest-access";
 
 export interface NavItem {
   title: string;
   href: string;
   icon: LucideIcon;
-  // 가입 승인 전(GUEST)에도 메뉴에 보일지 여부
-  allowGuest?: boolean;
 }
 
 export interface NavGroup {
@@ -22,7 +21,7 @@ export const mainNav: NavGroup[] = [
   },
   {
     label: "개인",
-    items: [{ title: "마이페이지", href: "/mypage", icon: UserRound, allowGuest: true }],
+    items: [{ title: "마이페이지", href: "/mypage", icon: UserRound }],
   },
 ];
 
@@ -42,10 +41,10 @@ export const navByVariant: Record<ShellVariant, NavGroup[]> = {
   admin: adminNav,
 };
 
-// GUEST에게는 allowGuest 메뉴만 보여 준다. (비어 버린 그룹은 제외)
+// GUEST에게는 접근 가능한 경로(lib/guest-access)의 메뉴만 보여 준다. (비어 버린 그룹은 제외)
 export function filterNavForRole(nav: NavGroup[], role: string | undefined): NavGroup[] {
   if (role !== "GUEST") return nav;
   return nav
-    .map((group) => ({ ...group, items: group.items.filter((item) => item.allowGuest) }))
+    .map((group) => ({ ...group, items: group.items.filter((item) => isGuestAllowedPath(item.href)) }))
     .filter((group) => group.items.length > 0);
 }

@@ -6,10 +6,9 @@ import { toast } from "sonner";
 import { FormField } from "@/components/common/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { changePassword } from "@/features/auth/api";
-import { validateNewPassword, validatePasswordConfirm } from "@/features/auth/validation";
+import { validateNewPassword, validatePasswordConfirm } from "@/lib/validation/user";
 import { getErrorMessage } from "@/lib/error-message";
-import { setAccessToken } from "@/services/api-client";
+import { useAuth } from "@/providers/auth-provider";
 import { CurrentPasswordDialog } from "./current-password-dialog";
 
 const INITIAL = { newPassword: "", newPasswordConfirm: "" };
@@ -19,9 +18,9 @@ type Errors = Partial<Record<keyof Values, string>>;
 // 비밀번호 변경 (PATCH /auth/change/pw)
 // [비밀번호 변경] → 새 비밀번호 검증 → 현재 비밀번호 모달 → 확인 시 요청
 // 오류(현재 비밀번호 불일치, 새 비밀번호가 현재와 같음 등)는 모두 비밀번호에 관한 것이라 모달 안에 표시한다.
-// 서버가 tokenVersion을 올려 기존 토큰을 모두 무효화하므로(다른 기기 로그인 포함),
-// 응답의 새 access token으로 교체해야 이후 요청이 실패하지 않는다. (새 refresh 쿠키는 서버가 저장)
+// 새 access token 교체는 AuthProvider.changePassword가 처리한다. (다른 기기 로그인은 모두 해제됨)
 export function ChangePasswordForm() {
+  const { changePassword } = useAuth();
   const [values, setValues] = useState<Values>(INITIAL);
   const [errors, setErrors] = useState<Errors>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -29,8 +28,7 @@ export function ChangePasswordForm() {
 
   const mutation = useMutation({
     mutationFn: (currentPassword: string) => changePassword({ currentPassword, newPassword: values.newPassword }),
-    onSuccess: ({ accessToken }) => {
-      setAccessToken(accessToken);
+    onSuccess: () => {
       setConfirmOpen(false);
       setValues(INITIAL);
       toast.success("비밀번호를 변경했습니다. 다른 기기의 로그인은 모두 해제됩니다.");

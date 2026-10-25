@@ -3,21 +3,20 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { FormError, FormField } from "@/components/common/form-field";
+import { FormField } from "@/components/common/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { updateMe } from "@/features/auth/api";
-import type { CurrentUser } from "@/features/auth/types";
+import { updateMe } from "@/services/api/users";
+import type { CurrentUser } from "@/types/user";
 import {
   normalizePhone,
   validateEmail,
   validateName,
   validateNickname,
   validatePhone,
-} from "@/features/auth/validation";
+} from "@/lib/validation/user";
 import { getErrorMessage } from "@/lib/error-message";
 import { useAuth } from "@/providers/auth-provider";
-import { ApiError } from "@/services/api-client";
 import { CurrentPasswordDialog } from "./current-password-dialog";
 
 function toFormValues(user: CurrentUser) {
@@ -33,10 +32,6 @@ function toFormValues(user: CurrentUser) {
 
 type Values = ReturnType<typeof toFormValues>;
 type Errors = Partial<Record<keyof Values, string>>;
-
-// 현재 비밀번호 불일치는 백엔드가 401로 응답한다. → 모달 안에 표시하고 다시 입력받는다.
-// 그 외 오류(이메일 중복 등)는 폼 내용을 고쳐야 하므로 모달을 닫고 폼 위에 표시한다.
-const isWrongPassword = (error: unknown) => error instanceof ApiError && error.status === 401;
 
 // 내 정보 수정 (PATCH /users/me)
 // [저장] → 입력값 검증 → 현재 비밀번호 모달 → 확인 시 요청
@@ -62,9 +57,6 @@ export function ProfileForm({ user }: { user: CurrentUser }) {
       setConfirmOpen(false);
       setUser(updated);
       toast.success("내 정보를 저장했습니다.");
-    },
-    onError: (error) => {
-      if (!isWrongPassword(error)) setConfirmOpen(false);
     },
   });
 
@@ -94,14 +86,19 @@ export function ProfileForm({ user }: { user: CurrentUser }) {
     "aria-describedby": `profile-${key}-message`,
   });
 
-  const formError = mutation.error && !isWrongPassword(mutation.error) ? getErrorMessage(mutation.error) : null;
-  const dialogError = mutation.error && isWrongPassword(mutation.error) ? getErrorMessage(mutation.error) : null;
+  // 저장 요청의 오류는 모두 모달 안에 표시한다.
+  // 현재 비밀번호 불일치와 이메일 중복이 둘 다 400이라 상태 코드로 구분할 수 없기 때문.
+  // 폼을 고쳐야 하는 오류(이메일 중복 등)면 사용자가 [취소]로 닫고 수정한다.
+  const dialogError = mutation.error ? getErrorMessage(mutation.error) : null;
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setConfirmOpen(open);
+    if (!open) mutation.reset(); // 닫으면 오류 메시지도 지운다
+  };
 
   return (
     <>
       <form onSubmit={handleSubmit} className="grid gap-4" noValidate>
-        <FormError message={formError} />
-
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField id="profile-name" label="이름" required error={errors.name}>
             <Input {...fieldProps("name")} autoComplete="name" />
@@ -134,7 +131,7 @@ export function ProfileForm({ user }: { user: CurrentUser }) {
 
       <CurrentPasswordDialog
         open={confirmOpen}
-        onOpenChange={setConfirmOpen}
+        onOpenChange={handleDialogOpenChange}
         title="본인 확인"
         description="내 정보를 저장하려면 현재 비밀번호를 입력해 주세요."
         confirmLabel="저장"

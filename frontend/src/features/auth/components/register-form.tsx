@@ -18,7 +18,7 @@ import {
   validateNickname,
   validatePasswordConfirm,
   validatePhone,
-} from "../validation";
+} from "@/lib/validation/user";
 
 const INITIAL = {
   empNo: "",
@@ -50,7 +50,7 @@ function validate(v: Values): Errors {
 }
 
 // 본인 가입 → 즉시 GUEST로 로그인 → 관리자가 승인하면 USER
-// 가입 성공 후 이동은 GuestOnlyGate가 처리한다. (/ 로 이동 → GuestGate가 승인 대기 화면 표시)
+// 가입 성공 후 이동은 GuestOnlyGate가 처리한다. (/ 로 이동 → PendingApprovalGate가 승인 대기 화면 표시)
 export function RegisterForm() {
   const { register } = useAuth();
   const [values, setValues] = useState<Values>(INITIAL);

@@ -4,22 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Clock, ShieldX } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { isGuestAllowedPath } from "@/lib/guest-access";
 import { useAuth } from "@/providers/auth-provider";
-
-// GUEST(가입 승인 전)도 볼 수 있는 경로
-const GUEST_ALLOWED_PATHS = ["/mypage"];
-
-function isGuestAllowed(pathname: string) {
-  return GUEST_ALLOWED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
 
 // 직원용 화면: GUEST는 승인 대기 안내만 보여 준다. (마이페이지는 허용)
 // 화면만 가리는 것이므로, 업무 API는 백엔드에서 @Roles(USER)로 GUEST를 거부해야 한다.
-export function GuestGate({ children }: { children: React.ReactNode }) {
+export function PendingApprovalGate({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const pathname = usePathname();
 
-  if (user?.role === "GUEST" && !isGuestAllowed(pathname)) {
+  if (user?.role === "GUEST" && !isGuestAllowedPath(pathname)) {
     return (
       <GateMessage
         icon={<Clock className="size-5" />}

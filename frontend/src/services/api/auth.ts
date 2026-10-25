@@ -1,11 +1,27 @@
+// 백엔드 auth.controller 대응 (/auth/*)
 import { apiFetch } from "@/services/api-client";
-import type {
-  ChangePasswordInput,
-  CurrentUser,
-  RegisterInput,
-  TokenResponse,
-  UpdateMeInput,
-} from "./types";
+
+export interface TokenResponse {
+  accessToken: string;
+}
+
+// POST /auth/register/emp (RegisterUserDto)
+export interface RegisterInput {
+  empNo: string;
+  email: string;
+  password: string;
+  name: string;
+  nickname?: string;
+  birthday?: string;
+  hp?: string;
+  tel?: string;
+}
+
+// PATCH /auth/change/pw (ChangePasswordDto)
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
 
 // Basic 인증 값: base64("사번:비밀번호")
 // btoa는 Latin1만 처리하므로 UTF-8 바이트로 바꾼 뒤 인코딩한다. (백엔드는 utf8로 디코딩)
@@ -37,14 +53,6 @@ export function register(input: RegisterInput) {
 // 로그아웃 → refresh 쿠키 삭제
 export function logout() {
   return apiFetch<boolean>("/auth/logout", { method: "POST", skipAuth: true });
-}
-
-export function fetchMe() {
-  return apiFetch<CurrentUser>("/users/me");
-}
-
-export function updateMe(input: UpdateMeInput) {
-  return apiFetch<CurrentUser>("/users/me", { method: "PATCH", body: input });
 }
 
 // 비밀번호 변경 → 기존 토큰은 tokenVersion으로 모두 무효화되고, 새 access token + 새 refresh 쿠키가 온다.

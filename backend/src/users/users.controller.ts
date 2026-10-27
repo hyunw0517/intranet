@@ -1,4 +1,4 @@
-import { Controller, Get, Body, Patch, Param, Delete, Query, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Body, Patch, Param, Delete, Query, ParseIntPipe, Res } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from 'src/auth/decorator/user.decorator';
 import { UserRole, type Users } from 'src/generated/prisma/client';
@@ -9,6 +9,8 @@ import { PaginateUserQueryDto } from './dto/paginate-user-query.dto';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { clearRefreshTokenCookie } from 'src/auth/const/refresh-cookie-const';
+import type { Response } from 'express';
 
 @Controller('users')
 export class UsersController {
@@ -44,11 +46,16 @@ export class UsersController {
 
   //* (개인) 회원 삭제(soft delete)
   @Delete('me')
-  deleteMe(
+  async deleteMe(
     @User() user: Pick<Users, 'id'>,
     @Body() body: DeleteUserDto,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.usersService.deleteUser(user, body);
+    await this.usersService.deleteUser(user, body);
+
+    clearRefreshTokenCookie(res);
+
+    return true;
   }
 
   // 관리자 라우트는 'me' 라우트 아래에 둔다. (':id'가 먼저 선언되면 'me' 요청이 ':id'로 매칭됨)
@@ -92,6 +99,18 @@ export class UsersController {
     @Body() body: UpdateUserStatusDto,
   ) {
     return this.usersService.updateUserStatus(user, id, body);
+  }
+  
+  //* (관리자) 회원 삭제(soft delete)
+  @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  async deleteUser(
+    @User() user: Pick<Users, 'id'>,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    await this.usersService.adminDeleteUser(user, id);
+  
+    return true;
   }
 
   //* (관리자) 삭제 회원 복구

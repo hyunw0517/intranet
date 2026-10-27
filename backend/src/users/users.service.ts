@@ -31,6 +31,8 @@ export class UsersService {
       email: query.email ? { contains: query.email } : undefined,
       name: query.name ? { contains: query.name } : undefined,
       nickname: query.nickname ? { contains: query.nickname } : undefined,
+      role: query.role, 
+      status: query.status,
     };
 
     // 목록과 전체 개수 조회 -> Promise.all로 병렬 처리
@@ -276,6 +278,30 @@ export class UsersService {
     return this.getUserDetail(userId);
   }
 
+  async adminDeleteUser(
+    user: Pick<Users, 'id'>,
+    userId: number,
+  ) {
+    this.checkNotSelf(user, userId);
+
+    //대상 회원 검증
+    const targetUser = await this.getUserDetail(userId);
+
+    await this.prisma.users.update({
+      where: {
+        id: targetUser.id,
+      },
+      data: {
+        tokenVersion: { increment: 1 },
+        deleted: true,
+        deletedAt: new Date(),
+        deletedId: user.id,
+      },
+    });
+
+    return true;
+  }
+
   //* (관리자) 삭제 회원 복구
   // - 삭제된 동안 다른 회원이 같은 이메일·사번으로 가입했을 수 있으므로 중복을 확인한다.
   // - 삭제 전에 발급된 토큰이 다시 유효해지지 않도록 tokenVersion을 올린다.
@@ -328,11 +354,11 @@ export class UsersService {
     return this.getUserDetail(userId);
   }
 
-  //* 관리자 본인을 대상으로 하는 권한·상태 변경 차단
+  //* 관리자 본인을 대상으로 하는 권한·상태 변경 또는 삭제 차단
   //  - 실수로 자기 권한을 잃는 것을 방지.
   private checkNotSelf(user: Pick<Users, 'id'>, userId: number) {
     if( user.id === userId ){
-      throw new BadRequestException('본인 계정의 권한·상태는 변경할 수 없습니다.');
+      throw new BadRequestException('본인 계정의 권한·상태를 변경하거나 삭제할 수 없습니다.');
     }
   }
 

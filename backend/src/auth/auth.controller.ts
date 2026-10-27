@@ -9,7 +9,7 @@ import { IsPublic } from 'src/common/decorator/is-public.decorator';
 import { RefreshTokenGuard } from './guard/bearer-token.guard';
 import { BasicTokenGuard } from './guard/basic-token.guard';
 import type { Response } from 'express';
-import { refreshTokenCookieOptions } from './const/refresh-cookie-const';
+import { clearRefreshTokenCookie, refreshTokenCookieOptions } from './const/refresh-cookie-const';
 
 @Controller('auth')
 export class AuthController {
@@ -65,11 +65,7 @@ export class AuthController {
   postLogout(
     @Res({ passthrough: true }) res: Response,
   ){
-    // 저장할 때와 path 등이 같아야 지워진다. (maxAge는 clearCookie에서 쓰지 않음)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { maxAge, ...options } = refreshTokenCookieOptions();
-
-    res.clearCookie( "refreshToken", options );
+    clearRefreshTokenCookie(res);
 
     return true;
   }

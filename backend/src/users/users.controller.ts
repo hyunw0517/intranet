@@ -20,15 +20,6 @@ export class UsersController {
 
   constructor(private readonly usersService: UsersService) {}
 
-  //* (관리자) 회원 전체 조회
-  @Get()
-  @Roles(UserRole.ADMIN)
-  getAllUsers(
-      @Query() query: PaginateUserQueryDto,
-  ) {
-    return this.usersService.paginateUser( query );
-  }
-
   //* (개인) 회원 개인정보 조회
   @Get('me')
   getMe( 
@@ -61,7 +52,18 @@ export class UsersController {
     return true;
   }
 
-  //! 관리자 라우트는 'me' 라우트 아래에 둔다. (':id'가 먼저 선언되면 'me' 요청이 ':id'로 매칭됨)
+
+  //! ========== 관리자 서비스 로직 ==========
+  // 'me', 'bulk'는 ':id' 라우트 아래에 둔다. (':id'가 먼저 선언되면 'me' 요청이 ':id'로 매칭됨)
+
+  //* (관리자) 회원 전체 조회
+  @Get()
+  @Roles(UserRole.ADMIN)
+  getAllUsers(
+      @Query() query: PaginateUserQueryDto,
+  ) {
+    return this.usersService.paginateUser( query );
+  }
 
   //* (관리자) 회원 상세 조회
   @Get(':id')
@@ -125,7 +127,7 @@ export class UsersController {
   }
   
   //* (관리자) 회원 삭제(soft delete) -> 다수
-  @Delete('/bulk/delete')
+  @Delete('/bulk')
   @Roles(UserRole.ADMIN)
   bulkDeleteUsers(
     @User() user: Pick<Users, 'id'>,

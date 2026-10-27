@@ -174,7 +174,13 @@ export class UsersService {
     userId: number,
     body: AdminUpdateUserDto,
   ) {
-    await this.getUserDetail(userId);
+    const targetUser = await this.getUserDetail(userId);
+
+    // 승인된 회원(USER·ADMIN)은 입사일을 비울 수 없다. (연차 계산에 필요, 승인 시 입사일 필수 규칙과 일관)
+    // - null: 비우기 요청 (빈 문자열은 EmptyToNull로 null), undefined: 변경 안 함
+    if( targetUser.role !== UserRole.GUEST && body.joinAt === null ){
+      throw new BadRequestException('승인된 회원은 입사일을 비울 수 없습니다.');
+    }
 
     // 대상 회원을 제외한 다른 회원이 이미 사용 중인 이메일·사번인지 확인한다.
     const emailExists = await this.prisma.users.findFirst({

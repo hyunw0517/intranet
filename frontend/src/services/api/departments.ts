@@ -27,3 +27,8 @@ export function updateDepartment(id: number, input: DepartmentInput) {
 export function deleteDepartment(id: number) {
   return apiFetch<boolean>(`/departments/${id}`, { method: "DELETE" });
 }
+
+// 부서 순서 변경 - 같은 상위 부서(null이면 최상위) 아래의 형제 부서 id 전체를 화면 순서대로 보낸다.
+export function reorderDepartments(parentDepartmentId: number | null, ids: number[]) {
+  return apiFetch<boolean>("/departments/order", { method: "PATCH", body: { parentDepartmentId, ids } });
+}

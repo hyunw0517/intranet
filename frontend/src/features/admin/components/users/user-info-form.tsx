@@ -38,12 +38,13 @@ type Errors = Partial<Record<keyof Values, string>>;
 // 관리자 회원 정보 수정 (PATCH /users/:id)
 // 본인 수정과 달리 현재 비밀번호 확인이 없고, 사번·입사일도 수정한다. 비밀번호는 [비밀번호 초기화]로만 바꾼다.
 // 선택 항목을 비우면 빈 문자열을 보내 서버에서 null로 저장된다.
-// 부모가 서버 값으로 key를 주므로, 저장이나 다른 구역(가입 승인의 입사일 등)으로 서버 값이 바뀌면 폼이 새 값으로 다시 채워진다.
+// 부모가 서버 값으로 key를 주므로, 저장이나 다른 화면(목록의 권한·상태 모달 등)으로 서버 값이 바뀌면 폼이 새 값으로 다시 채워진다.
 // (key가 없으면 이전 값을 들고 있다가 저장할 때 방금 바뀐 값을 덮어쓴다)
 export function UserInfoForm({ user }: { user: AdminUserDetail }) {
   const [values, setValues] = useState<Values>(() => toFormValues(user));
   const [errors, setErrors] = useState<Errors>({});
   const mutation = useAdminUserMutation((input: AdminUpdateUserInput) => adminUpdateUser(user.id, input));
+  const isApproved = user.role !== "GUEST";
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -54,6 +55,8 @@ export function UserInfoForm({ user }: { user: AdminUserDetail }) {
       nickname: validateNickname(values.nickname),
       hp: validatePhone(values.hp),
       tel: validatePhone(values.tel),
+      // 승인된 회원은 입사일을 비울 수 없다. (연차 계산에 필요, 서버도 400)
+      joinAt: isApproved && !values.joinAt ? "승인된 회원은 입사일을 비울 수 없습니다." : undefined,
     };
     const filtered = Object.fromEntries(Object.entries(next).filter(([, msg]) => msg)) as Errors;
     setErrors(filtered);
@@ -92,7 +95,13 @@ export function UserInfoForm({ user }: { user: AdminUserDetail }) {
         <FormField id="user-empNo" label="사번" required error={errors.empNo} hint="로그인 아이디로 사용됩니다.">
           <Input {...fieldProps("empNo")} autoComplete="off" />
         </FormField>
-        <FormField id="user-joinAt" label="입사일" error={errors.joinAt}>
+        <FormField
+          id="user-joinAt"
+          label="입사일"
+          required={isApproved}
+          error={errors.joinAt}
+          hint={isApproved ? undefined : "가입 승인 전에 먼저 등록해야 합니다."}
+        >
           <Input {...fieldProps("joinAt")} type="date" />
         </FormField>
       </div>

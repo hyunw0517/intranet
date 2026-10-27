@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CornerDownRight, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
@@ -12,12 +13,14 @@ import { getErrorMessage } from "@/lib/error-message";
 import {
   createDepartment,
   deleteDepartment,
+  reorderDepartments,
   updateDepartment,
   type DepartmentInput,
 } from "@/services/api/departments";
 import type { Department } from "@/types/organization";
-import { useDepartments, useOrganizationMutation } from "../../hooks/use-organization";
+import { organizationKeys, useDepartments, useOrganizationMutation } from "../../hooks/use-organization";
 import { NameDialog } from "./name-dialog";
+import { SortableList, SortSaveBar } from "./sortable-list";
 
 const ROOT = "root"; // 상위 부서 없음(최상위). Select는 빈 문자열 값을 쓸 수 없어 별도 값으로 둔다.
 
@@ -35,17 +38,70 @@ function selfAndDescendantIds(list: Department[], target: Department) {
   return ids;
 }
 
-// 부서 관리: 트리 순서 목록 + 추가(최상위·하위)·수정(이름·상위 부서 이동)·삭제
+// 상위 부서 id → 하위 부서 목록 (서버 응답이 트리 순서라 형제끼리의 순서도 그대로 유지된다)
+function groupByParent(list: Department[]) {
+  const map = new Map<number | null, Department[]>();
+  for (const d of list) {
+    const siblings = map.get(d.parentDepartmentId) ?? [];
+    siblings.push(d);
+    map.set(d.parentDepartmentId, siblings);
+  }
+  return map;
+}
+
+// 상위 부서별 "저장 전 순서" (부서는 형제 그룹마다 따로 정렬하므로 그룹별로 보관)
+// 그 사이 부서가 추가·삭제·이동되어 그룹 구성이 달라지면 해당 그룹의 임시 순서는 버린다.
+function useDepartmentSortDrafts(childrenOf: Map<number | null, Department[]>) {
+  const [drafts, setDrafts] = useState<Map<number | null, number[]>>(new Map());
+
+  const validDraft = (parentId: number | null) => {
+    const draft = drafts.get(parentId);
+    const serverIds = (childrenOf.get(parentId) ?? []).map((d) => d.id);
+    if (!draft || draft.length !== serverIds.length || !serverIds.every((id) => draft.includes(id))) return null;
+    return { draft, serverIds };
+  };
+
+  // 서버 순서와 달라진 그룹만 저장 대상
+  const changedGroups = [...drafts.keys()].flatMap((parentId) => {
+    const valid = validDraft(parentId);
+    return valid && valid.draft.some((id, i) => id !== valid.serverIds[i]) ? [{ parentId, ids: valid.draft }] : [];
+  });
+
+  const ordered = (parentId: number | null) => {
+    const siblings = childrenOf.get(parentId) ?? [];
+    const draft = validDraft(parentId)?.draft;
+    if (!draft) return siblings;
+    const byId = new Map(siblings.map((d) => [d.id, d]));
+    return draft.flatMap((id) => byId.get(id) ?? []);
+  };
+
+  return {
+    ordered,
+    changedGroups,
+    setDraft: (parentId: number | null, ids: number[]) => setDrafts((prev) => new Map(prev).set(parentId, ids)),
+    reset: () => setDrafts(new Map()),
+  };
+}
+
+type DepartmentSortDrafts = ReturnType<typeof useDepartmentSortDrafts>;
+
+// 부서 관리: 트리 목록 + 추가(최상위·하위)·수정(이름·상위 부서 이동)·삭제 + 같은 상위 부서 안에서 드래그 정렬
 export function DepartmentPanel() {
+  const queryClient = useQueryClient();
   const { data: departments, isPending, isError, error, refetch } = useDepartments();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
   const [parentValue, setParentValue] = useState(ROOT);
+  const sort = useDepartmentSortDrafts(groupByParent(departments ?? []));
 
   const saveMutation = useOrganizationMutation((input: DepartmentInput) =>
     dialog?.mode === "edit" ? updateDepartment(dialog.department.id, input) : createDepartment(input),
   );
   const deleteMutation = useOrganizationMutation((id: number) => deleteDepartment(id));
+  // 바뀐 형제 그룹마다 순서 변경 요청 (그룹 하나가 요청 하나이며, 각 요청은 서버에서 트랜잭션으로 처리)
+  const orderMutation = useOrganizationMutation(async (groups: { parentId: number | null; ids: number[] }[]) => {
+    for (const group of groups) await reorderDepartments(group.parentId, group.ids);
+  });
 
   const openDialog = (next: NonNullable<DialogState>) => {
     const parentId = next.mode === "add" ? next.parentId : next.department.parentDepartmentId;
@@ -80,15 +136,45 @@ export function DepartmentPanel() {
     });
   };
 
+  const handleSaveOrder = () =>
+    orderMutation.mutate(sort.changedGroups, {
+      onSuccess: () => {
+        toast.success("부서 순서를 저장했습니다.");
+        sort.reset();
+      },
+      // 여러 그룹 중 일부만 저장됐을 수 있으므로 최신 목록으로 다시 맞춘다.
+      onError: (err) => {
+        toast.error(getErrorMessage(err));
+        sort.reset();
+        queryClient.invalidateQueries({ queryKey: organizationKeys.departments() });
+      },
+    });
+
   // 상위 부서 후보: 수정 중이면 자기 자신과 하위 부서는 제외 (순환 참조 방지, 최종 검사는 서버)
   const excluded =
     dialog?.mode === "edit" && departments ? selfAndDescendantIds(departments, dialog.department) : new Set<number>();
   const parentOptions = (departments ?? []).filter((d) => !excluded.has(d.id));
 
+  const renderActions = (d: Department) => (
+    <>
+      <Button variant="ghost" size="sm" onClick={() => openDialog({ mode: "add", parentId: d.id })}>
+        하위 추가
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => openDialog({ mode: "edit", department: d })}>
+        수정
+      </Button>
+      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteTarget(d)}>
+        삭제
+      </Button>
+    </>
+  );
+
   return (
     <div className="grid gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-muted-foreground">상위 부서 아래에 하위 부서를 두는 트리 구조입니다.</p>
+        <p className="text-muted-foreground">
+          상위 부서 아래에 하위 부서를 두는 트리 구조입니다. 순서는 같은 상위 부서 안에서만 바꿀 수 있습니다.
+        </p>
         <Button onClick={() => openDialog({ mode: "add", parentId: null })} className="shrink-0 self-start sm:self-auto">
           <Plus aria-hidden />
           부서 추가
@@ -102,29 +188,18 @@ export function DepartmentPanel() {
       ) : departments.length === 0 ? (
         <EmptyState message="등록된 부서가 없습니다." />
       ) : (
-        <ul className="divide-y rounded-lg border">
-          {departments.map((d) => (
-            <li key={d.id} className="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-              {/* 깊이만큼 들여쓰기 (모바일에서 너무 밀리지 않게 단계당 1rem) */}
-              <div className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: `${d.depth}rem` }}>
-                {d.depth > 0 && <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
-                <span className={d.depth === 0 ? "font-semibold" : "font-medium"}>{d.name}</span>
-                <span className="sr-only">({d.path})</span>
-              </div>
-              <div className="flex shrink-0 gap-1">
-                <Button variant="ghost" size="sm" onClick={() => openDialog({ mode: "add", parentId: d.id })}>
-                  하위 추가
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => openDialog({ mode: "edit", department: d })}>
-                  수정
-                </Button>
-                <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteTarget(d)}>
-                  삭제
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <>
+          <SortSaveBar
+            visible={sort.changedGroups.length > 0}
+            pending={orderMutation.isPending}
+            onCancel={sort.reset}
+            onSave={handleSaveOrder}
+          />
+          {/* 행마다 위 테두리를 두고, 첫 행의 테두리는 바깥 테두리 밑으로 숨긴다(-mt-px). 중첩 목록이라 divide-y를 쓸 수 없다. */}
+          <div className="overflow-hidden rounded-lg border">
+            <DepartmentGroup parentId={null} className="-mt-px" sort={sort} renderActions={renderActions} />
+          </div>
+        </>
       )}
 
       <NameDialog
@@ -171,5 +246,46 @@ export function DepartmentPanel() {
         onConfirm={handleDelete}
       />
     </div>
+  );
+}
+
+// 한 상위 부서 아래의 형제 부서 목록 (각 부서 안에 자기 하위 부서 목록을 다시 그린다)
+// 형제 그룹마다 별도의 정렬 목록이라 다른 상위 부서 아래로는 끌어다 놓을 수 없다. (상위 부서 이동은 [수정]에서)
+// 부서를 끌면 그 안에 그려진 하위 부서들도 함께 움직인다.
+function DepartmentGroup({
+  parentId,
+  className,
+  sort,
+  renderActions,
+}: {
+  parentId: number | null;
+  className?: string;
+  sort: DepartmentSortDrafts;
+  renderActions: (department: Department) => React.ReactNode;
+}) {
+  const siblings = sort.ordered(parentId);
+  if (siblings.length === 0) return null;
+
+  return (
+    <SortableList
+      items={siblings}
+      onReorder={(ids) => sort.setDraft(parentId, ids)}
+      className={className}
+      renderItem={(d, handle) => (
+        <>
+          <div className="flex flex-col gap-2 border-t py-2 pr-4 pl-2 sm:flex-row sm:items-center sm:justify-between">
+            {/* 깊이만큼 들여쓰기 (모바일에서 너무 밀리지 않게 단계당 1rem) */}
+            <div className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: `${d.depth}rem` }}>
+              {handle}
+              {d.depth > 0 && <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+              <span className={d.depth === 0 ? "font-semibold" : "font-medium"}>{d.name}</span>
+              <span className="sr-only">({d.path})</span>
+            </div>
+            <div className="flex shrink-0 gap-1">{renderActions(d)}</div>
+          </div>
+          <DepartmentGroup parentId={d.id} sort={sort} renderActions={renderActions} />
+        </>
+      )}
+    />
   );
 }

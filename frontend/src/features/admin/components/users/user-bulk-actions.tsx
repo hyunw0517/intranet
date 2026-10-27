@@ -14,38 +14,44 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/error-message";
 import {
   bulkDeleteUsers,
-  bulkUpdateUsers,
+  bulkUpdateUsersRole,
+  bulkUpdateUsersStatus,
   type AdminUserListItem,
-  type BulkUpdateUsersInput,
+  type ApprovedRole,
 } from "@/services/api/users";
-import { ROLE_LABEL, STATUS_LABEL } from "@/types/user";
+import { ROLE_LABEL, STATUS_LABEL, type UserStatus } from "@/types/user";
 import { useAdminUserMutation } from "../../hooks/use-admin-users";
 
-const KEEP = "keep"; // "변경 안 함" (Select는 빈 문자열 값을 쓸 수 없다)
+type BulkDialog = "role" | "status" | "delete" | null;
 
 interface Props {
   selectedUsers: AdminUserListItem[];
   onDone: () => void; // 성공 후 선택 해제
 }
 
-// 회원 목록 하단의 선택 회원 일괄 처리 [삭제] [권한·상태]
-// ⚠ 백엔드 일괄 API는 아직 없다. (services/api/users.ts의 제안 계약 참고) 구현 전에는 요청이 실패해 오류가 표시된다.
+// 회원 목록 하단의 선택 회원 일괄 처리 [권한 변경] [상태 변경] [삭제]
+// 요청 하나가 동작 하나다. (권한과 상태를 한 요청에 섞지 않아 일부만 반영되는 경우가 없다)
+// 한 명이라도 처리할 수 없으면 서버가 전체를 거부하고(트랜잭션), 그 메시지를 모달에 보여 준다.
 export function UserBulkActions({ selectedUsers, onDone }: Props) {
-  const [dialog, setDialog] = useState<"delete" | "update" | null>(null);
+  const [dialog, setDialog] = useState<BulkDialog>(null);
   const count = selectedUsers.length;
+  const ids = selectedUsers.map((u) => u.id);
+  const close = () => setDialog(null);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="mr-1 text-sm text-muted-foreground tabular-nums" aria-live="polite">
         {count}명 선택
       </span>
-      <Button variant="outline" size="sm" disabled={count === 0} onClick={() => setDialog("update")}>
-        권한·상태
+      <Button variant="outline" size="sm" disabled={count === 0} onClick={() => setDialog("role")}>
+        권한 변경
+      </Button>
+      <Button variant="outline" size="sm" disabled={count === 0} onClick={() => setDialog("status")}>
+        상태 변경
       </Button>
       <Button
         variant="outline"
@@ -57,18 +63,35 @@ export function UserBulkActions({ selectedUsers, onDone }: Props) {
         삭제
       </Button>
 
-      <BulkDeleteDialog
-        open={dialog === "delete"}
-        onOpenChange={(open) => !open && setDialog(null)}
-        users={selectedUsers}
+      <BulkSelectDialog<ApprovedRole>
+        open={dialog === "role"}
+        onClose={close}
+        title="권한 일괄 변경"
+        description={`${namesLabel(selectedUsers)} 회원의 권한을 변경합니다.`}
+        label="권한"
+        options={(["USER", "ADMIN"] as const).map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
+        notice={
+          selectedUsers.some((u) => u.role === "GUEST")
+            ? "승인 대기 회원은 입사일이 등록되어 있어야 승인됩니다. 입사일이 없는 회원이 있으면 전체가 처리되지 않습니다."
+            : undefined
+        }
+        mutationFn={(role) => bulkUpdateUsersRole(ids, role)}
+        successMessage={(role) => `${count}명의 권한을 ${ROLE_LABEL[role]}(으)로 변경했습니다.`}
         onDone={onDone}
       />
-      <BulkUpdateDialog
-        open={dialog === "update"}
-        onOpenChange={(open) => !open && setDialog(null)}
-        users={selectedUsers}
+      <BulkSelectDialog<UserStatus>
+        open={dialog === "status"}
+        onClose={close}
+        title="상태 일괄 변경"
+        description={`${namesLabel(selectedUsers)} 회원의 상태를 변경합니다.`}
+        label="상태"
+        options={Object.entries(STATUS_LABEL).map(([value, label]) => ({ value: value as UserStatus, label }))}
+        notice="재직이 아니면 해당 회원의 로그인과 모든 요청이 즉시 차단됩니다."
+        mutationFn={(status) => bulkUpdateUsersStatus(ids, status)}
+        successMessage={(status) => `${count}명의 상태를 ${STATUS_LABEL[status]}(으)로 변경했습니다.`}
         onDone={onDone}
       />
+      <BulkDeleteDialog open={dialog === "delete"} onClose={close} users={selectedUsers} onDone={onDone} />
     </div>
   );
 }
@@ -79,14 +102,103 @@ function namesLabel(users: AdminUserListItem[], max = 3) {
   return users.length > max ? `${names} 외 ${users.length - max}명` : names;
 }
 
-interface DialogProps {
+// 권한·상태 일괄 변경 공용 모달 (값 하나를 골라 선택한 회원 모두에게 적용)
+function BulkSelectDialog<T extends string>({
+  open,
+  onClose,
+  title,
+  description,
+  label,
+  options,
+  notice,
+  mutationFn,
+  successMessage,
+  onDone,
+}: {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
-  users: AdminUserListItem[];
+  onClose: () => void;
+  title: string;
+  description: string;
+  label: string;
+  options: { value: T; label: string }[];
+  notice?: string;
+  mutationFn: (value: T) => Promise<unknown>;
+  successMessage: (value: T) => string;
   onDone: () => void;
+}) {
+  const [value, setValue] = useState<T | "">("");
+  const mutation = useAdminUserMutation(mutationFn);
+
+  // 요청 중에는 닫지 않고, 닫을 때 선택값·이전 오류를 지운다. (다시 열었을 때 남아 있지 않도록)
+  const handleOpenChange = (next: boolean) => {
+    if (next || mutation.isPending) return;
+    setValue("");
+    mutation.reset();
+    onClose();
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!value) return;
+    mutation.mutate(value, {
+      onSuccess: () => {
+        toast.success(successMessage(value));
+        handleOpenChange(false);
+        onDone();
+      },
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="grid gap-4" noValidate>
+          {/* 입사일 없는 승인 대기 회원(이름 포함), 본인 포함 등 서버 검증 오류 */}
+          <FormError message={mutation.error ? getErrorMessage(mutation.error) : null} />
+          <FormField id="bulk-value" label={label} required hint={notice}>
+            <Select value={value} onValueChange={(v) => setValue(v as T)}>
+              <SelectTrigger id="bulk-value" className="w-full" aria-describedby={notice ? "bulk-value-message" : undefined}>
+                <SelectValue placeholder={`변경할 ${label} 선택`} />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={mutation.isPending}>
+              취소
+            </Button>
+            <Button type="submit" disabled={!value || mutation.isPending}>
+              {mutation.isPending && <Loader2 className="animate-spin" aria-hidden />}
+              변경
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
-function BulkDeleteDialog({ open, onOpenChange, users, onDone }: DialogProps) {
+function BulkDeleteDialog({
+  open,
+  onClose,
+  users,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  users: AdminUserListItem[];
+  onDone: () => void;
+}) {
   const mutation = useAdminUserMutation((ids: number[]) => bulkDeleteUsers(ids));
 
   const handleConfirm = () =>
@@ -95,7 +207,7 @@ function BulkDeleteDialog({ open, onOpenChange, users, onDone }: DialogProps) {
       {
         onSuccess: () => {
           toast.success(`${users.length}명을 삭제했습니다.`);
-          onOpenChange(false);
+          onClose();
           onDone();
         },
         onError: (error) => toast.error(getErrorMessage(error)),
@@ -105,7 +217,7 @@ function BulkDeleteDialog({ open, onOpenChange, users, onDone }: DialogProps) {
   return (
     <ConfirmDialog
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(next) => !next && onClose()}
       title={`회원 ${users.length}명 삭제`}
       description={`${namesLabel(users)} 회원을 삭제합니다. 삭제된 회원은 로그인할 수 없으며 [삭제된 회원]에서 복구할 수 있습니다.`}
       confirmLabel="삭제"
@@ -113,148 +225,5 @@ function BulkDeleteDialog({ open, onOpenChange, users, onDone }: DialogProps) {
       pending={mutation.isPending}
       onConfirm={handleConfirm}
     />
-  );
-}
-
-function BulkUpdateDialog({ open, onOpenChange, users, onDone }: DialogProps) {
-  const mutation = useAdminUserMutation((input: BulkUpdateUsersInput) => bulkUpdateUsers(input));
-
-  // 요청 중에는 닫지 않고, 닫을 때 이전 오류를 지운다. (다시 열었을 때 남아 있지 않도록)
-  const handleOpenChange = (next: boolean) => {
-    if (mutation.isPending) return;
-    if (!next) mutation.reset();
-    onOpenChange(next);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>권한·상태 일괄 변경</DialogTitle>
-          <DialogDescription>{namesLabel(users)} 회원에게 같은 값을 적용합니다.</DialogDescription>
-        </DialogHeader>
-        {/* 열 때마다 입력값을 초기화하도록 열려 있을 때만 그린다. */}
-        {open && (
-          <BulkUpdateForm
-            users={users}
-            pending={mutation.isPending}
-            error={mutation.error}
-            onCancel={() => handleOpenChange(false)}
-            onSubmit={(input) =>
-              mutation.mutate(input, {
-                onSuccess: () => {
-                  toast.success(`${users.length}명의 권한·상태를 변경했습니다.`);
-                  onOpenChange(false);
-                  onDone();
-                },
-              })
-            }
-          />
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function BulkUpdateForm({
-  users,
-  pending,
-  error,
-  onCancel,
-  onSubmit,
-}: {
-  users: AdminUserListItem[];
-  pending: boolean;
-  error: Error | null;
-  onCancel: () => void;
-  onSubmit: (input: BulkUpdateUsersInput) => void;
-}) {
-  const [role, setRole] = useState<string>(KEEP);
-  const [status, setStatus] = useState<string>(KEEP);
-  const [joinAt, setJoinAt] = useState("");
-  const [formError, setFormError] = useState<string>();
-
-  // 승인 대기 회원을 승인하는 경우에만 입사일 입력을 보여 준다.
-  const hasGuest = users.some((u) => u.role === "GUEST");
-  const showJoinAt = hasGuest && role !== KEEP;
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (role === KEEP && status === KEEP) {
-      setFormError("변경할 권한 또는 상태를 선택하세요.");
-      return;
-    }
-    setFormError(undefined);
-    onSubmit({
-      ids: users.map((u) => u.id),
-      role: role === KEEP ? undefined : (role as BulkUpdateUsersInput["role"]),
-      status: status === KEEP ? undefined : (status as BulkUpdateUsersInput["status"]),
-      joinAt: showJoinAt && joinAt ? joinAt : undefined,
-    });
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="grid gap-4" noValidate>
-      <FormError message={formError ?? (error ? getErrorMessage(error) : null)} />
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField id="bulk-role" label="권한">
-          <Select value={role} onValueChange={setRole}>
-            <SelectTrigger id="bulk-role" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={KEEP}>변경 안 함</SelectItem>
-              {(["USER", "ADMIN"] as const).map((r) => (
-                <SelectItem key={r} value={r}>
-                  {ROLE_LABEL[r]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormField>
-        <FormField id="bulk-status" label="상태">
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger id="bulk-status" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={KEEP}>변경 안 함</SelectItem>
-              {Object.entries(STATUS_LABEL).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormField>
-      </div>
-
-      {showJoinAt && (
-        <FormField
-          id="bulk-joinAt"
-          label="입사일"
-          hint="선택한 회원 중 승인 대기 회원이 있습니다. 입사일이 없는 회원을 승인하려면 입력하세요."
-        >
-          <Input
-            id="bulk-joinAt"
-            type="date"
-            value={joinAt}
-            onChange={(e) => setJoinAt(e.target.value)}
-            aria-describedby="bulk-joinAt-message"
-          />
-        </FormField>
-      )}
-
-      <DialogFooter>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
-          취소
-        </Button>
-        <Button type="submit" disabled={pending}>
-          {pending && <Loader2 className="animate-spin" aria-hidden />}
-          변경
-        </Button>
-      </DialogFooter>
-    </form>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { createJobTitle, deleteJobTitle, updateJobTitle } from "@/services/api/job-titles";
-import { createPosition, deletePosition, updatePosition } from "@/services/api/positions";
+import { createJobTitle, deleteJobTitle, reorderJobTitles, updateJobTitle } from "@/services/api/job-titles";
+import { createPosition, deletePosition, reorderPositions, updatePosition } from "@/services/api/positions";
 import { useJobTitles, usePositions } from "../../hooks/use-organization";
 import { DepartmentPanel } from "./department-panel";
 import { RankListPanel } from "./rank-list-panel";
@@ -27,11 +27,12 @@ export function OrganizationView() {
       <TabsContent value="positions">
         <RankListPanel
           label="직급"
-          description="사원·대리·과장처럼 사람에게 붙는 등급입니다. 목록 순서는 등록 순서이며 직급 비교 기준(sortOrder)으로 쓰입니다."
+          description="사원·대리·과장처럼 사람에게 붙는 등급입니다. 위쪽일수록 높은 직급이며, 게시판 권한의 '이 직급 이상' 판단에 이 순서가 쓰입니다."
           query={positions}
           create={createPosition}
           update={updatePosition}
           remove={deletePosition}
+          reorder={reorderPositions}
         />
       </TabsContent>
 
@@ -43,6 +44,7 @@ export function OrganizationView() {
           create={createJobTitle}
           update={updateJobTitle}
           remove={deleteJobTitle}
+          reorder={reorderJobTitles}
         />
       </TabsContent>
     </Tabs>

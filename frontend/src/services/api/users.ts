@@ -84,11 +84,9 @@ export interface AdminUpdateUserInput {
   joinAt: string;
 }
 
-// PATCH /users/:id/agree (UpdateUserRoleDto) - GUEST → USER/ADMIN이 가입 승인 (입사일이 없으면 필수)
-export interface UpdateUserRoleInput {
-  role: Exclude<UserRole, "GUEST">;
-  joinAt?: string;
-}
+// PATCH /users/:id/role (UpdateUserRoleDto) - GUEST → USER/ADMIN이 가입 승인
+// 입사일은 받지 않는다. 승인 대기 회원은 입사일이 먼저 등록되어 있어야 한다. (없으면 서버 400)
+export type ApprovedRole = Exclude<UserRole, "GUEST">;
 
 // (관리자) 회원 목록 - 페이지 + 검색·권한·상태 필터, deletedOnly면 삭제된 회원만
 export function fetchUsers(query: UserListQuery) {
@@ -106,13 +104,13 @@ export function adminUpdateUser(id: number, input: AdminUpdateUserInput) {
 }
 
 // (관리자) 가입 승인 또는 권한 변경 (USER ↔ ADMIN)
-export function updateUserRole(id: number, input: UpdateUserRoleInput) {
-  return apiFetch<AdminUserDetail>(`/users/${id}/agree`, { method: "PATCH", body: input });
+export function updateUserRole(id: number, role: ApprovedRole) {
+  return apiFetch<boolean>(`/users/${id}/role`, { method: "PATCH", body: { role } });
 }
 
 // (관리자) 계정 상태 변경 (재직·비활성·퇴사) → 재직이 아니면 다음 요청부터 차단
 export function updateUserStatus(id: number, status: UserStatus) {
-  return apiFetch<AdminUserDetail>(`/users/${id}/status`, { method: "PATCH", body: { status } });
+  return apiFetch<boolean>(`/users/${id}/status`, { method: "PATCH", body: { status } });
 }
 
 // 관리자 삭제 (soft delete) → 복구 전까지 로그인 불가
@@ -126,23 +124,19 @@ export function restoreUser(id: number) {
 }
 
 // ── 관리자 일괄 처리 (선택한 회원) ─────────────────────────────────
-// ⚠ 백엔드 미구현: 아래 경로·요청 형식은 프론트에서 제안한 계약이다. 백엔드 구현에 맞춰 수정한다.
-//   (백엔드에서는 /users/:id/... 라우트보다 먼저 선언해야 "bulk"가 :id로 잡히지 않는다)
-
-// PATCH /users/bulk/role-status - 바꿀 항목만 보낸다. (role·status 중 하나 이상)
-export interface BulkUpdateUsersInput {
-  ids: number[];
-  role?: Exclude<UserRole, "GUEST">;
-  status?: UserStatus;
-  joinAt?: string; // 승인 대기(GUEST) 회원을 승인할 때 입사일
-}
+// 단건 API와 같은 서비스 로직을 쓴다. 한 명이라도 처리할 수 없으면(본인 포함, 삭제된 회원 등) 전체가 400으로 실패한다.
 
 // (관리자) 선택한 회원 일괄 삭제 (soft delete)
 export function bulkDeleteUsers(ids: number[]) {
-  return apiFetch<unknown>("/users/bulk/delete", { method: "PATCH", body: { ids } });
+  return apiFetch<boolean>("/users/bulk", { method: "DELETE", body: { ids } });
 }
 
-// (관리자) 선택한 회원 권한·상태 일괄 변경
-export function bulkUpdateUsers(input: BulkUpdateUsersInput) {
-  return apiFetch<unknown>("/users/bulk/role-status", { method: "PATCH", body: input });
+// (관리자) 선택한 회원 권한 일괄 변경 - 입사일이 없는 승인 대기 회원이 있으면 400 (메시지에 이름 포함)
+export function bulkUpdateUsersRole(ids: number[], role: ApprovedRole) {
+  return apiFetch<boolean>("/users/bulk/role", { method: "PATCH", body: { ids, role } });
+}
+
+// (관리자) 선택한 회원 상태 일괄 변경
+export function bulkUpdateUsersStatus(ids: number[], status: UserStatus) {
+  return apiFetch<boolean>("/users/bulk/status", { method: "PATCH", body: { ids, status } });
 }

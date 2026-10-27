@@ -1,26 +1,20 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { FormError, FormField } from "@/components/common/form-field";
 import { InfoItem } from "@/components/common/section";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/error-message";
-import { formatDate, toDateInputValue } from "@/lib/format";
-import {
-  updateUserRole,
-  updateUserStatus,
-  type AdminUserDetail,
-  type UpdateUserRoleInput,
-} from "@/services/api/users";
+import { formatDate } from "@/lib/format";
+import { updateUserRole, updateUserStatus, type AdminUserDetail, type ApprovedRole } from "@/services/api/users";
 import { ROLE_LABEL, STATUS_LABEL, type UserStatus } from "@/types/user";
 import { useAdminUserMutation } from "../../hooks/use-admin-users";
 import { RoleBadge, StatusBadge } from "./user-badges";
 
-type ApprovedRole = UpdateUserRoleInput["role"];
 const APPROVED_ROLES: ApprovedRole[] = ["USER", "ADMIN"]; // GUEST로 되돌리기는 서버가 막는다.
 
 interface Props {
@@ -46,7 +40,7 @@ export function UserAccountSection({ user, isSelf }: Props) {
         <>
           {/* key: 저장 후 서버 값이 바뀌면 입력 상태를 새로 맞춘다. */}
           {user.role === "GUEST" ? (
-            <ApproveForm key={user.joinAt} user={user} />
+            <ApproveForm user={user} />
           ) : (
             <RoleForm key={user.role} user={user} />
           )}
@@ -57,24 +51,16 @@ export function UserAccountSection({ user, isSelf }: Props) {
   );
 }
 
-// 가입 승인: GUEST → USER/ADMIN, 입사일이 없으면 함께 입력해야 한다. (서버도 400으로 검사)
+// 가입 승인: GUEST → USER/ADMIN
+// 입사일(연차 계산에 필요)이 먼저 등록되어 있어야 승인할 수 있다. 입사일은 회원 상세의 기본 정보에서 등록한다. (서버도 400으로 검사)
 function ApproveForm({ user }: { user: AdminUserDetail }) {
   const [role, setRole] = useState<ApprovedRole>("USER");
-  const [joinAt, setJoinAt] = useState(toDateInputValue(user.joinAt));
-  const [joinAtError, setJoinAtError] = useState<string>();
-  const mutation = useAdminUserMutation((input: UpdateUserRoleInput) => updateUserRole(user.id, input));
+  const mutation = useAdminUserMutation((next: ApprovedRole) => updateUserRole(user.id, next));
+  const hasJoinAt = !!user.joinAt;
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!joinAt) {
-      setJoinAtError("가입 승인 시 입사일을 입력해야 합니다.");
-      return;
-    }
-    setJoinAtError(undefined);
-    mutation.mutate(
-      { role, joinAt },
-      { onSuccess: () => toast.success(`${user.name} 회원의 가입을 승인했습니다.`) },
-    );
+    mutation.mutate(role, { onSuccess: () => toast.success(`${user.name} 회원의 가입을 승인했습니다.`) });
   };
 
   return (
@@ -83,11 +69,21 @@ function ApproveForm({ user }: { user: AdminUserDetail }) {
         <h3 className="font-medium">가입 승인</h3>
         <p className="mt-1 text-sm text-muted-foreground">승인하면 인트라넷의 모든 직원 메뉴를 이용할 수 있습니다.</p>
       </div>
-      <FormError message={mutation.error ? getErrorMessage(mutation.error) : null} />
-      <div className="grid gap-4 sm:grid-cols-[10rem_12rem_auto] sm:items-end">
+      {hasJoinAt ? (
+        <FormError message={mutation.error ? getErrorMessage(mutation.error) : null} />
+      ) : (
+        <p className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+          입사일이 등록되지 않아 승인할 수 없습니다.{" "}
+          <Link href={`/admin/users/${user.id}`} className="font-medium text-primary underline-offset-4 hover:underline">
+            회원 상세
+          </Link>
+          의 기본 정보에서 입사일을 먼저 등록하세요.
+        </p>
+      )}
+      <div className="flex flex-wrap items-end gap-3">
         <FormField id="approve-role" label="권한" required>
-          <Select value={role} onValueChange={(v) => setRole(v as ApprovedRole)}>
-            <SelectTrigger id="approve-role" className="w-full">
+          <Select value={role} onValueChange={(v) => setRole(v as ApprovedRole)} disabled={!hasJoinAt}>
+            <SelectTrigger id="approve-role" className="w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -99,17 +95,7 @@ function ApproveForm({ user }: { user: AdminUserDetail }) {
             </SelectContent>
           </Select>
         </FormField>
-        <FormField id="approve-joinAt" label="입사일" required error={joinAtError}>
-          <Input
-            id="approve-joinAt"
-            type="date"
-            value={joinAt}
-            onChange={(e) => setJoinAt(e.target.value)}
-            aria-invalid={!!joinAtError}
-            aria-describedby="approve-joinAt-message"
-          />
-        </FormField>
-        <Button type="submit" disabled={mutation.isPending} className={joinAtError ? "sm:mb-5" : undefined}>
+        <Button type="submit" disabled={!hasJoinAt || mutation.isPending}>
           {mutation.isPending && <Loader2 className="animate-spin" aria-hidden />}
           가입 승인
         </Button>
@@ -120,7 +106,7 @@ function ApproveForm({ user }: { user: AdminUserDetail }) {
 
 function RoleForm({ user }: { user: AdminUserDetail }) {
   const [role, setRole] = useState<ApprovedRole>(user.role === "ADMIN" ? "ADMIN" : "USER");
-  const mutation = useAdminUserMutation((next: ApprovedRole) => updateUserRole(user.id, { role: next }));
+  const mutation = useAdminUserMutation((next: ApprovedRole) => updateUserRole(user.id, next));
 
   const handleSave = () =>
     mutation.mutate(role, {

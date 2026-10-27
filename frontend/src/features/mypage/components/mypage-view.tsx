@@ -1,15 +1,12 @@
 "use client";
 
+import { InfoItem, Section } from "@/components/common/section";
 import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/format";
 import { useAuth } from "@/providers/auth-provider";
 import { ROLE_LABEL } from "@/types/user";
 import { ChangePasswordForm } from "./change-password-form";
 import { ProfileForm } from "./profile-form";
-
-
-function formatDate(value: string | null) {
-  return value ? value.slice(0, 10) : "-";
-}
 
 // 마이페이지: 계정 정보(읽기 전용) + 내 정보 수정 + 비밀번호 변경
 // GUEST(승인 대기)도 접근 가능하다.
@@ -42,27 +39,6 @@ export function MypageView() {
       <Section title="비밀번호 변경" description="변경하면 다른 기기의 로그인은 모두 해제됩니다.">
         <ChangePasswordForm />
       </Section>
-    </div>
-  );
-}
-
-function Section({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
-  return (
-    <section className="grid gap-4 lg:grid-cols-[14rem_1fr] lg:gap-10">
-      <div>
-        <h2 className="font-semibold">{title}</h2>
-        <p className="mt-1 text-muted-foreground">{description}</p>
-      </div>
-      <div className="min-w-0">{children}</div>
-    </section>
-  );
-}
-
-function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="grid gap-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="font-medium">{value}</dd>
     </div>
   );
 }

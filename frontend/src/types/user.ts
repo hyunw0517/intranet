@@ -10,6 +10,13 @@ export const ROLE_LABEL: Record<UserRole, string> = {
   ADMIN: "관리자",
 };
 
+// 화면 표시용 계정 상태 이름 (재직만 로그인 가능, 백엔드 checkUserStatus 기준)
+export const STATUS_LABEL: Record<UserStatus, string> = {
+  ACTIVE: "재직",
+  INACTIVE: "비활성",
+  RESIGNED: "퇴사",
+};
+
 // GET /users/me 응답 (화면에서 쓰는 필드만 정의)
 export interface CurrentUser {
   id: number;

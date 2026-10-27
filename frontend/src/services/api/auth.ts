@@ -59,3 +59,8 @@ export function logout() {
 export function changePassword(input: ChangePasswordInput) {
   return apiFetch<TokenResponse>("/auth/change/pw", { method: "PATCH", body: input });
 }
+
+// (관리자) 비밀번호 초기화 → 서버가 만든 임시 비밀번호를 응답으로 한 번만 돌려준다. (대상 회원의 기존 로그인은 해제)
+export function resetPassword(userId: number) {
+  return apiFetch<{ temporaryPassword: string }>(`/auth/reset/pw/${userId}`, { method: "PATCH" });
+}

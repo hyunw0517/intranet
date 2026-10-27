@@ -13,6 +13,7 @@ import { useAuth } from "@/providers/auth-provider";
 import {
   normalizePhone,
   validateEmail,
+  validateEmpNo,
   validateName,
   validateNewPassword,
   validateNickname,
@@ -37,7 +38,7 @@ type Errors = Partial<Record<keyof Values, string>>;
 
 function validate(v: Values): Errors {
   const errors: Errors = {
-    empNo: v.empNo.trim() ? undefined : "사번을 입력해 주세요.",
+    empNo: validateEmpNo(v.empNo),
     name: validateName(v.name),
     email: validateEmail(v.email),
     password: validateNewPassword(v.password),

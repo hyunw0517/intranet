@@ -3,6 +3,10 @@
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export function validateEmpNo(value: string) {
+  if (!value.trim()) return "사번을 입력해 주세요.";
+}
+
 export function validateEmail(value: string) {
   if (!value.trim()) return "이메일을 입력해 주세요.";
   if (!EMAIL_PATTERN.test(value.trim())) return "이메일 형식이 올바르지 않습니다.";

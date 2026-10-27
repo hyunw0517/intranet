@@ -1,6 +1,8 @@
 // 백엔드 users.controller 대응 (/users/*)
 import { apiFetch } from "@/services/api-client";
-import type { CurrentUser } from "@/types/user";
+import type { NamedRef, UserDepartmentItem } from "@/types/organization";
+import type { PageResult } from "@/types/pagination";
+import type { CurrentUser, UserRole, UserStatus } from "@/types/user";
 
 // PATCH /users/me (UpdateUserDto) - 수정하려면 현재 비밀번호로 본인 확인
 export interface UpdateMeInput {
@@ -13,10 +15,134 @@ export interface UpdateMeInput {
   tel: string;
 }
 
+// 내 정보 조회 (로그인 직후·새로고침 시 현재 사용자 확인)
 export function fetchMe() {
   return apiFetch<CurrentUser>("/users/me");
 }
 
+// 내 정보 수정 (마이페이지) → 수정된 내 정보
 export function updateMe(input: UpdateMeInput) {
   return apiFetch<CurrentUser>("/users/me", { method: "PATCH", body: input });
+}
+
+// ── 관리자 ────────────────────────────────────────────────────────
+
+// GET /users (PaginateUserQueryDto) - 검색 필드는 각각 부분 일치
+// apiFetch의 query(Record)에 그대로 넘길 수 있도록 interface가 아닌 type으로 선언
+export type UserListQuery = {
+  page?: number;
+  take?: number;
+  empNo?: string;
+  email?: string;
+  name?: string;
+  role?: UserRole;
+  status?: UserStatus;
+  deletedOnly?: boolean; // true면 삭제된 회원만
+};
+
+// GET /users 목록 항목 (소속은 대표 소속만 포함)
+export interface AdminUserListItem {
+  id: number;
+  empNo: string;
+  email: string;
+  name: string;
+  nickname: string | null;
+  role: UserRole;
+  status: UserStatus;
+  deletedAt: string | null;
+  position: NamedRef | null;
+  departments: UserDepartmentItem[];
+}
+
+// GET /users/:id (개인정보 포함, 소속은 대표 소속부터 전체)
+export interface AdminUserDetail {
+  id: number;
+  empNo: string;
+  email: string;
+  name: string;
+  nickname: string | null;
+  birthday: string | null;
+  hp: string | null;
+  tel: string | null;
+  joinAt: string | null;
+  role: UserRole;
+  status: UserStatus;
+  createdAt: string;
+  position: NamedRef | null;
+  departments: UserDepartmentItem[];
+}
+
+// PATCH /users/:id (AdminUpdateUserDto) - 선택 항목은 빈 문자열이면 서버에서 null로 저장
+export interface AdminUpdateUserInput {
+  empNo: string;
+  email: string;
+  name: string;
+  nickname: string;
+  birthday: string;
+  hp: string;
+  tel: string;
+  joinAt: string;
+}
+
+// PATCH /users/:id/agree (UpdateUserRoleDto) - GUEST → USER/ADMIN이 가입 승인 (입사일이 없으면 필수)
+export interface UpdateUserRoleInput {
+  role: Exclude<UserRole, "GUEST">;
+  joinAt?: string;
+}
+
+// (관리자) 회원 목록 - 페이지 + 검색·권한·상태 필터, deletedOnly면 삭제된 회원만
+export function fetchUsers(query: UserListQuery) {
+  return apiFetch<PageResult<AdminUserListItem>>("/users", { query });
+}
+
+// (관리자) 회원 상세 - 삭제된 회원은 서버가 400
+export function fetchUser(id: number) {
+  return apiFetch<AdminUserDetail>(`/users/${id}`);
+}
+
+// (관리자) 회원 기본 정보 수정 (사번·입사일 포함, 비밀번호 제외)
+export function adminUpdateUser(id: number, input: AdminUpdateUserInput) {
+  return apiFetch<AdminUserDetail>(`/users/${id}`, { method: "PATCH", body: input });
+}
+
+// (관리자) 가입 승인 또는 권한 변경 (USER ↔ ADMIN)
+export function updateUserRole(id: number, input: UpdateUserRoleInput) {
+  return apiFetch<AdminUserDetail>(`/users/${id}/agree`, { method: "PATCH", body: input });
+}
+
+// (관리자) 계정 상태 변경 (재직·비활성·퇴사) → 재직이 아니면 다음 요청부터 차단
+export function updateUserStatus(id: number, status: UserStatus) {
+  return apiFetch<AdminUserDetail>(`/users/${id}/status`, { method: "PATCH", body: { status } });
+}
+
+// 관리자 삭제 (soft delete) → 복구 전까지 로그인 불가
+export function deleteUser(id: number) {
+  return apiFetch<boolean>(`/users/${id}`, { method: "DELETE" });
+}
+
+// (관리자) 삭제된 회원 복구 → 권한·상태는 삭제 전 그대로
+export function restoreUser(id: number) {
+  return apiFetch<AdminUserDetail>(`/users/${id}/delete_recovery`, { method: "PATCH" });
+}
+
+// ── 관리자 일괄 처리 (선택한 회원) ─────────────────────────────────
+// ⚠ 백엔드 미구현: 아래 경로·요청 형식은 프론트에서 제안한 계약이다. 백엔드 구현에 맞춰 수정한다.
+//   (백엔드에서는 /users/:id/... 라우트보다 먼저 선언해야 "bulk"가 :id로 잡히지 않는다)
+
+// PATCH /users/bulk/role-status - 바꿀 항목만 보낸다. (role·status 중 하나 이상)
+export interface BulkUpdateUsersInput {
+  ids: number[];
+  role?: Exclude<UserRole, "GUEST">;
+  status?: UserStatus;
+  joinAt?: string; // 승인 대기(GUEST) 회원을 승인할 때 입사일
+}
+
+// (관리자) 선택한 회원 일괄 삭제 (soft delete)
+export function bulkDeleteUsers(ids: number[]) {
+  return apiFetch<unknown>("/users/bulk/delete", { method: "PATCH", body: { ids } });
+}
+
+// (관리자) 선택한 회원 권한·상태 일괄 변경
+export function bulkUpdateUsers(input: BulkUpdateUsersInput) {
+  return apiFetch<unknown>("/users/bulk/role-status", { method: "PATCH", body: input });
 }

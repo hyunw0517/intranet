@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Users } from 'src/generated/prisma/client';
+import { Users, UserStatus } from 'src/generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { UpdateSortOrderDto } from './dto/update-sort-order.dto';
+import { isSameIdSet } from 'src/common/util/id-set.util';
 import { CreateJobTitleDto } from './dto/create-job-title.dto';
 import { UpdateJobTitleDto } from './dto/update-job-title.dto';
 import { PaginateJobTitleQueryDto } from './dto/paginate-job-title-query.dto';
@@ -121,6 +123,37 @@ export class JobTitlesService {
         return updateJobTitle;
     }
 
+    //* 직책 순서 변경 (드래그 정렬)
+    // - 화면의 최종 순서대로 받은 id 배열의 위치를 sortOrder로 저장한다.
+    // - 현재 직책 전체와 정확히 일치해야 한다. (다른 관리자가 추가·삭제했다면 순서가 어긋나므로 거부)
+    async updateJobTitleOrder(
+        user: Pick<Users, 'id'>,
+        body: UpdateSortOrderDto,
+    ){
+        await this.prisma.$transaction( async (tx) => {
+            const jobTitles = await tx.jobTitle.findMany({
+                select: { id: true },
+                where: { deleted: false },
+            });
+
+            if( !isSameIdSet( jobTitles.map( (j) => j.id ), body.ids ) ){
+                throw new BadRequestException('직책 목록이 변경되었습니다. 새로고침 후 다시 시도하세요.');
+            }
+
+            for( const [ index, id ] of body.ids.entries() ){
+                await tx.jobTitle.update({
+                    where: { id },
+                    data: {
+                        sortOrder: index,
+                        updatedId: user.id,
+                    },
+                });
+            }
+        });
+
+        return true;
+    }
+
     //* 직책 삭제
     async deleteJobTitle(
         user: Pick<Users, 'id'>, 
@@ -137,7 +170,35 @@ export class JobTitlesService {
         if( !thisJobTitle ){
             throw new BadRequestException('존재하지 않는 직책입니다.');
         }
-        
+
+        // 이 직책으로 등록된 소속 확인 (부서 삭제와 같이 퇴사자는 제외)
+        const memberCount = await this.prisma.userDepartment.count({
+            where: {
+                jobTitleId: thisJobTitle.id,
+                deleted: false,
+                user: {
+                    status: { not: UserStatus.RESIGNED },
+                    deleted: false,
+                },
+            }
+        });
+
+        if( memberCount > 0 ){
+            throw new BadRequestException('이 직책으로 등록된 소속 인원이 있어 삭제할 수 없습니다.');
+        }
+
+        // 게시판 권한의 허용 직책으로 사용 중인지 확인 (중간 테이블은 deleted가 없으므로 게시판 권한 기준)
+        const boardAuthCount = await this.prisma.boardAuthJobTitle.count({
+            where: {
+                jobTitleId: thisJobTitle.id,
+                boardAuth: { deleted: false },
+            }
+        });
+
+        if( boardAuthCount > 0 ){
+            throw new BadRequestException('게시판 권한에서 사용 중인 직책은 삭제할 수 없습니다.');
+        }
+
         // DELETE (트랜잭션: 삭제+재정렬)
         await this.prisma.$transaction([
             // 대상 직책 삭제

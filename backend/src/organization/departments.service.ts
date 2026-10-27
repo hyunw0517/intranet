@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Users, UserStatus } from 'src/generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { UpdateDepartmentOrderDto } from './dto/update-department-order.dto';
+import { isSameIdSet } from 'src/common/util/id-set.util';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { PaginateDepartmentQueryDto } from './dto/paginate-department-query.dto';
@@ -209,6 +211,42 @@ export class DepartmentsService {
         });
         
         return updateDepartment;
+    }
+
+    //* 부서 순서 변경 (드래그 정렬)
+    // - 같은 상위 부서 아래의 형제 부서끼리만 순서를 바꾼다. (상위 부서 이동은 부서 수정에서)
+    // - 받은 id 배열이 그 상위 부서의 하위 부서 전체와 정확히 일치해야 한다.
+    async updateDepartmentOrder(
+        user: Pick<Users, 'id'>,
+        body: UpdateDepartmentOrderDto,
+    ){
+        const parentDepartmentId = body.parentDepartmentId ?? null;
+
+        await this.prisma.$transaction( async (tx) => {
+            const siblings = await tx.department.findMany({
+                select: { id: true },
+                where: {
+                    parentDepartmentId,
+                    deleted: false,
+                },
+            });
+
+            if( !isSameIdSet( siblings.map( (d) => d.id ), body.ids ) ){
+                throw new BadRequestException('부서 목록이 변경되었습니다. 새로고침 후 다시 시도하세요.');
+            }
+
+            for( const [ index, id ] of body.ids.entries() ){
+                await tx.department.update({
+                    where: { id },
+                    data: {
+                        sortOrder: index,
+                        updatedId: user.id,
+                    },
+                });
+            }
+        });
+
+        return true;
     }
 
     //* 부서 삭제

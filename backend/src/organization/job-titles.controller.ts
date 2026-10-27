@@ -6,6 +6,7 @@ import { UserRole, Users } from 'src/generated/prisma/client';
 import { Roles } from 'src/auth/decorator/roles.decorator';
 import { CreateJobTitleDto } from './dto/create-job-title.dto';
 import { UpdateJobTitleDto } from './dto/update-job-title.dto';
+import { UpdateSortOrderDto } from './dto/update-sort-order.dto';
 
 
 // 소속 - 직책 전용 컨트롤러
@@ -31,6 +32,17 @@ export class JobTitlesController {
     @Body() body: CreateJobTitleDto,
   ){
     return this.jobTitlesService.createJobTitle(user, body);
+  }
+
+  //* 직책 순서 변경 (드래그 정렬)
+  // 'order'는 ':id'보다 먼저 선언해야 한다. (뒤에 두면 'order'가 :id로 매칭되어 ParseIntPipe 400)
+  @Patch('order')
+  @Roles(UserRole.ADMIN)
+  patchJobTitleOrder(
+    @User() user: Pick<Users, 'id'>,
+    @Body() body: UpdateSortOrderDto,
+  ){
+    return this.jobTitlesService.updateJobTitleOrder(user, body);
   }
 
   //* 직책 수정

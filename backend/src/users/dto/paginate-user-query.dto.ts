@@ -1,6 +1,7 @@
 import { IsString, IsOptional, IsBoolean, IsEnum } from 'class-validator';
 import { StringToBoolean } from 'src/common/decorator/string-to-boolean.decorator';
 import { PagePaginationDto } from 'src/common/dto/page-pagination.dto';
+import { UserRole, UserStatus } from 'src/generated/prisma/client';
 
 //* 정렬 가능 컬럼
 export enum UserSortBy {
@@ -43,4 +44,13 @@ export class PaginateUserQueryDto extends PagePaginationDto {
     @IsEnum( UserSortBy )
     sortBy: UserSortBy = UserSortBy.CREATED_AT;
 
+    // 회원 권한 필터
+    @IsOptional()
+    @IsEnum(UserRole)
+    role?: UserRole;
+
+    // 계정 상태 필터
+    @IsOptional()
+    @IsEnum(UserStatus)
+    status?: UserStatus;
 }

@@ -30,17 +30,6 @@ export class BoardsController {
     return this.boardsService.createBoard(user, body);
   }
 
-  //* 게시판 수정
-  @Patch(':id')
-  @Roles(UserRole.ADMIN)
-  patchBoard(
-    @User() user: Pick<Users, 'id'>,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: UpdateBoardDto,
-  ){
-    return this.boardsService.updateBoard(user, id, body);
-  }
-
   //* 게시판 순서 변경 (드래그 정렬, 같은 상위 게시판의 형제끼리)
   // 'order'는 ':id'보다 먼저 선언해야 한다.
   @Patch('order')
@@ -50,6 +39,17 @@ export class BoardsController {
     @Body() body: UpdateBoardOrderDto,
   ){
     return this.boardsService.updateBoardOrder(user, body);
+  }
+
+  //* 게시판 수정
+  @Patch(':id')
+  @Roles(UserRole.ADMIN)
+  patchBoard(
+    @User() user: Pick<Users, 'id'>,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateBoardDto,
+  ){
+    return this.boardsService.updateBoard(user, id, body);
   }
 
   //* 게시판 삭제

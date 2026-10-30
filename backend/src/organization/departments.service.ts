@@ -296,6 +296,18 @@ export class DepartmentsService {
             throw new BadRequestException('소속 인원이 있는 부서는 삭제할 수 없습니다.');
         }
 
+        // 게시판 권한의 부서 조건으로 사용 중인지 확인 (직급·직책 삭제와 동일)
+        const boardAuthCount = await this.prisma.boardAuth.count({
+            where: {
+                departmentId: thisDepartment.id,
+                deleted: false,
+            }
+        });
+
+        if( boardAuthCount > 0 ){
+            throw new BadRequestException('게시판 권한에서 사용 중인 부서는 삭제할 수 없습니다.');
+        }
+
         // DELETE (트랜잭션: 삭제+재정렬)
         await this.prisma.$transaction([
             // 대상 부서 삭제

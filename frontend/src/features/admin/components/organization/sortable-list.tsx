@@ -165,6 +165,53 @@ export function useSortDraft(serverIds: number[]) {
   return { orderedIds, changed, setDraft, reset: () => setDraft(null) };
 }
 
+// 트리(부서·게시판)의 상위별 "저장 전 순서" - 형제 그룹마다 따로 정렬하므로 그룹별로 보관한다.
+// childrenOf: 상위 id(null이면 최상위) → 서버 순서의 하위 목록
+// 그 사이 항목이 추가·삭제·이동되어 그룹 구성이 달라지면 해당 그룹의 임시 순서는 버린다.
+export function useGroupedSortDrafts<T extends { id: number }>(childrenOf: Map<number | null, T[]>) {
+  const [drafts, setDrafts] = useState<Map<number | null, number[]>>(new Map());
+
+  const validDraft = (parentId: number | null) => {
+    const draft = drafts.get(parentId);
+    const serverIds = (childrenOf.get(parentId) ?? []).map((item) => item.id);
+    if (!draft || draft.length !== serverIds.length || !serverIds.every((id) => draft.includes(id))) return null;
+    return { draft, serverIds };
+  };
+
+  // 서버 순서와 달라진 그룹만 저장 대상
+  const changedGroups = [...drafts.keys()].flatMap((parentId) => {
+    const valid = validDraft(parentId);
+    return valid && valid.draft.some((id, i) => id !== valid.serverIds[i]) ? [{ parentId, ids: valid.draft }] : [];
+  });
+
+  const ordered = (parentId: number | null) => {
+    const siblings = childrenOf.get(parentId) ?? [];
+    const draft = validDraft(parentId)?.draft;
+    if (!draft) return siblings;
+    const byId = new Map(siblings.map((item) => [item.id, item]));
+    return draft.flatMap((id) => byId.get(id) ?? []);
+  };
+
+  return {
+    ordered,
+    changedGroups,
+    setDraft: (parentId: number | null, ids: number[]) => setDrafts((prev) => new Map(prev).set(parentId, ids)),
+    reset: () => setDrafts(new Map()),
+  };
+}
+
+// 상위 id → 하위 목록 (서버 응답이 트리 순서라 형제끼리의 순서도 그대로 유지된다)
+export function groupByParent<T>(list: T[], getParentId: (item: T) => number | null) {
+  const map = new Map<number | null, T[]>();
+  for (const item of list) {
+    const parentId = getParentId(item);
+    const siblings = map.get(parentId) ?? [];
+    siblings.push(item);
+    map.set(parentId, siblings);
+  }
+  return map;
+}
+
 // 순서가 바뀌었을 때만 보이는 [취소] [순서 저장] 줄
 export function SortSaveBar({
   visible,

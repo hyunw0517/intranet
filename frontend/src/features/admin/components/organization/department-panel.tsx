@@ -20,7 +20,7 @@ import {
 import type { Department } from "@/types/organization";
 import { organizationKeys, useDepartments, useOrganizationMutation } from "../../hooks/use-organization";
 import { NameDialog } from "./name-dialog";
-import { SortableList, SortSaveBar } from "./sortable-list";
+import { groupByParent, SortableList, SortSaveBar, useGroupedSortDrafts } from "./sortable-list";
 
 const ROOT = "root"; // 상위 부서 없음(최상위). Select는 빈 문자열 값을 쓸 수 없어 별도 값으로 둔다.
 
@@ -38,52 +38,7 @@ function selfAndDescendantIds(list: Department[], target: Department) {
   return ids;
 }
 
-// 상위 부서 id → 하위 부서 목록 (서버 응답이 트리 순서라 형제끼리의 순서도 그대로 유지된다)
-function groupByParent(list: Department[]) {
-  const map = new Map<number | null, Department[]>();
-  for (const d of list) {
-    const siblings = map.get(d.parentDepartmentId) ?? [];
-    siblings.push(d);
-    map.set(d.parentDepartmentId, siblings);
-  }
-  return map;
-}
-
-// 상위 부서별 "저장 전 순서" (부서는 형제 그룹마다 따로 정렬하므로 그룹별로 보관)
-// 그 사이 부서가 추가·삭제·이동되어 그룹 구성이 달라지면 해당 그룹의 임시 순서는 버린다.
-function useDepartmentSortDrafts(childrenOf: Map<number | null, Department[]>) {
-  const [drafts, setDrafts] = useState<Map<number | null, number[]>>(new Map());
-
-  const validDraft = (parentId: number | null) => {
-    const draft = drafts.get(parentId);
-    const serverIds = (childrenOf.get(parentId) ?? []).map((d) => d.id);
-    if (!draft || draft.length !== serverIds.length || !serverIds.every((id) => draft.includes(id))) return null;
-    return { draft, serverIds };
-  };
-
-  // 서버 순서와 달라진 그룹만 저장 대상
-  const changedGroups = [...drafts.keys()].flatMap((parentId) => {
-    const valid = validDraft(parentId);
-    return valid && valid.draft.some((id, i) => id !== valid.serverIds[i]) ? [{ parentId, ids: valid.draft }] : [];
-  });
-
-  const ordered = (parentId: number | null) => {
-    const siblings = childrenOf.get(parentId) ?? [];
-    const draft = validDraft(parentId)?.draft;
-    if (!draft) return siblings;
-    const byId = new Map(siblings.map((d) => [d.id, d]));
-    return draft.flatMap((id) => byId.get(id) ?? []);
-  };
-
-  return {
-    ordered,
-    changedGroups,
-    setDraft: (parentId: number | null, ids: number[]) => setDrafts((prev) => new Map(prev).set(parentId, ids)),
-    reset: () => setDrafts(new Map()),
-  };
-}
-
-type DepartmentSortDrafts = ReturnType<typeof useDepartmentSortDrafts>;
+type DepartmentSortDrafts = ReturnType<typeof useGroupedSortDrafts<Department>>;
 
 // 부서 관리: 트리 목록 + 추가(최상위·하위)·수정(이름·상위 부서 이동)·삭제 + 같은 상위 부서 안에서 드래그 정렬
 export function DepartmentPanel() {
@@ -92,7 +47,7 @@ export function DepartmentPanel() {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
   const [parentValue, setParentValue] = useState(ROOT);
-  const sort = useDepartmentSortDrafts(groupByParent(departments ?? []));
+  const sort = useGroupedSortDrafts(groupByParent(departments ?? [], (d) => d.parentDepartmentId));
 
   const saveMutation = useOrganizationMutation((input: DepartmentInput) =>
     dialog?.mode === "edit" ? updateDepartment(dialog.department.id, input) : createDepartment(input),

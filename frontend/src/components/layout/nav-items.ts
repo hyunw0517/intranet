@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Network, Settings, UserRound, Users } from "lucide-react";
+import { LayoutDashboard, LayoutList, Network, Settings, UserRound, Users } from "lucide-react";
 import { isGuestAllowedPath } from "@/lib/guest-access";
 
 export interface NavItem {
@@ -32,6 +32,7 @@ export const adminNav: NavGroup[] = [
       { title: "관리자 홈", href: "/admin", icon: Settings },
       { title: "회원 관리", href: "/admin/users", icon: Users },
       { title: "조직 관리", href: "/admin/organization", icon: Network },
+      { title: "게시판 관리", href: "/admin/boards", icon: LayoutList },
     ],
   },
 ];

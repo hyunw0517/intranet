@@ -6,12 +6,13 @@ import { PageHeader } from "@/components/layout/page-header";
 const ADMIN_LINKS = [
   { href: "/admin/users", title: "회원 관리", description: "가입 승인, 권한·상태, 직급·소속, 비밀번호 초기화" },
   { href: "/admin/organization", title: "조직 관리", description: "부서 트리, 직급, 직책" },
+  { href: "/admin/boards", title: "게시판 관리", description: "카테고리·게시판, 게시판별 권한 규칙" },
 ];
 
 export default function AdminHomePage() {
   return (
     <>
-      <PageHeader title="관리자 홈" description="회원·조직 등 인트라넷 설정을 관리합니다." />
+      <PageHeader title="관리자 홈" description="회원·조직·게시판 등 인트라넷 설정을 관리합니다." />
       <ul className="grid gap-3 sm:grid-cols-2">
         {ADMIN_LINKS.map((link) => (
           <li key={link.href}>

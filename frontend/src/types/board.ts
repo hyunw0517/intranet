@@ -12,8 +12,9 @@ export const BOARD_TYPE_LABEL: Record<BoardType, string> = {
   ALBUM: "앨범",
 };
 
-// 관리자 화면에서 고를 수 있는 타입 (앨범은 파일 기능 이후 구현 예정이라 아직 제외)
-export const SELECTABLE_BOARD_TYPES: BoardType[] = ["CATEGORY", "NORMAL", "NOTICE", "CALENDAR"];
+// 관리자 화면에서 고를 수 있는 타입
+// 앨범의 썸네일·그리드 목록은 파일 기능 이후 구현 예정. 
+export const SELECTABLE_BOARD_TYPES: BoardType[] = ["CATEGORY", "NORMAL", "NOTICE", "CALENDAR", "ALBUM"];
 
 // GET /boards/admin → 트리 순서(카테고리 → 하위 게시판)의 평평한 목록 (백엔드 toTreeList)
 export interface AdminBoard {

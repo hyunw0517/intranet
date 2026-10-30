@@ -14,6 +14,7 @@ import { createBoard, deleteBoard, reorderBoards, updateBoard, type BoardInput }
 import { BOARD_TYPE_LABEL, type AdminBoard } from "@/types/board";
 import { adminBoardKeys, useAdminBoardMutation, useAdminBoards } from "../../hooks/use-admin-boards";
 import { groupByParent, SortableList, SortSaveBar, useGroupedSortDrafts } from "../organization/sortable-list";
+import { CollapseAllBar, CollapseToggle, useCollapsedIds, type CollapsedIds } from "../organization/tree-collapse";
 import { BoardFormDialog, type BoardDialogState } from "./board-form-dialog";
 
 type BoardSortDrafts = ReturnType<typeof useGroupedSortDrafts<AdminBoard>>;
@@ -25,7 +26,10 @@ export function BoardPanel() {
   const { data: boards, isPending, isError, error, refetch } = useAdminBoards();
   const [dialog, setDialog] = useState<BoardDialogState>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminBoard | null>(null);
-  const sort = useGroupedSortDrafts(groupByParent(boards ?? [], (b) => b.parentBoardId));
+  const childrenOf = groupByParent(boards ?? [], (b) => b.parentBoardId);
+  const sort = useGroupedSortDrafts(childrenOf);
+  const collapse = useCollapsedIds();
+  const parentIds = [...childrenOf.keys()].filter((id): id is number => id !== null);
 
   const saveMutation = useAdminBoardMutation((input: BoardInput) =>
     dialog?.mode === "edit" ? updateBoard(dialog.board.id, input) : createBoard(input),
@@ -45,6 +49,7 @@ export function BoardPanel() {
     saveMutation.mutate(input, {
       onSuccess: () => {
         toast.success(dialog?.mode === "edit" ? "게시판을 수정했습니다." : "게시판을 추가했습니다.");
+        collapse.expand(input.parentBoardId); // 접힌 카테고리 아래로 추가·이동해도 바로 보이게
         setDialog(null);
       },
     });
@@ -131,9 +136,18 @@ export function BoardPanel() {
             onCancel={sort.reset}
             onSave={handleSaveOrder}
           />
-          {/* 행마다 위 테두리를 두고, 첫 행의 테두리는 바깥 테두리 밑으로 숨긴다(-mt-px). 중첩 목록이라 divide-y를 쓸 수 없다. */}
-          <div className="overflow-hidden rounded-lg border">
-            <BoardGroup parentId={null} className="-mt-px" sort={sort} renderActions={renderActions} />
+          <div className="grid gap-1">
+            <CollapseAllBar collapse={collapse} parentIds={parentIds} />
+            {/* 행마다 위 테두리를 두고, 첫 행의 테두리는 바깥 테두리 밑으로 숨긴다(-mt-px). 중첩 목록이라 divide-y를 쓸 수 없다. */}
+            <div className="overflow-hidden rounded-lg border">
+              <BoardGroup
+                parentId={null}
+                className="-mt-px"
+                sort={sort}
+                collapse={collapse}
+                renderActions={renderActions}
+              />
+            </div>
           </div>
         </>
       )}
@@ -171,11 +185,13 @@ function BoardGroup({
   parentId,
   className,
   sort,
+  collapse,
   renderActions,
 }: {
   parentId: number | null;
   className?: string;
   sort: BoardSortDrafts;
+  collapse: CollapsedIds;
   renderActions: (board: AdminBoard) => React.ReactNode;
 }) {
   const siblings = sort.ordered(parentId);
@@ -186,30 +202,46 @@ function BoardGroup({
       items={siblings}
       onReorder={(ids) => sort.setDraft(parentId, ids)}
       className={className}
-      renderItem={(b, handle) => (
-        <>
-          <div className="flex flex-col gap-2 border-t py-2 pr-4 pl-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-start gap-1.5" style={{ paddingLeft: `${b.depth}rem` }}>
-              {handle}
-              <div className="grid min-w-0 gap-0.5 pt-1">
-                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  {b.type === "CATEGORY" ? (
-                    <Folder className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                  ) : (
-                    b.depth > 0 && <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                  )}
-                  <span className={b.type === "CATEGORY" ? "font-semibold" : "font-medium"}>{b.name}</span>
-                  <span className="sr-only">({b.path})</span>
-                  {b.type !== "CATEGORY" && <BoardMeta board={b} />}
+      renderItem={(b, handle) => {
+        const hasChildren = sort.ordered(b.id).length > 0;
+        const collapsed = collapse.isCollapsed(b.id);
+        return (
+          <>
+            <div className="flex flex-col gap-2 border-t py-2 pr-4 pl-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-1" style={{ paddingLeft: `${b.depth}rem` }}>
+                {handle}
+                {/* 손잡이(size-7)와 높이를 맞추려고 한 번 감싼다. (행이 설명 때문에 두 줄이 되어도 첫 줄에 붙음) */}
+                <div className="flex h-7 items-center">
+                  <CollapseToggle
+                    name={b.name}
+                    hasChildren={hasChildren}
+                    collapsed={collapsed}
+                    onToggle={() => collapse.toggle(b.id)}
+                  />
                 </div>
-                {b.description && <p className="truncate text-xs text-muted-foreground">{b.description}</p>}
+                <div className="grid min-w-0 gap-0.5 pt-1">
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    {b.type === "CATEGORY" ? (
+                      <Folder className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                    ) : (
+                      b.depth > 0 && <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                    )}
+                    <span className={b.type === "CATEGORY" ? "font-semibold" : "font-medium"}>{b.name}</span>
+                    <span className="sr-only">({b.path})</span>
+                    {b.type !== "CATEGORY" && <BoardMeta board={b} />}
+                  </div>
+                  {b.description && <p className="truncate text-xs text-muted-foreground">{b.description}</p>}
+                </div>
               </div>
+              <div className="flex shrink-0 flex-wrap gap-1">{renderActions(b)}</div>
             </div>
-            <div className="flex shrink-0 flex-wrap gap-1">{renderActions(b)}</div>
-          </div>
-          {b.type === "CATEGORY" && <BoardGroup parentId={b.id} sort={sort} renderActions={renderActions} />}
-        </>
-      )}
+            {/* 접힌 카테고리는 하위 목록을 그리지 않는다. (저장 전 순서는 sort 상태에 남아 다시 펼쳐도 유지) */}
+            {b.type === "CATEGORY" && !collapsed && (
+              <BoardGroup parentId={b.id} sort={sort} collapse={collapse} renderActions={renderActions} />
+            )}
+          </>
+        );
+      }}
     />
   );
 }

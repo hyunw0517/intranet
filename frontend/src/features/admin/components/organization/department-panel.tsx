@@ -21,6 +21,7 @@ import type { Department } from "@/types/organization";
 import { organizationKeys, useDepartments, useOrganizationMutation } from "../../hooks/use-organization";
 import { NameDialog } from "./name-dialog";
 import { groupByParent, SortableList, SortSaveBar, useGroupedSortDrafts } from "./sortable-list";
+import { CollapseAllBar, CollapseToggle, useCollapsedIds, type CollapsedIds } from "./tree-collapse";
 
 const ROOT = "root"; // 상위 부서 없음(최상위). Select는 빈 문자열 값을 쓸 수 없어 별도 값으로 둔다.
 
@@ -47,7 +48,10 @@ export function DepartmentPanel() {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
   const [parentValue, setParentValue] = useState(ROOT);
-  const sort = useGroupedSortDrafts(groupByParent(departments ?? [], (d) => d.parentDepartmentId));
+  const childrenOf = groupByParent(departments ?? [], (d) => d.parentDepartmentId);
+  const sort = useGroupedSortDrafts(childrenOf);
+  const collapse = useCollapsedIds();
+  const parentIds = [...childrenOf.keys()].filter((id): id is number => id !== null);
 
   const saveMutation = useOrganizationMutation((input: DepartmentInput) =>
     dialog?.mode === "edit" ? updateDepartment(dialog.department.id, input) : createDepartment(input),
@@ -65,16 +69,19 @@ export function DepartmentPanel() {
     setDialog(next);
   };
 
-  const handleSave = (name: string) =>
+  const handleSave = (name: string) => {
+    const parentDepartmentId = parentValue === ROOT ? null : Number(parentValue);
     saveMutation.mutate(
-      { name, parentDepartmentId: parentValue === ROOT ? null : Number(parentValue) },
+      { name, parentDepartmentId },
       {
         onSuccess: () => {
           toast.success(dialog?.mode === "edit" ? "부서를 수정했습니다." : "부서를 추가했습니다.");
+          collapse.expand(parentDepartmentId); // 접힌 상위 아래로 추가·이동해도 바로 보이게
           setDialog(null);
         },
       },
     );
+  };
 
   // 하위 부서·소속 인원이 있으면 서버가 400으로 거부하고, 그 메시지를 그대로 보여 준다.
   const handleDelete = () => {
@@ -150,9 +157,18 @@ export function DepartmentPanel() {
             onCancel={sort.reset}
             onSave={handleSaveOrder}
           />
-          {/* 행마다 위 테두리를 두고, 첫 행의 테두리는 바깥 테두리 밑으로 숨긴다(-mt-px). 중첩 목록이라 divide-y를 쓸 수 없다. */}
-          <div className="overflow-hidden rounded-lg border">
-            <DepartmentGroup parentId={null} className="-mt-px" sort={sort} renderActions={renderActions} />
+          <div className="grid gap-1">
+            <CollapseAllBar collapse={collapse} parentIds={parentIds} />
+            {/* 행마다 위 테두리를 두고, 첫 행의 테두리는 바깥 테두리 밑으로 숨긴다(-mt-px). 중첩 목록이라 divide-y를 쓸 수 없다. */}
+            <div className="overflow-hidden rounded-lg border">
+              <DepartmentGroup
+                parentId={null}
+                className="-mt-px"
+                sort={sort}
+                collapse={collapse}
+                renderActions={renderActions}
+              />
+            </div>
           </div>
         </>
       )}
@@ -206,16 +222,18 @@ export function DepartmentPanel() {
 
 // 한 상위 부서 아래의 형제 부서 목록 (각 부서 안에 자기 하위 부서 목록을 다시 그린다)
 // 형제 그룹마다 별도의 정렬 목록이라 다른 상위 부서 아래로는 끌어다 놓을 수 없다. (상위 부서 이동은 [수정]에서)
-// 부서를 끌면 그 안에 그려진 하위 부서들도 함께 움직인다.
+// 부서를 끌면 그 안에 그려진 하위 부서들도 함께 움직인다. (접혀 있어도 마찬가지)
 function DepartmentGroup({
   parentId,
   className,
   sort,
+  collapse,
   renderActions,
 }: {
   parentId: number | null;
   className?: string;
   sort: DepartmentSortDrafts;
+  collapse: CollapsedIds;
   renderActions: (department: Department) => React.ReactNode;
 }) {
   const siblings = sort.ordered(parentId);
@@ -226,21 +244,32 @@ function DepartmentGroup({
       items={siblings}
       onReorder={(ids) => sort.setDraft(parentId, ids)}
       className={className}
-      renderItem={(d, handle) => (
-        <>
-          <div className="flex flex-col gap-2 border-t py-2 pr-4 pl-2 sm:flex-row sm:items-center sm:justify-between">
-            {/* 깊이만큼 들여쓰기 (모바일에서 너무 밀리지 않게 단계당 1rem) */}
-            <div className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: `${d.depth}rem` }}>
-              {handle}
-              {d.depth > 0 && <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
-              <span className={d.depth === 0 ? "font-semibold" : "font-medium"}>{d.name}</span>
-              <span className="sr-only">({d.path})</span>
+      renderItem={(d, handle) => {
+        const hasChildren = sort.ordered(d.id).length > 0;
+        const collapsed = collapse.isCollapsed(d.id);
+        return (
+          <>
+            <div className="flex flex-col gap-2 border-t py-2 pr-4 pl-2 sm:flex-row sm:items-center sm:justify-between">
+              {/* 깊이만큼 들여쓰기 (모바일에서 너무 밀리지 않게 단계당 1rem) */}
+              <div className="flex min-w-0 items-center gap-1" style={{ paddingLeft: `${d.depth}rem` }}>
+                {handle}
+                <CollapseToggle
+                  name={d.name}
+                  hasChildren={hasChildren}
+                  collapsed={collapsed}
+                  onToggle={() => collapse.toggle(d.id)}
+                />
+                {d.depth > 0 && <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+                <span className={d.depth === 0 ? "font-semibold" : "font-medium"}>{d.name}</span>
+                <span className="sr-only">({d.path})</span>
+              </div>
+              <div className="flex shrink-0 gap-1">{renderActions(d)}</div>
             </div>
-            <div className="flex shrink-0 gap-1">{renderActions(d)}</div>
-          </div>
-          <DepartmentGroup parentId={d.id} sort={sort} renderActions={renderActions} />
-        </>
-      )}
+            {/* 접힌 부서는 하위 목록을 그리지 않는다. (저장 전 순서는 sort 상태에 남아 있어 다시 펼쳐도 유지) */}
+            {!collapsed && <DepartmentGroup parentId={d.id} sort={sort} collapse={collapse} renderActions={renderActions} />}
+          </>
+        );
+      }}
     />
   );
 }

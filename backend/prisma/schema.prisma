@@ -33,15 +33,17 @@ enum UserStatus {
 //? 게시판 구분 -> 모델: Board
 enum BoardType {
   CATEGORY  // 카테고리(게시판 묶는 용도)
-  NORMAL    // 일반 게시판
   NOTICE    // 공지 게시판
+  NORMAL    // 일반 게시판
   CALENDAR  // 캘린더
+  ALBUM     // 앨범
 }
 
 //? 파일 사용 구분 -> 모델: Files
 enum FileTargetType {
   USER_PROFILE        // 회원 프로필 사진
   POST                // 게시글 첨부파일
+  POST_IMAGE          // 게시글 본문 이미지 (에디터 삽입)
   APPROVAL_DOCUMENT   // 전자결재 문서 첨부파일
   CHAT_MESSAGE        // 채팅 첨부파일
 }
@@ -163,6 +165,7 @@ model Users {
   departments             UserDepartment[] // 소속 목록 (겸직 시 여러 개)
   notifications           Notification[]  // 받은 알림 목록
   posts                   Post[]                      @relation("PostAuthor")    // 작성한 게시글 목록
+  postViews               PostView[]          // 게시글 조회 기록
   comments                Comment[]                   @relation("CommentAuthor") // 작성한 댓글 목록
   reservations            MeetingRoomReservation[]    @relation("MeetingRoomReservationUser")   // 예약한 회의실 목록
   approvalLineTemplates   ApprovalLineTemplate[]      @relation("ApprovalLineOwner")            // 소유한 개인 결재라인
@@ -354,6 +357,9 @@ model Board {
   parentBoardId Int?      @map("parent_board_id") // 상위 게시판 id (최상위는 NULL)
   type          BoardType @default(NORMAL) // 게시판 구분
   name          String    // 게시판명
+  description   String?   // 게시판 설명
+  isAnonymous   Boolean   @default(false) @map("is_anonymous") // 익명 게시판 여부
+  allowSecret   Boolean   @default(false) @map("allow_secret") // 비밀글 허용 여부
   sortOrder     Int       @default(0) @map("sort_order") // 정렬 순서
 
   parent    Board?  @relation("BoardHierarchy", fields: [parentBoardId], references: [id]) // 상위 게시판
@@ -380,6 +386,9 @@ model Post {
   authorId  Int      @map("author_id") // 작성자 id
   title     String   // 게시글 제목
   content   String?   // 게시글 본문
+  isPinned  Boolean   @default(false) @map("is_pinned") // 상단 고정
+  viewCount Int     @default(0) @map("view_count") // 조회수
+  isSecret  Boolean @default(false) @map("is_secret") // 비밀글 여부 (작성자 + 게시판 관리자만 열람 가능)
 
   eventStartAt  DateTime? @map("event_start_at")  // 일정 시작 시간 (캘린더 게시판용)
   eventEndAt    DateTime? @map("event_end_at")  // 일정 종료 시간 (캘린더 게시판용)
@@ -388,6 +397,7 @@ model Post {
   board     Board     @relation(fields: [boardId], references: [id])
   author    Users     @relation("PostAuthor", fields: [authorId], references: [id]) // 작성자
   comments  Comment[] // 댓글 목록
+  views     PostView[] // 조회 기록
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -430,6 +440,20 @@ model Comment {
   @@map("comment_model")
 }
 
+//* 게시글 조회 기록 (1개의 게시글 -> 사용자당 1개) 
+model PostView {
+  postId    Int   @map("post_id")
+  userId    Int   @map("user_id")
+  viewedAt  DateTime @default(now()) @map("viewed_at") // 최초 조회 시간
+
+  post Post @relation(fields: [postId], references: [id])
+  user Users @relation(fields: [userId], references: [id])
+
+  @@id([postId, userId]) // 중복 조회 방지 + 게시글별 읽은 사람 조회
+  @@index([userId])      // FK 인덱스 (PostgreSQL은 자동 생성 안 함)
+  @@map("post_view_model")
+}
+
 //* 게시판 권한 (게시판-부서-직급-직책)
 // -> 부서/직책: UserDepartment 기준
 // -> 직급: Users.positionId 기준
@@ -447,8 +471,8 @@ model BoardAuth {
 
   board      Board               @relation(fields: [boardId], references: [id])
   department Department?         @relation(fields: [departmentId], references: [id])
-  jobTitles  BoardAuthJobTitle[] // 허용 직책 목록 (비어 있으면 직책 조건 없음)
   position   Position?           @relation(fields: [positionId], references: [id])
+  jobTitles  BoardAuthJobTitle[] // 허용 직책 목록 (비어 있으면 직책 조건 없음)
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")

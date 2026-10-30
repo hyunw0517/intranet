@@ -10,6 +10,7 @@ import { AccessTokenGuard } from './auth/guard/bearer-token.guard';
 import { APP_GUARD } from '@nestjs/core/constants';
 import { RolesGuard } from './auth/guard/roles.guard';
 import { OrganizationModule } from './organization/organization.module';
+import { BoardsModule } from './boards/boards.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { OrganizationModule } from './organization/organization.module';
     UsersModule, 
     AuthModule, 
     OrganizationModule, 
+    BoardsModule, 
   ],
   controllers: [AppController],
   providers: [

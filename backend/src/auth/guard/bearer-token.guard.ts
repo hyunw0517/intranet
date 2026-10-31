@@ -32,27 +32,24 @@ export class BearerTokenGuard implements CanActivate {
             // "로그인 없이도 볼 수 있지만, 로그인했으면 개인화된 정보(예: 내가 좋아요했는지)도
             // 함께 보여준다" 같은 케이스를 위한 것. 토큰이 없거나 유효하지 않아도 공개
             // 라우트이므로 에러를 던지지 않고 그냥 비로그인으로 취급한다.
+            // 검증은 일반 라우트와 같은 authenticate()를 써서 tokenVersion·상태 체크가 빠지지 않게 한다.
             const rawToken = req.headers['authorization'];
 
             if( rawToken ){
                 try{
                     const token = this.authService.extractTokenFromHeader(rawToken, true);
-                    const result = await this.authService.verifyToken(token);
-                    
-                    if( !result.empNo ){
-                        throw new UnauthorizedException('잘못된 토큰입니다.');
-                    }
+                    await this.authenticate(req, token);
 
-                    if( result.type === 'access' ){
-                        req.user = await this.usersService.getUserByEmpNo(result.empNo);
-                    }
-
-                    if( !req.user ){
-                        throw new UnauthorizedException('존재하지 않는 사용자입니다.');
+                    // 공개 라우트에서도 access token만 로그인으로 인정한다.
+                    if( req.tokenType !== 'access' ){
+                        throw new UnauthorizedException('Access Token이 아닙니다.');
                     }
 
                 }catch{
-                    // 무시 - 비로그인으로 취급
+                    // 비로그인으로 취급 - 검증 도중 채워진 값은 지운다.
+                    req.user = undefined;
+                    req.token = undefined;
+                    req.tokenType = undefined;
                 }
             }
 

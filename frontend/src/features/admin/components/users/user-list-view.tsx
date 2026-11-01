@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { MoreHorizontal, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal, Search } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/common/data-state";
@@ -24,16 +24,40 @@ import { getErrorMessage } from "@/lib/error-message";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
-import { restoreUser, type AdminUserListItem, type UserListQuery } from "@/services/api/users";
+import {
+  restoreUser,
+  type AdminUserListItem,
+  type SortOrder,
+  type UserListQuery,
+  type UserSortBy,
+} from "@/services/api/users";
 import { ROLE_LABEL, STATUS_LABEL, type UserRole, type UserStatus } from "@/types/user";
 import { useAdminUserMutation, useAdminUsers } from "../../hooks/use-admin-users";
+import { useJobTitles, usePositions } from "../../hooks/use-organization";
 import { RoleBadge, StatusBadge } from "./user-badges";
 import { UserBulkActions } from "./user-bulk-actions";
 import { UserQuickDialog, type QuickDialogState, type QuickDialogType } from "./user-quick-dialog";
 
-// 검색 대상 필드 (백엔드는 필드별로 부분 일치 검색)
-const SEARCH_FIELDS = { name: "이름", empNo: "사번", email: "이메일" } as const;
+// 검색 대상 필드 (백엔드는 필드별로 부분 일치 검색, 부서는 겸직 소속까지 포함)
+const SEARCH_FIELDS = { name: "이름", empNo: "사번", email: "이메일", departmentName: "부서" } as const;
 type SearchField = keyof typeof SEARCH_FIELDS;
+
+// 표 머리글로 정렬할 수 있는 컬럼 (정렬하지 않으면 백엔드 기본값: 가입일 최신순)
+const SORT_FIELDS = ["empNo", "name", "department", "position"] as const satisfies readonly UserSortBy[];
+type SortField = (typeof SORT_FIELDS)[number];
+type Sort = { field: SortField; order: SortOrder } | null;
+
+function readSort(params: URLSearchParams): Sort {
+  const field = params.get("sort") as SortField;
+  if (!SORT_FIELDS.includes(field)) return null;
+  return { field, order: params.get("order") === "desc" ? "desc" : "asc" };
+}
+
+// 같은 컬럼을 누를 때마다 오름차순 → 내림차순 → 정렬 해제(기본 순서)
+function nextSort(current: Sort, field: SortField): Sort {
+  if (current?.field !== field) return { field, order: "asc" };
+  return current.order === "asc" ? { field, order: "desc" } : null;
+}
 
 const ALL = "all"; // Select는 빈 문자열 값을 쓸 수 없어 "전체"를 별도 값으로 둔다.
 
@@ -51,6 +75,10 @@ function readFilters(params: URLSearchParams) {
     q: params.get("q") ?? "",
     role: (params.get("role") ?? ALL) as UserRole | typeof ALL,
     status: (params.get("status") ?? ALL) as UserStatus | typeof ALL,
+    // 직급·직책은 id 문자열 (Select 값이 문자열이라 그대로 둔다)
+    position: params.get("position") ?? ALL,
+    jobTitle: params.get("jobTitle") ?? ALL,
+    sort: readSort(params),
     deleted: params.get("deleted") === "1",
   };
 }
@@ -64,11 +92,15 @@ function toQuery(f: Filters): UserListQuery {
     [f.field]: f.q || undefined,
     role: f.role === ALL ? undefined : f.role,
     status: f.status === ALL ? undefined : f.status,
+    positionId: f.position === ALL ? undefined : Number(f.position),
+    jobTitleId: f.jobTitle === ALL ? undefined : Number(f.jobTitle),
+    sortBy: f.sort?.field,
+    order: f.sort?.order,
     deletedOnly: f.deleted || undefined,
   };
 }
 
-// 관리자 회원 목록: 검색·권한·상태 필터, 표시 개수·페이지 이동, 선택 회원 일괄 처리, 삭제된 회원 보기(복구)
+// 관리자 회원 목록: 검색·권한·상태·직급·직책 필터, 머리글 정렬, 표시 개수·페이지 이동, 선택 회원 일괄 처리, 삭제된 회원 보기(복구)
 export function UserListView() {
   const router = useRouter();
   const pathname = usePathname();
@@ -88,6 +120,12 @@ export function UserListView() {
     }
     if (next.role !== ALL) params.set("role", next.role);
     if (next.status !== ALL) params.set("status", next.status);
+    if (next.position !== ALL) params.set("position", next.position);
+    if (next.jobTitle !== ALL) params.set("jobTitle", next.jobTitle);
+    if (next.sort) {
+      params.set("sort", next.sort.field);
+      params.set("order", next.sort.order);
+    }
     if (next.deleted) params.set("deleted", "1");
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
@@ -124,7 +162,12 @@ export function UserListView() {
               <DeletedUserTable users={data.data} />
             ) : (
               // key: 페이지·필터가 바뀌면(URL) 선택 상태를 초기화한다. 다른 페이지의 회원이 선택된 채 남지 않게 한다.
-              <UserTable key={searchParams.toString()} users={data.data} />
+              <UserTable
+                key={searchParams.toString()}
+                users={data.data}
+                sort={filters.sort}
+                onSort={(field) => updateFilters({ sort: nextSort(filters.sort, field) })}
+              />
             )}
           </div>
           <PaginationBar meta={data.meta} onPageChange={(page) => updateFilters({ page })} />
@@ -153,11 +196,13 @@ function PageSizeSelect({ value, onChange }: { value: number; onChange: (size: n
   );
 }
 
-// 검색어는 [검색]을 눌러야 반영하고, 권한·상태는 고르는 즉시 반영한다.
+// 검색어는 [검색]을 눌러야 반영하고, 권한·상태·직급·직책은 고르는 즉시 반영한다.
 // URL이 바뀌면 key로 다시 마운트되어 입력값이 URL과 맞춰진다.
 function UserFilters({ filters, onChange }: { filters: Filters; onChange: (patch: Partial<Filters>) => void }) {
   const [field, setField] = useState<SearchField>(filters.field);
   const [q, setQ] = useState(filters.q);
+  const positions = usePositions();
+  const jobTitles = useJobTitles();
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -192,7 +237,8 @@ function UserFilters({ filters, onChange }: { filters: Filters; onChange: (patch
         </Button>
       </form>
 
-      <div className="flex gap-2">
+      {/* 좁은 화면에서는 2열로 배치해 Select 4개가 넘치지 않게 한다. */}
+      <div className="grid grid-cols-2 gap-2 lg:flex">
         <Select value={filters.role} onValueChange={(v) => onChange({ role: v as Filters["role"] })}>
           <SelectTrigger className="w-full lg:w-32" aria-label="권한">
             <SelectValue />
@@ -219,6 +265,32 @@ function UserFilters({ filters, onChange }: { filters: Filters; onChange: (patch
             ))}
           </SelectContent>
         </Select>
+        <Select value={filters.position} onValueChange={(v) => onChange({ position: v })}>
+          <SelectTrigger className="w-full lg:w-32" aria-label="직급">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>직급 전체</SelectItem>
+            {positions.data?.map((p) => (
+              <SelectItem key={p.id} value={String(p.id)}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filters.jobTitle} onValueChange={(v) => onChange({ jobTitle: v })}>
+          <SelectTrigger className="w-full lg:w-32" aria-label="직책">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>직책 전체</SelectItem>
+            {jobTitles.data?.map((j) => (
+              <SelectItem key={j.id} value={String(j.id)}>
+                {j.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );
@@ -234,7 +306,15 @@ function primaryDepartmentLabel(user: AdminUserListItem) {
 // 관리자 화면은 PC 우선이므로 좁은 화면에서는 표를 가로 스크롤한다. (Table 컨테이너가 overflow-x-auto)
 // 왼쪽 체크박스로 선택한 회원은 하단 [권한·상태] [삭제]로 일괄 처리하고, 오른쪽 ⋯ 메뉴로 한 명씩 모달에서 변경한다.
 // 권한·상태, 직급·소속 변경은 이 목록에서만 한다. (상세 페이지는 조회 + 기본 정보 수정 + 계정 관리)
-function UserTable({ users }: { users: AdminUserListItem[] }) {
+function UserTable({
+  users,
+  sort,
+  onSort,
+}: {
+  users: AdminUserListItem[];
+  sort: Sort;
+  onSort: (field: SortField) => void;
+}) {
   const { user: me } = useAuth();
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [dialog, setDialog] = useState<QuickDialogState | null>(null);
@@ -272,11 +352,11 @@ function UserTable({ users }: { users: AdminUserListItem[] }) {
                 aria-label="이 페이지 회원 전체 선택"
               />
             </TableHead>
-            <TableHead className="w-28">사번</TableHead>
-            <TableHead>이름</TableHead>
+            <SortableHead field="empNo" label="사번" sort={sort} onSort={onSort} className="w-28" />
+            <SortableHead field="name" label="이름" sort={sort} onSort={onSort} />
             <TableHead>이메일</TableHead>
-            <TableHead>대표 소속</TableHead>
-            <TableHead className="w-20">직급</TableHead>
+            <SortableHead field="department" label="대표 소속" sort={sort} onSort={onSort} />
+            <SortableHead field="position" label="직급" sort={sort} onSort={onSort} className="w-24" />
             <TableHead className="w-24">권한</TableHead>
             <TableHead className="w-20">상태</TableHead>
             <TableHead className="w-12">
@@ -330,6 +410,40 @@ function UserTable({ users }: { users: AdminUserListItem[] }) {
         onClose={() => setDialog((prev) => (prev ? { ...prev, open: false } : null))}
       />
     </div>
+  );
+}
+
+// 정렬 가능한 머리글: 누를 때마다 오름차순 → 내림차순 → 해제 (nextSort)
+// 정렬 상태는 aria-sort로 스크린리더에 알리고, 아이콘으로 현재 방향을 보여 준다.
+function SortableHead({
+  field,
+  label,
+  sort,
+  onSort,
+  className,
+}: {
+  field: SortField;
+  label: string;
+  sort: Sort;
+  onSort: (field: SortField) => void;
+  className?: string;
+}) {
+  const order = sort?.field === field ? sort.order : null;
+  const Icon = order === "asc" ? ArrowUp : order === "desc" ? ArrowDown : ArrowUpDown;
+  return (
+    <TableHead
+      className={className}
+      aria-sort={order === "asc" ? "ascending" : order === "desc" ? "descending" : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        className="-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        {label}
+        <Icon aria-hidden className={cn("size-3.5", order ? "text-foreground" : "text-muted-foreground")} />
+      </button>
+    </TableHead>
   );
 }
 

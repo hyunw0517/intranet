@@ -5,12 +5,13 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
-import { UserRole, Users } from 'src/generated/prisma/client';
-import { PaginateUserQueryDto } from './dto/paginate-user-query.dto';
+import { Prisma, UserRole, Users } from 'src/generated/prisma/client';
+import { PaginateUserQueryDto, UserSortBy } from './dto/paginate-user-query.dto';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { PageArgs, PageResult } from 'src/common/util/pagination.util';
+import { SortOrder } from 'src/common/dto/base-pagination.dto';
 
 @Injectable()
 export class UsersService {
@@ -25,7 +26,7 @@ export class UsersService {
     query: PaginateUserQueryDto,
   ) {
     
-    const where = {
+    const where: Prisma.UsersWhereInput = {
       deleted: ( query.deletedOnly === true ) ? true : false, // 삭제 회원 조회 true 플래그가 있다면 삭제된 회원만 표시
       empNo: query.empNo ? { contains: query.empNo } : undefined,
       email: query.email ? { contains: query.email } : undefined,
@@ -33,66 +34,31 @@ export class UsersService {
       nickname: query.nickname ? { contains: query.nickname } : undefined,
       role: query.role, 
       status: query.status,
+      positionId: query.positionId,
+      // 부서명 검색·직책 필터: 삭제되지 않은 소속 중 하나라도 맞으면 포함 (겸직 포함)
+      // 둘 다 있으면 같은 소속 행이 두 조건을 모두 만족해야 한다. (예: 개발팀의 팀장)
+      departments: ( query.departmentName || query.jobTitleId ) ? {
+        some: {
+          deleted: false,
+          department: query.departmentName ? { name: { contains: query.departmentName } } : undefined,
+          jobTitleId: query.jobTitleId,
+        },
+      } : undefined,
     };
+
+    // 소속(1:N 관계) 정렬은 Prisma orderBy로 지정할 수 없어 따로 처리한다.
+    if ( query.sortBy === UserSortBy.DEPARTMENT ) {
+      return this.paginateUserByDepartment( where, query );
+    }
 
     // 목록과 전체 개수 조회 -> Promise.all로 병렬 처리
     const [result, total] = await Promise.all([
       // list
       this.prisma.users.findMany({
-        select: {
-          id: true,
-          empNo: true, 
-          email: true, 
-          name: true, 
-          nickname: true, 
-          birthday: true,
-          status: true,
-          role: true,
-          deletedAt: true, // 삭제된 회원 조회(deletedOnly) 시 삭제 시각
-
-          // 직급
-          position: {
-            select: {
-              id: true,
-              name: true,
-            }
-          },
-
-          // 소속 (부서+직책)
-          departments: {
-            select: {
-              id: true,
-              isPrimary: true,
-              // 부서
-              department: {
-                select: {
-                  id: true,
-                  name: true,
-                }
-              },
-              // 직책
-              jobTitle: {
-                select: {
-                  id: true,
-                  name: true,
-                } 
-              },
-            },
-            where: { 
-              deleted: false, 
-              isPrimary: ( query.allDepartments === true ) ? undefined : true, // 전체 소속 조회 true 플래그가 없다면 대표 소속만 표시
-            },
-            orderBy: [
-              // orderBy 배열 이유: Prisma는 orderBy 객체 하나에 필드가 정확히 1개만 있어야 함
-              { isPrimary: 'desc' }, //1순위(대표 지정 소속)
-              { createdAt: 'asc' } //2순위(등록순)
-            ], 
-          },
-        },
-
+        select: this.userListSelect( query ),
         where,
         orderBy: [
-          { [query.sortBy]: query.order },
+          this.userOrderBy( query ),
           { id: query.order }
         ],
         ...PageArgs( query ),
@@ -102,6 +68,124 @@ export class UsersService {
     ]);
 
     return PageResult( result, total, query );
+  }
+
+  //* 회원 목록 select (일반 조회·소속 정렬 조회 공용)
+  private userListSelect( query: PaginateUserQueryDto ) {
+    return {
+      id: true,
+      empNo: true, 
+      email: true, 
+      name: true, 
+      nickname: true, 
+      birthday: true,
+      status: true,
+      role: true,
+      deletedAt: true, // 삭제된 회원 조회(deletedOnly) 시 삭제 시각
+
+      // 직급
+      position: {
+        select: {
+          id: true,
+          name: true,
+        }
+      },
+
+      // 소속 (부서+직책)
+      departments: {
+        select: {
+          id: true,
+          isPrimary: true,
+          // 부서
+          department: {
+            select: {
+              id: true,
+              name: true,
+            }
+          },
+          // 직책
+          jobTitle: {
+            select: {
+              id: true,
+              name: true,
+            } 
+          },
+        },
+        where: { 
+          deleted: false, 
+          isPrimary: ( query.allDepartments === true ) ? undefined : true, // 전체 소속 조회 true 플래그가 없다면 대표 소속만 표시
+        },
+        orderBy: [
+          // orderBy 배열 이유: Prisma는 orderBy 객체 하나에 필드가 정확히 1개만 있어야 함
+          { isPrimary: 'desc' }, //1순위(대표 지정 소속)
+          { createdAt: 'asc' } //2순위(등록순)
+        ], 
+      },
+    } satisfies Prisma.UsersSelect;
+  }
+
+  //* 정렬 컬럼 → Prisma orderBy (소속 정렬은 paginateUserByDepartment에서 처리)
+  private userOrderBy( query: PaginateUserQueryDto ): Prisma.UsersOrderByWithRelationInput {
+    switch ( query.sortBy ) {
+      case UserSortBy.EMP_NO:
+        return { empNo: query.order };
+      case UserSortBy.NAME:
+        return { name: query.order };
+      case UserSortBy.POSITION:
+        // 직급은 이름이 아닌 순위(sortOrder)로 정렬한다.
+        // 직급이 없는 회원은 LEFT JOIN 결과가 NULL이라 PostgreSQL 기본값대로 오름차순은 맨 뒤, 내림차순은 맨 앞에 온다.
+        return { position: { sortOrder: query.order } };
+      default:
+        return { createdAt: query.order };
+    }
+  }
+
+  //* 대표 소속 부서명 정렬 조회
+  // - to-many 관계(소속)는 Prisma orderBy에서 _count 정렬만 지원해 부서명으로 정렬할 수 없다.
+  // - 조건에 맞는 회원의 id와 대표 부서명만 전부 조회해 메모리에서 정렬하고, 해당 페이지의 id만 목록 데이터로 조회한다.
+  // - 사내 회원 수(수백~수천 명) 기준으로는 충분하다. 규모가 커지면 raw SQL(LEFT JOIN + ORDER BY)로 바꾼다.
+  private async paginateUserByDepartment(
+    where: Prisma.UsersWhereInput,
+    query: PaginateUserQueryDto,
+  ) {
+    const rows = await this.prisma.users.findMany({
+      select: {
+        id: true,
+        departments: {
+          select: { department: { select: { name: true } } },
+          where: { deleted: false, isPrimary: true },
+        },
+      },
+      where,
+    });
+
+    // 대표 부서명 → id 순으로 정렬 (일반 조회의 { id: order } 보조 정렬과 같은 기준)
+    // 대표 소속이 없는 회원은 정렬 방향과 관계없이 맨 뒤
+    const direction = ( query.order === SortOrder.ASC ) ? 1 : -1;
+    const sorted = rows
+      .map( (row) => ({ id: row.id, departmentName: row.departments[0]?.department.name ?? null }) )
+      .sort( (a, b) => {
+        if ( a.departmentName === b.departmentName ) return ( a.id - b.id ) * direction;
+        if ( a.departmentName === null ) return 1;
+        if ( b.departmentName === null ) return -1;
+        return a.departmentName.localeCompare( b.departmentName, 'ko' ) * direction;
+      });
+
+    const { skip, take } = PageArgs( query );
+    const pageIds = sorted.slice( skip, skip + take ).map( (row) => row.id );
+
+    const users = await this.prisma.users.findMany({
+      select: this.userListSelect( query ),
+      where: { id: { in: pageIds } },
+    });
+
+    // IN 조회는 순서를 보장하지 않으므로 정렬된 id 순서로 다시 맞춘다.
+    const userById = new Map( users.map( (user) => [user.id, user] ) );
+    const result = pageIds
+      .map( (id) => userById.get(id) )
+      .filter( (user) => user !== undefined );
+
+    return PageResult( result, sorted.length, query );
   }
 
   //* (관리자) 회원 상세 조회

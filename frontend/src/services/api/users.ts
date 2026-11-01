@@ -27,6 +27,10 @@ export function updateMe(input: UpdateMeInput) {
 
 // ── 관리자 ────────────────────────────────────────────────────────
 
+// GET /users 정렬 기준 (UserSortBy) - 소속은 대표 소속 부서명, 직급은 순위(sortOrder) 기준
+export type UserSortBy = "createdAt" | "empNo" | "name" | "department" | "position";
+export type SortOrder = "asc" | "desc";
+
 // GET /users (PaginateUserQueryDto) - 검색 필드는 각각 부분 일치
 // apiFetch의 query(Record)에 그대로 넘길 수 있도록 interface가 아닌 type으로 선언
 export type UserListQuery = {
@@ -35,8 +39,13 @@ export type UserListQuery = {
   empNo?: string;
   email?: string;
   name?: string;
+  departmentName?: string; // 겸직 포함, 소속 중 하나라도 부분 일치
   role?: UserRole;
   status?: UserStatus;
+  positionId?: number;
+  jobTitleId?: number; // 겸직 포함, 소속 중 하나라도 해당 직책
+  sortBy?: UserSortBy; // 생략하면 가입일(createdAt)
+  order?: SortOrder; // 생략하면 desc
   deletedOnly?: boolean; // true면 삭제된 회원만
 };
 

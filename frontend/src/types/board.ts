@@ -49,3 +49,16 @@ export interface BoardAuthRule {
   authComment: boolean;
   authAdmin: boolean; // 다른 사람이 쓴 게시글·댓글 삭제
 }
+
+// GET /boards/navigation 항목 - 읽기 권한이 있는 게시판만 트리 순서로 (백엔드 getUserBoardNavigate)
+// 카테고리는 볼 수 있는 하위 게시판이 하나라도 있을 때만 포함된다.
+export interface BoardNavItem {
+  id: number;
+  parentBoardId: number | null;
+  type: BoardType;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  depth: number; // 최상위 0, 카테고리 하위 1
+  path: string; // 최상위부터 자기까지의 이름 (구분자 /)
+}

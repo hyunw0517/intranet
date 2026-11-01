@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowLeftRight, Building2 } from "lucide-react";
@@ -20,7 +21,12 @@ import { useAuth } from "@/providers/auth-provider";
 import { filterNavForRole, navByVariant, type ShellVariant } from "./nav-items";
 import { isActivePath } from "./is-active-path";
 
-export function AppSidebar({ variant }: { variant: ShellVariant }) {
+interface AppSidebarProps {
+  variant: ShellVariant;
+  extraNav?: React.ReactNode; // 고정 메뉴의 첫 그룹 다음에 표시 (업무 → 게시판 → 개인)
+}
+
+export function AppSidebar({ variant, extraNav }: AppSidebarProps) {
   const { user } = useAuth();
   const nav = filterNavForRole(navByVariant[variant], user?.role);
   const pathname = usePathname();
@@ -55,26 +61,29 @@ export function AppSidebar({ variant }: { variant: ShellVariant }) {
       </SidebarHeader>
 
       <SidebarContent>
-        {nav.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-            <SidebarMenu>
-              {group.items.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.title}
-                    isActive={isActivePath(pathname, item.href)}
-                  >
-                    <Link href={item.href} onClick={closeOnMobile}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
+        {nav.map((group, index) => (
+          <Fragment key={group.label}>
+            <SidebarGroup>
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+              <SidebarMenu>
+                {group.items.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip={item.title}
+                      isActive={isActivePath(pathname, item.href)}
+                    >
+                      <Link href={item.href} onClick={closeOnMobile}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+            {index === 0 && extraNav}
+          </Fragment>
         ))}
       </SidebarContent>
 

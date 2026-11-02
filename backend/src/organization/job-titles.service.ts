@@ -6,7 +6,7 @@ import { isSameIdSet } from 'src/common/util/id-set.util';
 import { CreateJobTitleDto } from './dto/create-job-title.dto';
 import { UpdateJobTitleDto } from './dto/update-job-title.dto';
 import { PaginateJobTitleQueryDto } from './dto/paginate-job-title-query.dto';
-import { PageArgs, PageResult } from 'src/common/util/pagination.util';
+import { PaginatePage } from 'src/common/util/pagination.util';
 
 @Injectable()
 export class JobTitlesService {
@@ -23,21 +23,19 @@ export class JobTitlesService {
             name: query.name ? { contains: query.name } : undefined,
         };
 
-        const [result, total] = await Promise.all([
+        return PaginatePage( query,
             // list
-            this.prisma.jobTitle.findMany({
+            (page) => this.prisma.jobTitle.findMany({
                 where,
                 orderBy: [
                     { [query.sortBy]: query.order },
                     { id: query.order }
                 ],
-                ...PageArgs( query ),
+                ...page,
             }),
             // count
-            this.prisma.jobTitle.count({ where })
-        ]) 
-
-        return PageResult( result, total, query );
+            () => this.prisma.jobTitle.count({ where }),
+        );
     }
 
     //* 직책 생성

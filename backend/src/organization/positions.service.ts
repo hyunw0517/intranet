@@ -6,7 +6,7 @@ import { isSameIdSet } from 'src/common/util/id-set.util';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
 import { PaginatePositionQueryDto } from './dto/paginate-position-query.dto';
-import { PageArgs, PageResult } from 'src/common/util/pagination.util';
+import { PaginatePage } from 'src/common/util/pagination.util';
 
 @Injectable()
 export class PositionsService {
@@ -24,19 +24,17 @@ export class PositionsService {
             name: query.name ? { contains: query.name } : undefined,
         }
 
-        const [result, total] = await Promise.all([
-            this.prisma.position.findMany({
+        return PaginatePage( query,
+            (page) => this.prisma.position.findMany({
                 where,
                 orderBy: [
                     { [query.sortBy]: query.order },
                     { id: query.order }
                 ],
-                ...PageArgs( query ),
+                ...page,
             }),
-            this.prisma.position.count({ where })
-        ]);
-
-        return PageResult( result, total, query );
+            () => this.prisma.position.count({ where }),
+        );
     }
 
     //* 직급 생성

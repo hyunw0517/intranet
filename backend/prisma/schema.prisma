@@ -166,6 +166,7 @@ model Users {
   notifications           Notification[]  // 받은 알림 목록
   posts                   Post[]                      @relation("PostAuthor")    // 작성한 게시글 목록
   postViews               PostView[]          // 게시글 조회 기록
+  postLikes               PostLike[]          // 좋아요한 게시글 기록
   comments                Comment[]                   @relation("CommentAuthor") // 작성한 댓글 목록
   reservations            MeetingRoomReservation[]    @relation("MeetingRoomReservationUser")   // 예약한 회의실 목록
   approvalLineTemplates   ApprovalLineTemplate[]      @relation("ApprovalLineOwner")            // 소유한 개인 결재라인
@@ -384,10 +385,13 @@ model Post {
   id        Int      @id @default(autoincrement())
   boardId   Int      @map("board_id") // 게시판 id
   authorId  Int      @map("author_id") // 작성자 id
+  authorDepartmentName String? @map("author_department_name") // 작성자 - 작성 당시 대표로 지정한 소속 부서명
+  authorPositionName   String? @map("author_position_name")   // 작성자 - 작성 당시 직급명
   title     String   // 게시글 제목
   content   String?   // 게시글 본문
   isPinned  Boolean   @default(false) @map("is_pinned") // 상단 고정
   viewCount Int     @default(0) @map("view_count") // 조회수
+  likeCount Int     @default(0) @map("like_count") // 좋아요 수
   isSecret  Boolean @default(false) @map("is_secret") // 비밀글 여부 (작성자 + 게시판 관리자만 열람 가능)
 
   eventStartAt  DateTime? @map("event_start_at")  // 일정 시작 시간 (캘린더 게시판용)
@@ -398,6 +402,7 @@ model Post {
   author    Users     @relation("PostAuthor", fields: [authorId], references: [id]) // 작성자
   comments  Comment[] // 댓글 목록
   views     PostView[] // 조회 기록
+  likes     PostLike[] // 좋아요 기록
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -452,6 +457,20 @@ model PostView {
   @@id([postId, userId]) // 중복 조회 방지 + 게시글별 읽은 사람 조회
   @@index([userId])      // FK 인덱스 (PostgreSQL은 자동 생성 안 함)
   @@map("post_view_model")
+}
+
+//* 게시글 좋아요 (1개의 게시글 -> 사용자당 1개)
+model PostLike {
+  postId    Int   @map("post_id")
+  userId    Int   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at") // 좋아요 누른 시간
+
+  post Post @relation(fields: [postId], references: [id])
+  user Users @relation(fields: [userId], references: [id])
+
+  @@id([postId, userId]) // 중복 좋아요 방지 + 게시글별 좋아요 누른 사람 조회
+  @@index([userId])      // FK 인덱스 + 내가 좋아요한 글 목록
+  @@map("post_like_model")
 }
 
 //* 게시판 권한 (게시판-부서-직급-직책)

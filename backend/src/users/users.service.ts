@@ -10,7 +10,7 @@ import { PaginateUserQueryDto, UserSortBy } from './dto/paginate-user-query.dto'
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
-import { PageArgs, PageResult } from 'src/common/util/pagination.util';
+import { PaginatePage } from 'src/common/util/pagination.util';
 import { SortOrder } from 'src/common/dto/base-pagination.dto';
 
 @Injectable()
@@ -30,8 +30,8 @@ export class UsersService {
       deleted: ( query.deletedOnly === true ) ? true : false, // 삭제 회원 조회 true 플래그가 있다면 삭제된 회원만 표시
       empNo: query.empNo ? { contains: query.empNo } : undefined,
       email: query.email ? { contains: query.email } : undefined,
-      name: query.name ? { contains: query.name } : undefined,
-      nickname: query.nickname ? { contains: query.nickname } : undefined,
+      name: query.name ? { contains: query.name, mode: 'insensitive' } : undefined,
+      nickname: query.nickname ? { contains: query.nickname, mode: 'insensitive' } : undefined,
       role: query.role, 
       status: query.status,
       positionId: query.positionId,
@@ -40,7 +40,7 @@ export class UsersService {
       departments: ( query.departmentName || query.jobTitleId ) ? {
         some: {
           deleted: false,
-          department: query.departmentName ? { name: { contains: query.departmentName } } : undefined,
+          department: query.departmentName ? { name: { contains: query.departmentName, mode: 'insensitive' } } : undefined,
           jobTitleId: query.jobTitleId,
         },
       } : undefined,
@@ -51,23 +51,21 @@ export class UsersService {
       return this.paginateUserByDepartment( where, query );
     }
 
-    // 목록과 전체 개수 조회 -> Promise.all로 병렬 처리
-    const [result, total] = await Promise.all([
+    return PaginatePage( 
+      query,
       // list
-      this.prisma.users.findMany({
+      (page) => this.prisma.users.findMany({
         select: this.userListSelect( query ),
         where,
         orderBy: [
           this.userOrderBy( query ),
           { id: query.order }
         ],
-        ...PageArgs( query ),
+        ...page,
       }),
       // total
-      this.prisma.users.count({ where })
-    ]);
-
-    return PageResult( result, total, query );
+      () => this.prisma.users.count({ where }),
+    );
   }
 
   //* 회원 목록 select (일반 조회·소속 정렬 조회 공용)
@@ -171,21 +169,25 @@ export class UsersService {
         return a.departmentName.localeCompare( b.departmentName, 'ko' ) * direction;
       });
 
-    const { skip, take } = PageArgs( query );
-    const pageIds = sorted.slice( skip, skip + take ).map( (row) => row.id );
+    return PaginatePage( query,
+      // list: 정렬된 id에서 해당 페이지만 잘라 조회
+      async ({ skip, take }) => {
+        const pageIds = sorted.slice( skip, skip + take ).map( (row) => row.id );
 
-    const users = await this.prisma.users.findMany({
-      select: this.userListSelect( query ),
-      where: { id: { in: pageIds } },
-    });
+        const users = await this.prisma.users.findMany({
+          select: this.userListSelect( query ),
+          where: { id: { in: pageIds } },
+        });
 
-    // IN 조회는 순서를 보장하지 않으므로 정렬된 id 순서로 다시 맞춘다.
-    const userById = new Map( users.map( (user) => [user.id, user] ) );
-    const result = pageIds
-      .map( (id) => userById.get(id) )
-      .filter( (user) => user !== undefined );
-
-    return PageResult( result, sorted.length, query );
+        // IN 조회는 순서를 보장하지 않으므로 정렬된 id 순서로 다시 맞춘다.
+        const userById = new Map( users.map( (user) => [user.id, user] ) );
+        return pageIds
+          .map( (id) => userById.get(id) )
+          .filter( (user) => user !== undefined );
+      },
+      // total: 이미 전체를 조회했으므로 개수만 반환
+      () => Promise.resolve( sorted.length ),
+    );
   }
 
   //* (관리자) 회원 상세 조회

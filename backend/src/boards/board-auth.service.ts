@@ -4,7 +4,7 @@ import { PrismaService } from "src/prisma/prisma.service";
 import { toTreeList } from "src/common/util/tree.util";
 import { CreateBoardAuthDto } from "./dto/create-board-auth.dto";
 import { UpdateBoardAuthDto } from "./dto/update-board-auth.dto";
-import { BoardAction, BoardPermission } from "./interface/board-permission.interface";
+import { BoardAction, BoardPermission, BoardAccess } from "./interface/board-permission.interface";
 import { UserAccessInfo, UserMembership } from "./interface/user-access-info.interface";
 import { BoardRule } from "./interface/board-rule.interface";
 import { ALL_PERMISSION, boardRuleSelect, NO_PERMISSION } from "./const/board-permission.const";
@@ -203,6 +203,11 @@ export class BoardAuthService {
         if( result.departmentId === null ){
             result.includeSubDepartment = false;
         }
+        
+        if( result.authAdmin ){
+            result.authWrite = true;
+            result.authComment = true;
+        }
 
         if( result.authWrite || result.authComment || result.authAdmin ){
             result.authRead = true;
@@ -349,13 +354,14 @@ export class BoardAuthService {
     //* 게시판 권한 검사 (게시글·댓글 서비스에서 요청마다 호출)
     // - 읽기 권한이 없으면 게시판이 있다는 사실도 숨기기 위해 404, 요청한 동작의 권한이 없으면 403
     // - 반환한 권한은 버튼 표시용 응답이나 삭제 조건(작성자 또는 관리 권한) 확인에 이어서 쓴다.
+    // - 게시판 정보(비밀글 허용·타입 등)도 함께 반환해 호출한 쪽이 다시 조회하지 않게 한다.
     async assertBoardPermission(
         boardId: number,
         user: Pick<Users, 'id' | 'role'>,
         action: BoardAction,
-    ): Promise<BoardPermission> {
+    ): Promise<BoardAccess> {
         const board = await this.prisma.board.findFirst({
-            select: { id: true, type: true },
+            select: { id: true, type: true, name: true, description: true, allowSecret: true, isAnonymous: true },
             where: {
                 id: boardId,
                 deleted: false,
@@ -395,7 +401,7 @@ export class BoardAuthService {
             throw new ForbiddenException('권한이 없습니다.');
         }
 
-        return perm;
+        return { board, perm };
     }
 
     //* 규칙과 비교할 회원 정보 (직급 + 소속별 부서·상위 부서·직책)

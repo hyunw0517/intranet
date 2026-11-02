@@ -386,9 +386,11 @@ model Post {
   boardId   Int      @map("board_id") // 게시판 id
   authorId  Int      @map("author_id") // 작성자 id
   authorDepartmentName String? @map("author_department_name") // 작성자 - 작성 당시 대표로 지정한 소속 부서명
+  authorJobTitleName   String? @map("author_job_title_name")   // 작성자 - 작성 당시 직책명
   authorPositionName   String? @map("author_position_name")   // 작성자 - 작성 당시 직급명
   title     String   // 게시글 제목
-  content   String?   // 게시글 본문
+  content   String?   // 게시글 본문 (정제된 HTML)
+  contentText String? @map("content_text") // 본문에서 태그를 뺀 텍스트 (본문 검색용, 저장 시 content와 함께 생성)
   isPinned  Boolean   @default(false) @map("is_pinned") // 상단 고정
   viewCount Int     @default(0) @map("view_count") // 조회수
   likeCount Int     @default(0) @map("like_count") // 좋아요 수

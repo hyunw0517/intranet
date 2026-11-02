@@ -11,6 +11,7 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 
 @Module({
   imports: [PrismaModule],
+  exports: [OrganizationService],
   controllers: [
     OrganizationController,
     DepartmentsController,

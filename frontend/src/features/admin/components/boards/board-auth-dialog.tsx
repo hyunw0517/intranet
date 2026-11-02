@@ -30,8 +30,21 @@ const PERMISSIONS: { key: Permission; label: string; hint: string }[] = [
   { key: "authRead", label: "읽기", hint: "게시판과 게시글을 볼 수 있습니다." },
   { key: "authWrite", label: "글쓰기", hint: "게시글을 작성할 수 있습니다." },
   { key: "authComment", label: "댓글", hint: "댓글을 작성할 수 있습니다." },
-  { key: "authAdmin", label: "게시판 관리", hint: "다른 사람이 쓴 게시글·댓글을 삭제할 수 있습니다." },
+  { key: "authAdmin", label: "게시판 관리", hint: "모든 권한에 더해 다른 사람이 쓴 게시글·댓글을 삭제할 수 있습니다." },
 ];
+
+// 권한 포함 관계 (서버 normalizeRule과 같은 규칙)
+// - 게시판 관리는 읽기·글쓰기·댓글을 모두 포함한다.
+// - 글쓰기·댓글은 읽기가 있어야 의미가 있으므로 읽기를 함께 켠다.
+function normalizePerms(perms: Record<Permission, boolean>): Record<Permission, boolean> {
+  const next = { ...perms };
+  if (next.authAdmin) {
+    next.authWrite = true;
+    next.authComment = true;
+  }
+  if (next.authWrite || next.authComment || next.authAdmin) next.authRead = true;
+  return next;
+}
 
 interface BoardAuthDialogProps {
   open: boolean;
@@ -70,25 +83,31 @@ function BoardAuthForm({
   const [positionValue, setPositionValue] = useState(rule?.positionId ? String(rule.positionId) : NONE);
   const [jobTitleIds, setJobTitleIds] = useState<number[]>(rule?.jobTitles.map((j) => j.id) ?? []);
   // 새 규칙의 기본값은 서버 DTO 기본값과 같다. (읽기·댓글 허용, 글쓰기·관리 불가)
-  const [perms, setPerms] = useState<Record<Permission, boolean>>({
-    authRead: rule?.authRead ?? true,
-    authWrite: rule?.authWrite ?? false,
-    authComment: rule?.authComment ?? true,
-    authAdmin: rule?.authAdmin ?? false,
-  });
+  // 기존 규칙도 포함 관계로 맞춰서 시작한다. (관리만 켜진 채 저장된 예전 규칙 대비)
+  const [perms, setPerms] = useState<Record<Permission, boolean>>(() =>
+    normalizePerms({
+      authRead: rule?.authRead ?? true,
+      authWrite: rule?.authWrite ?? false,
+      authComment: rule?.authComment ?? true,
+      authAdmin: rule?.authAdmin ?? false,
+    }),
+  );
   const [permError, setPermError] = useState<string>();
 
   const loading = departments.isPending || positions.isPending || jobTitles.isPending;
   const hasDepartment = departmentValue !== NONE;
-  // 글쓰기·댓글·관리는 읽기가 있어야 의미가 있으므로 읽기를 함께 켜고 잠근다. (서버도 같은 규칙으로 정규화)
-  const readLocked = perms.authWrite || perms.authComment || perms.authAdmin;
+  // 포함된 권한은 켜진 채로 잠근다. (끄려면 그 권한을 포함하는 상위 권한을 먼저 끈다)
+  const lockedHint: Partial<Record<Permission, string>> = {};
+  if (perms.authAdmin) {
+    lockedHint.authWrite = "게시판 관리 권한에 포함됩니다.";
+    lockedHint.authComment = "게시판 관리 권한에 포함됩니다.";
+  }
+  if (perms.authWrite || perms.authComment || perms.authAdmin) {
+    lockedHint.authRead = "다른 권한이 있으면 읽기는 항상 포함됩니다.";
+  }
 
   const togglePerm = (key: Permission, checked: boolean) =>
-    setPerms((prev) => {
-      const next = { ...prev, [key]: checked };
-      if (next.authWrite || next.authComment || next.authAdmin) next.authRead = true;
-      return next;
-    });
+    setPerms((prev) => normalizePerms({ ...prev, [key]: checked }));
 
   const toggleJobTitle = (id: number, checked: boolean) =>
     setJobTitleIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)));
@@ -217,7 +236,7 @@ function BoardAuthForm({
                   id={`auth-${p.key}`}
                   checked={perms[p.key]}
                   onCheckedChange={(v) => togglePerm(p.key, v === true)}
-                  disabled={p.key === "authRead" && readLocked}
+                  disabled={!!lockedHint[p.key]}
                   aria-describedby={`auth-${p.key}-hint`}
                   className="mt-0.5"
                 />
@@ -226,7 +245,7 @@ function BoardAuthForm({
                     {p.label}
                   </Label>
                   <p id={`auth-${p.key}-hint`} className="text-xs text-muted-foreground">
-                    {p.key === "authRead" && readLocked ? "다른 권한이 있으면 읽기는 항상 포함됩니다." : p.hint}
+                    {lockedHint[p.key] ?? p.hint}
                   </p>
                 </div>
               </div>

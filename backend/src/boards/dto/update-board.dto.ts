@@ -7,8 +7,8 @@ import { CreateBoardDto } from './create-board.dto';
 export class UpdateBoardDto extends PartialType(OmitType(CreateBoardDto, ['name'] as const)) {
 
     @IsString()
-    @Length(1, 50)
     @IsNotEmpty()
+    @Length(1, 100)
     name: string;
 
 }

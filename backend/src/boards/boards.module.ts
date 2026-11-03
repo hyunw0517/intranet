@@ -7,6 +7,8 @@ import { BoardAuthService } from './board-auth.service';
 import { PostsController } from './posts.controller';
 import { PostsService } from './posts.service';
 import { OrganizationModule } from 'src/organization/organization.module';
+import { CommentsController } from './comments.controller';
+import { CommentsService } from './comments.service';
 
 @Module({
   imports: [
@@ -17,11 +19,13 @@ import { OrganizationModule } from 'src/organization/organization.module';
     BoardAuthController,
     BoardsController,
     PostsController,
+    CommentsController,
   ],
   providers: [
     BoardAuthService,
     BoardsService,
     PostsService,
+    CommentsService,
   ],
 })
 export class BoardsModule {}

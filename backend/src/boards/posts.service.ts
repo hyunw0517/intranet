@@ -250,15 +250,17 @@ export class PostsService {
             await this.assertPinLimit( boardId );
         }
 
-        // 작성자 소속/직급 (작성·최종 수정 당시 값으로 저장)
-        const authorOrganization = await this.getAuthorOrganization( user.id );
+        // 작성자 대표 소속/직급
+        const author = await this.organizationService.getPrimaryOrganizationNames( user.id );
 
         // INSERT
-        const newPost = await this.prisma.post.create({
+        return await this.prisma.post.create({
             data: {
                 boardId,
                 authorId: user.id,
-                ...authorOrganization,
+                authorPositionName: author.positionName,
+                authorDepartmentName: author.departmentName,
+                authorJobTitleName: author.jobTitleName,
                 title: body.title,
                 ...this.toContentFields( body.content ),
                 isPinned,
@@ -270,7 +272,6 @@ export class PostsService {
             },
         });
 
-        return newPost;
     }
 
     //* 게시글 단일 조회
@@ -281,7 +282,7 @@ export class PostsService {
     ) {
 
         // 게시판 권한 확인 + 게시글 존재 확인 (+ 비밀글 열람 확인)
-        const { post: found, board, perm } = await this.checkPost(postId, boardId, user, 'read');
+        const { post: found, board, perm } = await this.checkPost(boardId, postId, user, 'read');
 
         // 조회수 증가 (update 결과 = 증가된 조회수가 반영된 게시글)
         const [post] = await this.prisma.$transaction([
@@ -325,18 +326,20 @@ export class PostsService {
         postId: number,
         body: UpdatePostDto
     ) {
-        const { board } = await this.checkPost(postId, boardId, user, 'update');
+        const { board } = await this.checkPost(boardId, postId, user, 'update');
         
-        // 작성자 소속/직급 (작성·최종 수정 당시 값으로 저장)
-        const authorOrganization = await this.getAuthorOrganization( user.id );
-        
+        // 작성자 대표 소속/직급
+        const author = await this.organizationService.getPrimaryOrganizationNames( user.id );
+
         return await this.prisma.post.update({
-            where: { 
+            where: {
                 id: postId,
             },
             data: {
                 authorId: user.id,
-                ...authorOrganization,
+                authorPositionName: author.positionName,
+                authorDepartmentName: author.departmentName,
+                authorJobTitleName: author.jobTitleName,
                 title: body.title,
                 ...this.toContentFields( body.content ),
                 // 고정 여부는 별도 API(pinPost)에서만 바꾼다. (작성자 수정으로 관리자가 고정한 글이 풀리지 않게)
@@ -354,7 +357,7 @@ export class PostsService {
         boardId: number,
         postId: number,
     ) {
-        await this.checkPost(postId, boardId, user, 'delete');
+        await this.checkPost(boardId, postId, user, 'delete');
 
         await this.prisma.post.update({
             where: { 
@@ -368,21 +371,6 @@ export class PostsService {
         });
 
         return true;
-    }
-
-    //* 작성자 소속 (작성·수정 공용) → 대표 소속의 부서·직책 + 직급
-    // 대표 소속은 organization 서비스의 정렬 규칙(isPrimary 우선)을 따르므로 첫 번째 소속이다.
-    private async getAuthorOrganization(
-        userId: number,
-    ){
-        const organization = await this.organizationService.getUserOrganization( userId );
-        const primary = organization.departments[0];    // 소속이 없는 회원도 있음
-
-        return {
-            authorPositionName: organization.position?.name ?? null,
-            authorDepartmentName: primary?.department.name ?? null,
-            authorJobTitleName: primary?.jobTitle?.name ?? null,
-        };
     }
 
     //* 본문 정제 (작성·수정 공용) → 저장용 HTML + 검색용 텍스트
@@ -431,7 +419,7 @@ export class PostsService {
         isPinned: boolean,
     ) {
         // 고정은 글쓰기가 아닌 관리 동작이라 읽기로 확인하고 관리 권한을 따로 본다.
-        const { post, perm } = await this.checkPost(postId, boardId, user, 'read');
+        const { post, perm } = await this.checkPost(boardId, postId, user, 'read');
 
         if( !perm.admin ){
             throw new ForbiddenException('게시판 관리자만 게시글을 고정할 수 있습니다.');
@@ -477,13 +465,13 @@ export class PostsService {
 
     //* 게시글 존재 확인 + 권한 확인
     // 게시글과 함께 게시판 정보·권한을 반환한다. (상세 응답의 버튼 표시, 고정 권한 확인 등에 이어서 사용)
-    private async checkPost(
-        postId: number,
+    async checkPost(
         boardId: number,
+        postId: number,
         user: Pick<Users, 'id' | 'role'>,
-        action: 'read' | 'update' | 'delete',
+        action: 'read' | 'update' | 'delete' | 'comment',
     ){
-        const actionByType = { read: 'read', update: 'write', delete: 'write' } as const;
+        const actionByType = { read: 'read', update: 'write', delete: 'write', comment: 'comment' } as const;
 
         // 게시판 권한 확인 
         const { board, perm } = await this.boardAuthService.assertBoardPermission( boardId, user, actionByType[action] );
@@ -496,7 +484,9 @@ export class PostsService {
             },
         });
 
-        if( !post ) throw new NotFoundException('게시글을 찾을 수 없습니다.');
+        if( !post ){
+            throw new NotFoundException('게시글을 찾을 수 없습니다.');
+        } 
         
         // 비밀글: 작성자 또는 게시판 관리 권한
         if( !this.canViewSecret( post.isSecret, post.authorId, user.id, perm.admin ) ){

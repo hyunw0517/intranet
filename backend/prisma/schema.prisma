@@ -427,6 +427,9 @@ model Comment {
   postId          Int      @map("post_id") // 게시글 id
   parentCommentId Int?     @map("parent_comment_id") // 상위 댓글 id (일반 댓글은 NULL, 대댓글만 값 있음)
   authorId        Int      @map("author_id") // 작성자 id
+  authorDepartmentName String? @map("author_department_name") // 작성자 - 작성 당시 대표로 지정한 소속 부서명
+  authorJobTitleName   String? @map("author_job_title_name")   // 작성자 - 작성 당시 직책명
+  authorPositionName   String? @map("author_position_name")   // 작성자 - 작성 당시 직급명
   comment         String   // 댓글 내용
 
   post      Post      @relation(fields: [postId], references: [id])

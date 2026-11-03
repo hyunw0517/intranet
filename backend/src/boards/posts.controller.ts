@@ -8,7 +8,7 @@ import { CreatePostDto } from "./dto/create-post.dto";
 import { UpdatePostDto } from "./dto/update-post.dto";
 import { PinPostDto } from "./dto/pin-post.dto";
 
-@Controller('boards')
+@Controller('boards/:boardId/posts')
 export class PostsController {
 
     constructor( 
@@ -16,7 +16,7 @@ export class PostsController {
     ) {}
 
     //* 게시글 조회 (페이지)
-    @Get(':boardId/posts')
+    @Get()
     @Roles(UserRole.USER)
     getPosts(
         @User() user: Pick<Users, 'id' | 'role'>,
@@ -27,7 +27,7 @@ export class PostsController {
     }
 
     //* 게시글 작성
-    @Post(':boardId/posts')
+    @Post()
     @Roles(UserRole.USER)
     postPost(
         @User() user: Pick<Users, 'id' | 'role'>,
@@ -38,7 +38,7 @@ export class PostsController {
     }
     
     //* 게시글 조회 (단일)
-    @Get(':boardId/posts/:postId')
+    @Get(':postId')
     @Roles(UserRole.USER)
     getPost(
         @User() user: Pick<Users, 'id' | 'role'>,
@@ -49,7 +49,7 @@ export class PostsController {
     }
 
     //* 게시글 수정
-    @Patch(':boardId/posts/:postId')
+    @Patch(':postId')
     @Roles(UserRole.USER)
     patchPost(
         @User() user: Pick<Users, 'id' | 'role'>,
@@ -62,7 +62,7 @@ export class PostsController {
 
     //* 게시글 고정·해제 (게시판 관리 권한)
     // ':postId' 뒤에 붙는 고정 경로라 수정 라우트(:boardId/posts/:postId)와 충돌하지 않는다.
-    @Patch(':boardId/posts/:postId/pin')
+    @Patch(':postId/pin')
     @Roles(UserRole.USER)
     pinPost(
         @User() user: Pick<Users, 'id' | 'role'>,
@@ -74,7 +74,7 @@ export class PostsController {
     }
 
     //* 게시글 삭제
-    @Delete(':boardId/posts/:postId')
+    @Delete(':postId')
     @Roles(UserRole.USER)
     deletePost(
         @User() user: Pick<Users, 'id' | 'role'>,

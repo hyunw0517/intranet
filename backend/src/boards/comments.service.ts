@@ -148,6 +148,11 @@ export class CommentsService {
         
         // 작성자 대표 소속/직급
         const author = await this.organizationService.getPrimaryOrganizationNames( user.id );
+        
+        // 댓글 내용 공백만 있는지 확인
+        if( body.comment.trim() === "" ){
+            throw new BadRequestException('댓글 내용을 입력해 주세요.');
+        }
 
         return await this.prisma.comment.create({
             data: {
@@ -178,6 +183,11 @@ export class CommentsService {
         
         // 작성자 대표 소속/직급
         const author = await this.organizationService.getPrimaryOrganizationNames( user.id );
+        
+        // 댓글 내용 공백만 있는지 확인
+        if( body.comment.trim() === "" ){
+            throw new BadRequestException('댓글 내용을 입력해 주세요.');
+        }
 
         return await this.prisma.comment.update({
             where: {

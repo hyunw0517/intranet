@@ -25,6 +25,8 @@ export class BoardsService {
                 type: true,
                 name: true,
                 description: true,
+                isAnonymous: true,
+                allowSecret: true,
                 sortOrder: true,
                 _count: {
                     select: {

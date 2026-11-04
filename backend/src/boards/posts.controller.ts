@@ -83,4 +83,27 @@ export class PostsController {
     ) {
         return this.postsService.deletePost( user, boardId, postId );
     }
+
+    //* 게시글 좋아요
+    @Patch(':postId/like')
+    @Roles(UserRole.USER)
+    likePost(
+        @User() user: Pick<Users, 'id' | 'role'>,
+        @Param('boardId', ParseIntPipe) boardId: number,
+        @Param('postId', ParseIntPipe) postId: number,
+
+    ){
+        return this.postsService.likePost( user, boardId, postId );
+    }
+
+    //* 게시글 좋아요 취소
+    @Delete(':postId/unlike')
+    @Roles(UserRole.USER)
+    unlikePost(
+        @User() user: Pick<Users, 'id' | 'role'>,
+        @Param('boardId', ParseIntPipe) boardId: number,
+        @Param('postId', ParseIntPipe) postId: number,
+    ) {
+        return this.postsService.unlikePost( user, boardId, postId );
+    }
 }

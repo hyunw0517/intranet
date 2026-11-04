@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { BoardType, Prisma, Users } from "src/generated/prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
 import { BoardAuthService } from "./board-auth.service";
@@ -462,6 +462,82 @@ export class PostsService {
             throw new BadRequestException(`고정 글은 최대 ${MAX_PINNED_POSTS}개까지 지정할 수 있습니다.`);
         }
     }
+
+    //* 게시글 좋아요
+    async likePost(
+        user: Pick<Users, 'id' | 'role'>,
+        boardId: number,
+        postId: number,
+    ) {
+        // 게시판 권한 확인 + 게시글 존재 확인 (+ 비밀글 열람 확인)
+        await this.checkPost(boardId, postId, user, 'read');
+
+        // 좋아요 중복 확인
+        const likePost = await this.prisma.postLike.findFirst({
+            where: {
+                postId,
+                userId: user.id,
+            },
+        });
+
+        if( likePost ){
+            throw new ConflictException('이미 좋아요를 누른 게시글입니다.');
+        }
+
+        await this.prisma.$transaction([
+            this.prisma.postLike.create({
+                data: {
+                    postId,
+                    userId: user.id,
+                },
+            }),
+            this.prisma.post.update({
+                where: { id: postId },
+                data: { likeCount: { increment: 1 } },
+            }),
+        ]);
+
+        return true;
+    }
+
+    //* 게시글 좋아요 취소
+    async unlikePost(
+        user: Pick<Users, 'id' | 'role'>,
+        boardId: number,
+        postId: number,
+    ) {
+        // 게시판 권한 확인 + 게시글 존재 확인 (+ 비밀글 열람 확인)
+        await this.checkPost(boardId, postId, user, 'read');
+
+        // 좋아요 존재 확인
+        const likePost = await this.prisma.postLike.findFirst({
+            where: {
+                postId,
+                userId: user.id,
+            },
+        });
+
+        if( !likePost ){
+            throw new BadRequestException('좋아요를 누르지 않은 게시글입니다.');
+        }
+
+        await this.prisma.$transaction([
+            this.prisma.postLike.delete({
+                where: {
+                    postId_userId: {
+                        postId,
+                        userId: user.id,
+                    },
+                },
+            }),
+            this.prisma.post.update({
+                where: { id: postId },
+                data: { likeCount: { decrement: 1 } },
+            }),
+        ]);
+
+        return true;
+    }        
 
     //* 게시글 존재 확인 + 권한 확인
     // 게시글과 함께 게시판 정보·권한을 반환한다. (상세 응답의 버튼 표시, 고정 권한 확인 등에 이어서 사용)

@@ -134,3 +134,51 @@
     @apply font-sans;
   }
 }
+/*
+ * 게시글 본문 (에디터 입력 영역 .ProseMirror 와 상세 화면이 같은 모양을 쓴다)
+ * 허용 태그는 백엔드 sanitize-html 허용 목록과 같다. (p, h1~h3, 글자 서식, 목록, 인용, 코드, 링크, hr)
+ */
+@layer components {
+  .rich-text {
+    @apply text-[15px] leading-7 break-words;
+  }
+  .rich-text > * + * {
+    @apply mt-3;
+  }
+  .rich-text h1 {
+    @apply mt-6 text-xl font-semibold;
+  }
+  .rich-text h2 {
+    @apply mt-6 text-lg font-semibold;
+  }
+  .rich-text h3 {
+    @apply mt-5 text-base font-semibold;
+  }
+  .rich-text ul {
+    @apply list-disc pl-6;
+  }
+  .rich-text ol {
+    @apply list-decimal pl-6;
+  }
+  .rich-text li > p {
+    @apply m-0;
+  }
+  .rich-text blockquote {
+    @apply border-l-2 border-border pl-4 text-muted-foreground;
+  }
+  .rich-text a {
+    @apply text-primary underline underline-offset-4;
+  }
+  .rich-text code {
+    @apply rounded bg-muted px-1 py-0.5 font-mono text-[0.9em];
+  }
+  .rich-text pre {
+    @apply overflow-x-auto rounded-lg bg-muted px-4 py-3 font-mono text-[13px] leading-6;
+  }
+  .rich-text pre code {
+    @apply bg-transparent p-0;
+  }
+  .rich-text hr {
+    @apply my-6 border-border;
+  }
+}

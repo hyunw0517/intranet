@@ -410,6 +410,7 @@ model Post {
   createdId Int      @map("created_id")
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedId Int      @map("updated_id")
+  editedAt  DateTime? @map("edited_at") // 마지막 수정 시간(게시글 수정 여부 확인용)
   deleted   Boolean  @default(false)
   deletedAt DateTime? @map("deleted_at")
   deletedId Int?     @map("deleted_id")

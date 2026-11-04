@@ -355,6 +355,7 @@ export class PostsService {
                 isSecret: board.allowSecret ? ( body.isSecret ?? false ) : undefined,
                 ...this.resolveEventFields( board.type, body ),
                 updatedId: user.id,
+                editedAt: new Date(),
             },
         });
     }

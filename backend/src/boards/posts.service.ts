@@ -113,6 +113,9 @@ export class PostsService {
             isPinned: true,
             viewCount: true,
             likeCount: true,
+            eventStartAt: true,
+            eventEndAt: true,
+            isAllDay: true,
             isSecret: true,
             createdAt: true,
             updatedAt: true,
@@ -282,10 +285,10 @@ export class PostsService {
     ) {
 
         // 게시판 권한 확인 + 게시글 존재 확인 (+ 비밀글 열람 확인)
-        const { post: found, board, perm } = await this.checkPost(boardId, postId, user, 'read');
+        const { board, perm } = await this.checkPost(boardId, postId, user, 'read');
 
-        // 조회수 증가 (update 결과 = 증가된 조회수가 반영된 게시글)
-        const [post] = await this.prisma.$transaction([
+        // 조회수 증가 (update 결과 = 증가된 조회수가 반영된 게시글) + 좋아요 여부
+        const [post, , myLike] = await this.prisma.$transaction([
             this.prisma.post.update({
                 select: this.postDetailSelect(),
                 where: { id: postId },
@@ -296,10 +299,14 @@ export class PostsService {
                 data: { postId, userId: user.id },
                 skipDuplicates: true,   // 중복 방지 옵션
             }),
+            this.prisma.postLike.findUnique({
+                select: { postId: true },
+                where: { postId_userId: { postId, userId: user.id } },
+            }),
         ]);
 
         // 버튼 표시용 권한 (서버 판정 결과, 실제로 막는 것은 각 API의 검사)
-        const isAuthor = found.authorId === user.id;
+        const isAuthor = post.author.id === user.id;
         const can = {
             edit: isAuthor && perm.write,       // 수정: 작성자 + 쓰기 권한 (관리자도 남의 글은 수정 불가)
             delete: isAuthor || perm.admin,     // 삭제: 작성자 또는 게시판 관리 권한
@@ -308,12 +315,13 @@ export class PostsService {
         };
 
         // 익명 게시판의 다른 사람 글은 작성자 정보를 가린다.
-        const detail = this.isAuthorHidden( board.isAnonymous, found.authorId, user.id )
+        const detail = this.isAuthorHidden( board.isAnonymous, post.author.id, user.id )
             ? this.hideAuthor( post )
             : post;
 
         return {
             ...detail,
+            liked: myLike !== null,     // 내가 좋아요를 눌렀는지
             board,
             can,
         };

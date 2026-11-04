@@ -1,6 +1,7 @@
 // 백엔드 boards.controller 대응 (/boards/*)
 import { apiFetch } from "@/services/api-client";
 import type { AdminBoard, BoardType } from "@/types/board";
+import type { BoardAccess } from "@/types/post";
 
 // POST /boards, PATCH /boards/:id (CreateBoardDto / UpdateBoardDto)
 // 수정 시 생략한 필드는 서버가 기존 값을 유지한다. (name은 항상 필수)
@@ -11,6 +12,11 @@ export interface BoardInput {
   description: string; // 빈 문자열이면 서버에서 null로 저장
   isAnonymous?: boolean;
   allowSecret?: boolean;
+}
+
+// 직원용 게시판 단건 - 게시판 설정(타입·비밀글 허용·익명)과 내 권한. 읽기 권한이 없거나 카테고리면 404.
+export function fetchBoard(boardId: number) {
+  return apiFetch<BoardAccess>(`/boards/${boardId}`);
 }
 
 // 관리자 전체 게시판 - 수십 개 수준이라 페이지네이션 없이 트리 순서 전체를 받는다.

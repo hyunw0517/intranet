@@ -20,6 +20,12 @@ export interface PostBoardInfo {
   isAnonymous: boolean;
 }
 
+// GET /boards/:boardId 응답 (BoardAccess) - 게시글 없이 게시판 설정·권한이 필요한 화면(글쓰기)에서 사용
+export interface BoardAccess {
+  board: PostBoardInfo;
+  perm: BoardPermission;
+}
+
 // 작성자 (익명 게시판의 다른 사람 글, 볼 수 없는 비밀글이면 null)
 export interface PostAuthor {
   id: number;
@@ -44,6 +50,9 @@ export interface PostListItem extends AuthorSnapshot {
   isSecret: boolean;
   viewCount: number;
   likeCount: number;
+  eventStartAt: string | null; // 캘린더 게시판만 값이 있다.
+  eventEndAt: string | null;
+  isAllDay: boolean | null;
   createdAt: string;
   updatedAt: string;
   _count: { comments: number }; // 삭제되지 않은 댓글 수
@@ -80,8 +89,7 @@ export interface PostDetail extends AuthorSnapshot {
     pin: boolean;
     comment: boolean;
   };
-  // 현재 상세 응답에는 없음. 백엔드에 추가되면 좋아요 버튼의 처음 상태를 정확히 표시한다. (docs/frontend/fe-06-posts.md)
-  liked?: boolean;
+  liked: boolean; // 내가 좋아요를 눌렀는지 (좋아요 버튼의 처음 상태)
 }
 
 // GET /boards/:boardId/posts/:postId/comments 항목

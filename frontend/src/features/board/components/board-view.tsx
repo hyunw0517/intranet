@@ -15,7 +15,7 @@ import { ApiError } from "@/services/api-client";
 import type { PostListQuery, PostSortBy } from "@/services/api/posts";
 import { BOARD_TYPE_LABEL } from "@/types/board";
 import { useBoardNavigation } from "../hooks/use-board-navigation";
-import { DEFAULT_POST_QUERY, usePosts } from "../hooks/use-posts";
+import { usePosts } from "../hooks/use-posts";
 import { BoardNotFound } from "./board-not-found";
 import { PostList } from "./post-list";
 
@@ -38,9 +38,8 @@ function readFilters(params: URLSearchParams) {
 
 type Filters = ReturnType<typeof readFilters>;
 
-// 조건이 기본값이면 DEFAULT_POST_QUERY와 같은 객체 모양을 만든다. (글쓰기 화면과 같은 캐시 키)
 function toQuery(f: Filters): PostListQuery {
-  const query: PostListQuery = { ...DEFAULT_POST_QUERY, page: f.page };
+  const query: PostListQuery = { page: f.page };
   if (f.q) query[f.field] = f.q;
   if (f.sort !== "createdAt") query.sortBy = f.sort;
   return query;

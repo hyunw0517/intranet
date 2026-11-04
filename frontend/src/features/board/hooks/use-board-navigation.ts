@@ -8,6 +8,7 @@ import { useAuth } from "@/providers/auth-provider";
 export const boardKeys = {
   all: ["boards"] as const,
   navigation: () => [...boardKeys.all, "navigation"] as const,
+  access: (boardId: number) => [...boardKeys.all, "access", boardId] as const, // GET /boards/:boardId
 };
 
 // 사이드바 게시판 메뉴와 게시판 화면(이름·설명)이 같은 캐시를 쓴다.

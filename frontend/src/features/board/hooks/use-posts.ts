@@ -1,6 +1,7 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchBoard } from "@/services/api/boards";
 import { fetchComments } from "@/services/api/comments";
 import { fetchPost, fetchPosts, type PostListQuery } from "@/services/api/posts";
 import type { PostDetail } from "@/types/post";
@@ -15,8 +16,13 @@ export const postKeys = {
   comments: (boardId: number, postId: number) => [...postKeys.all, "comments", boardId, postId] as const,
 };
 
-// 게시판 첫 화면의 조회 조건. 글쓰기 화면도 같은 키로 게시판 정보·권한을 읽어 목록 캐시를 재사용한다.
-export const DEFAULT_POST_QUERY: PostListQuery = { page: 1 };
+// 게시판 설정 + 내 권한 (글쓰기 화면: 게시글이 없어 상세 응답을 쓸 수 없음)
+export function useBoardAccess(boardId: number) {
+  return useQuery({
+    queryKey: boardKeys.access(boardId),
+    queryFn: () => fetchBoard(boardId),
+  });
+}
 
 // 게시글 목록 (+ 게시판 정보·권한) - 페이지·검색을 바꾸는 동안 이전 목록을 유지한다.
 export function usePosts(boardId: number, query: PostListQuery) {

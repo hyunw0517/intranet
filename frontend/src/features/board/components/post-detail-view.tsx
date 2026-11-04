@@ -183,12 +183,11 @@ function PostActions({ boardId, post }: { boardId: number; post: PostDetail }) {
   );
 }
 
-// 좋아요 / 좋아요 취소
-// 상세 응답에 "내가 눌렀는지(liked)"가 아직 없어 처음에는 누르지 않은 상태로 보인다.
-// 이미 눌렀던 글이면 서버가 409(좋아요)·400(취소)을 주므로, 그 응답으로 버튼 상태만 맞춘다. (수치는 그대로)
+// 좋아요 / 좋아요 취소 (처음 상태는 상세 응답의 liked)
+// 성공하면 상세를 다시 요청하지 않고 liked·likeCount만 고친다. (상세 조회는 조회수를 올린다)
 function LikeButton({ boardId, post }: { boardId: number; post: PostDetail }) {
   const cache = usePostCache(boardId);
-  const liked = post.liked ?? false;
+  const liked = post.liked;
 
   const mutation = useMutation({
     mutationFn: (next: boolean) => (next ? likePost(boardId, post.id) : unlikePost(boardId, post.id)),
@@ -196,15 +195,8 @@ function LikeButton({ boardId, post }: { boardId: number; post: PostDetail }) {
       cache.patchDetail(post.id, (prev) => ({ liked: next, likeCount: prev.likeCount + (next ? 1 : -1) }));
       cache.invalidateLists();
     },
-    onError: (error, next) => {
-      const alreadyLiked = next && error instanceof ApiError && error.status === 409;
-      const notLiked = !next && error instanceof ApiError && error.status === 400;
-      if (alreadyLiked || notLiked) {
-        cache.patchDetail(post.id, () => ({ liked: next }));
-        return;
-      }
-      toast.error(getErrorMessage(error));
-    },
+    // 다른 탭에서 이미 누른 경우 등은 서버 메시지(409·400)를 그대로 보여 준다.
+    onError: (error) => toast.error(getErrorMessage(error)),
   });
 
   return (

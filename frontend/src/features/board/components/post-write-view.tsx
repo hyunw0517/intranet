@@ -9,15 +9,15 @@ import { getErrorMessage } from "@/lib/error-message";
 import { ApiError } from "@/services/api-client";
 import { createPost, updatePost, type PostInput } from "@/services/api/posts";
 import { toEventInput } from "../event-date";
-import { DEFAULT_POST_QUERY, usePost, usePostCache, usePosts } from "../hooks/use-posts";
+import { useBoardAccess, usePost, usePostCache } from "../hooks/use-posts";
 import { BoardNotFound, NotFoundMessage, PostNotFound } from "./board-not-found";
 import { EMPTY_POST_FORM, PostForm } from "./post-form";
 
 // 게시글 작성 (/boards/[boardId]/write)
-// 게시판 정보·권한은 목록 첫 페이지 응답을 쓴다. (게시판 단건 조회 API가 없음, 목록에서 넘어오면 캐시 재사용)
+// 게시글이 아직 없어 상세 응답을 쓸 수 없으므로, 게시판 단건 조회(GET /boards/:boardId)로 설정·권한을 받는다.
 export function PostCreateView({ boardId }: { boardId: number }) {
   const router = useRouter();
-  const { data, isPending, isError, error, refetch } = usePosts(boardId, DEFAULT_POST_QUERY);
+  const { data, isPending, isError, error, refetch } = useBoardAccess(boardId);
   const cache = usePostCache(boardId);
   const listHref = `/boards/${boardId}`;
 

@@ -155,6 +155,7 @@ export class PostsService {
             isAllDay: true,
             createdAt: true,
             updatedAt: true,
+            editedAt: true,
 
             // 작성자 + 작성(최종 수정) 당시 소속
             author: {

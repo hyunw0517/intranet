@@ -87,7 +87,17 @@ export function PostForm({ board, initial, showPin, submitLabel, cancelHref, pen
         />
       </FormField>
 
-      {isCalendar && <EventFields value={event} onChange={setEvent} error={errors.event} />}
+      {isCalendar && (
+        <EventFields
+          value={event}
+          onChange={(next) => {
+            setEvent(next);
+            // 값을 고치면 오류 표시를 지운다. (다시 등록할 때 재검사)
+            if (errors.event) setErrors((prev) => ({ ...prev, event: undefined }));
+          }}
+          error={errors.event}
+        />
+      )}
 
       <div className="grid gap-1.5">
         <Label id="post-content-label">내용</Label>

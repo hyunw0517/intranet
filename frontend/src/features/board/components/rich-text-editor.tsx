@@ -152,6 +152,9 @@ function Toolbar({ editor }: { editor: Editor }) {
                 aria-label={item.label}
                 aria-pressed={item.active ?? undefined}
                 disabled={item.disabled}
+                // 마우스로 눌러도 포커스·선택 영역을 에디터에 남긴다. (버튼이 포커스를 가져가면 바로 이어 친 Enter가 버튼을 다시 누름)
+                // 키보드(Tab → Space/Enter)로는 그대로 조작할 수 있다.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={item.run}
                 className={cn(item.active && "bg-accent text-foreground")}
               >
@@ -187,6 +190,9 @@ function LinkForm({ editor, onDone }: { editor: Editor; onDone: () => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Dialog는 화면에서는 portal로 밖에 그려지지만 React 트리에서는 게시글 <form> 안이다.
+    // React 이벤트는 React 트리를 따라 전파되므로, 막지 않으면 게시글 폼의 onSubmit까지 실행되어 글이 등록된다.
+    e.stopPropagation();
     const value = href.trim();
     if (!value) {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();

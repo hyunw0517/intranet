@@ -139,7 +139,8 @@ function CommentItem({
 
   const replying = active?.type === "reply" && active.commentId === c.id;
   const editing = active?.type === "edit" && active.commentId === c.id;
-  const edited = new Date(c.updatedAt).getTime() - new Date(c.createdAt).getTime() > 1000;
+  // 댓글의 updatedAt은 수정·삭제 때만 바뀐다. (작성 시에는 createdAt과 같은 값)
+  const edited = c.updatedAt !== c.createdAt;
   // 들여쓰기 한도보다 깊은 답글은 같은 위치에 그려지므로 누구에게 단 답글인지 이름을 붙인다.
   const replyTo = c.depth > MAX_INDENT && parent?.author ? parent.author.name : null;
 

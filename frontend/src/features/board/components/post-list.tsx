@@ -14,10 +14,10 @@ interface PostListProps {
 }
 
 // 열 너비 (머리글과 행이 같은 값을 쓴다): 제목 | 작성자 | 작성일 | 조회 | 좋아요
-const COLUMNS = "md:grid md:grid-cols-[minmax(0,1fr)_11rem_5.5rem_3.5rem_3.5rem] md:items-center md:gap-4";
+const COLUMNS = "lg:grid lg:grid-cols-[minmax(0,1fr)_11rem_5.5rem_3.5rem_3.5rem] lg:items-center lg:gap-4";
 
 // 게시글 목록
-// - PC(md 이상): 표처럼 열을 맞춘 행 / 모바일: 제목 아래에 작성자·날짜·수치를 한 줄로
+// - 넓은 화면(lg 이상, 사이드바를 뺀 본문이 충분할 때): 표처럼 열을 맞춘 행 / 모바일: 제목 아래에 작성자·날짜·수치를 한 줄로
 // - 표(<table>) 대신 목록(<ul>)을 쓴 이유: 모바일에서 행을 카드 모양으로 바꾸기 쉽고, 행 전체가 링크다.
 export function PostList({ boardId, board, perm, pinned, posts }: PostListProps) {
   return (
@@ -87,16 +87,16 @@ function PostRow({
         isAnonymous={board.isAnonymous}
         className="truncate"
       />
-      <time dateTime={post.createdAt} className="tabular-nums md:text-right">
+      <time dateTime={post.createdAt} className="tabular-nums lg:text-right">
         {formatListDate(post.createdAt)}
       </time>
-      <span className="inline-flex items-center gap-1 tabular-nums md:justify-end">
-        <Eye className="size-3.5 md:hidden" aria-hidden />
+      <span className="inline-flex items-center gap-1 tabular-nums lg:justify-end">
+        <Eye className="size-3.5 lg:hidden" aria-hidden />
         <span className="sr-only">조회</span>
         {post.viewCount.toLocaleString()}
       </span>
-      <span className="inline-flex items-center gap-1 tabular-nums md:justify-end">
-        <Heart className="size-3.5 md:hidden" aria-hidden />
+      <span className="inline-flex items-center gap-1 tabular-nums lg:justify-end">
+        <Heart className="size-3.5 lg:hidden" aria-hidden />
         <span className="sr-only">좋아요</span>
         {post.likeCount.toLocaleString()}
       </span>
@@ -107,7 +107,7 @@ function PostRow({
   const content = (
     <>
       {title}
-      <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground md:contents md:text-sm">
+      <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground lg:contents lg:text-sm">
         {meta}
       </span>
     </>

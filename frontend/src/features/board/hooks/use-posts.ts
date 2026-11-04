@@ -1,10 +1,10 @@
 "use client";
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { fetchBoard } from "@/services/api/boards";
 import { fetchComments } from "@/services/api/comments";
 import { fetchPost, fetchPosts, type PostListQuery } from "@/services/api/posts";
-import type { PostDetail } from "@/types/post";
+import type { PostDetail, PostListItem, PostListResult } from "@/types/post";
 import { boardKeys } from "./use-board-navigation";
 
 // 게시글·댓글 queryKey (boardKeys.all 아래 → 관리자가 게시판을 바꾸면 함께 무효화)
@@ -37,11 +37,30 @@ export function usePosts(boardId: number, query: PostListQuery) {
 // - 좋아요·고정 후에는 invalidate 대신 setQueryData로 캐시만 고친다. (usePostCache)
 // - staleTime: 수정 화면처럼 이미 받은 본문을 다시 쓰는 곳은 Infinity로 넘긴다.
 export function usePost(boardId: number, postId: number, options?: { staleTime?: number }) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: postKeys.detail(boardId, postId),
-    queryFn: () => fetchPost(boardId, postId),
+    queryFn: async () => {
+      const post = await fetchPost(boardId, postId);
+      syncListAfterView(queryClient, boardId, post);
+      return post;
+    },
     staleTime: options?.staleTime,
   });
+}
+
+// 상세를 조회하면 서버의 조회수가 올라간다. 목록 캐시는 그대로라서 뒤로 가면 이전 조회수가 보인다.
+// 1) 캐시된 목록에서 이 글의 조회수·좋아요 수를 상세 응답 값으로 바로 고치고 (돌아왔을 때 이전 숫자가 깜빡이지 않게)
+// 2) 목록을 오래된 값으로 표시해 목록 화면에 돌아오면 다시 받는다. (다른 사람이 올린 글·댓글 수 반영)
+//    목록은 지금 화면에 없으므로 refetchType: "none" - 바로 요청하지 않고 다음 마운트 때 요청한다.
+function syncListAfterView(queryClient: QueryClient, boardId: number, post: PostDetail) {
+  queryClient.setQueriesData<PostListResult>({ queryKey: postKeys.lists(boardId) }, (prev) => {
+    if (!prev) return prev;
+    const patch = (row: PostListItem) =>
+      row.id === post.id ? { ...row, viewCount: post.viewCount, likeCount: post.likeCount } : row;
+    return { ...prev, pinned: prev.pinned.map(patch), data: prev.data.map(patch) };
+  });
+  queryClient.invalidateQueries({ queryKey: postKeys.lists(boardId), refetchType: "none" });
 }
 
 // 댓글 트리 전체 (페이지는 화면에서 나눈다)

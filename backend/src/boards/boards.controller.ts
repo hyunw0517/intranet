@@ -16,6 +16,14 @@ export class BoardsController {
     private readonly boardAuthService: BoardAuthService,
   ) {}
 
+  //* 관리자 전체 게시판 조회 (트리 순서, 페이지네이션 없음)
+  // 'admin'은 ':id'보다 먼저 선언해야 한다. (뒤에 두면 'admin'이 :id로 매칭되어 ParseIntPipe 400)
+  @Get('admin')
+  @Roles(UserRole.ADMIN)
+  getAdminBoards() {
+    return this.boardsService.getAdminBoards();
+  }
+
   //* 게시글 작성 시 게시판 권한 조회 (게시판 정보 + 권한 반환)
   @Get(':boardId')
   @Roles(UserRole.USER)
@@ -24,14 +32,6 @@ export class BoardsController {
     @Param('boardId', ParseIntPipe) boardId: number,
   ){
     return this.boardAuthService.assertBoardPermission( boardId, user, 'read' );
-  }
-
-  //* 관리자 전체 게시판 조회 (트리 순서, 페이지네이션 없음)
-  // 'admin'은 ':id'보다 먼저 선언해야 한다. (뒤에 두면 'admin'이 :id로 매칭되어 ParseIntPipe 400)
-  @Get('admin')
-  @Roles(UserRole.ADMIN)
-  getAdminBoards() {
-    return this.boardsService.getAdminBoards();
   }
 
   //* 게시판 생성

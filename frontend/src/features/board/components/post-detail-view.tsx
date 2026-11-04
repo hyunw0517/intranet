@@ -43,7 +43,7 @@ export function PostDetailView({ boardId, postId }: { boardId: number; postId: n
     return <ErrorState error={error} onRetry={() => refetch()} />;
   }
 
-  // "(수정됨)"은 표시하지 않는다. 게시글 updatedAt은 조회수·좋아요·고정 변경(post.update)에도 바뀌어 수정 여부를 알 수 없다. (docs/frontend/fe-06-posts.md 6장)
+  // "(수정됨)"은 editedAt으로 판단한다. updatedAt은 조회수·좋아요·고정 변경(post.update)에도 바뀌어 쓸 수 없다. (docs/frontend/fe-06-posts.md)
 
   return (
     <div className="mx-auto grid max-w-4xl gap-6">
@@ -73,9 +73,19 @@ export function PostDetailView({ boardId, postId }: { boardId: number; postId: n
               positionName={post.authorPositionName}
               isAnonymous={post.board.isAnonymous}
             />
-            <time dateTime={post.createdAt} className="tabular-nums">
-              {formatDateTime(post.createdAt)}
-            </time>
+            <span className="tabular-nums">
+              <time dateTime={post.createdAt}>{formatDateTime(post.createdAt)}</time>
+              {post.editedAt && (
+                // 회색 보조 텍스트, 마우스를 올리면 수정 시각
+                <time
+                  dateTime={post.editedAt}
+                  title={`수정 ${formatDateTime(post.editedAt)}`}
+                  className="ml-1 text-muted-foreground"
+                >
+                  (수정됨)
+                </time>
+              )}
+            </span>
             <span className="inline-flex items-center gap-1 tabular-nums">
               <Eye className="size-3.5" aria-hidden />
               <span className="sr-only">조회</span>

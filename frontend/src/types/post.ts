@@ -81,7 +81,8 @@ export interface PostDetail extends AuthorSnapshot {
   eventEndAt: string | null;
   isAllDay: boolean | null;
   createdAt: string;
-  updatedAt: string;
+  updatedAt: string; // 조회수·좋아요·고정 변경에도 갱신되므로 "수정됨" 판단에 쓰지 않는다.
+  editedAt: string | null; // 내용을 수정한 시각 (updatePost에서만 기록, 수정한 적 없으면 null)
   board: PostBoardInfo;
   can: {
     edit: boolean; // 작성자 + 쓰기 권한 (관리자도 남의 글은 수정 불가)

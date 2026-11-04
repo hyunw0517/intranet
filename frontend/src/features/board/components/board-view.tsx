@@ -52,7 +52,7 @@ export function BoardView({ boardId }: { boardId: number }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const filters = readFilters(searchParams);
-  const { data, isPending, isError, error, refetch, isFetching } = usePosts(boardId, toQuery(filters));
+  const { data, isPending, isError, error, refetch, isFetching, isPlaceholderData } = usePosts(boardId, toQuery(filters));
   // 카테고리 이름만 메뉴 캐시에서 찾는다. (사이드바가 이미 받아 둔 데이터라 추가 요청 없음)
   const navigation = useBoardNavigation();
 
@@ -114,7 +114,9 @@ export function BoardView({ boardId }: { boardId: number }) {
         <div className="flex items-center justify-between text-sm text-muted-foreground" aria-live="polite">
           <span>
             {searching ? "검색 결과 " : "전체 "}
-            {meta.total.toLocaleString()}건
+            {/* 조건을 바꾼 직후에는 이전 목록(keepPreviousData)을 보여 주므로, 이전 개수 대신 불러오는 중으로 표시한다. */}
+            {/* meta.total은 고정글을 뺀 개수 (검색 중에는 고정글도 data에 포함되고 pinned는 빈 배열) */}
+            {isPlaceholderData ? "불러오는 중" : `${(meta.total + pinned.length).toLocaleString()}건`}
           </span>
           {searching && (
             <Button variant="link" size="sm" className="h-auto px-0" onClick={() => updateFilters({ q: "" })}>
@@ -160,7 +162,7 @@ function BoardToolbar({
   };
 
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
       <form onSubmit={handleSubmit} className="flex gap-2" role="search">
         <Select value={field} onValueChange={(v) => setField(v as SearchField)}>
           <SelectTrigger className="w-24 shrink-0" aria-label="검색 항목">
@@ -179,7 +181,7 @@ function BoardToolbar({
           onChange={(e) => setQ(e.target.value)}
           placeholder="검색어"
           aria-label="검색어"
-          className="min-w-0 sm:w-56"
+          className="min-w-0 flex-1 lg:w-56 lg:flex-none"
         />
         <Button type="submit" variant="outline" className="shrink-0">
           <Search aria-hidden />
@@ -188,7 +190,7 @@ function BoardToolbar({
       </form>
 
       <Select value={filters.sort} onValueChange={(v) => onChange({ sort: v as PostSortBy })}>
-        <SelectTrigger className="w-full sm:w-32" aria-label="정렬">
+        <SelectTrigger className="w-full lg:w-32" aria-label="정렬">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

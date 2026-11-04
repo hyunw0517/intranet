@@ -43,7 +43,7 @@ export function PostDetailView({ boardId, postId }: { boardId: number; postId: n
     return <ErrorState error={error} onRetry={() => refetch()} />;
   }
 
-  const edited = new Date(post.updatedAt).getTime() - new Date(post.createdAt).getTime() > 1000;
+  // "(수정됨)"은 표시하지 않는다. 게시글 updatedAt은 조회수·좋아요·고정 변경(post.update)에도 바뀌어 수정 여부를 알 수 없다. (docs/frontend/fe-06-posts.md 6장)
 
   return (
     <div className="mx-auto grid max-w-4xl gap-6">
@@ -75,7 +75,6 @@ export function PostDetailView({ boardId, postId }: { boardId: number; postId: n
             />
             <time dateTime={post.createdAt} className="tabular-nums">
               {formatDateTime(post.createdAt)}
-              {edited && <span title={`수정 ${formatDateTime(post.updatedAt)}`}> (수정됨)</span>}
             </time>
             <span className="inline-flex items-center gap-1 tabular-nums">
               <Eye className="size-3.5" aria-hidden />

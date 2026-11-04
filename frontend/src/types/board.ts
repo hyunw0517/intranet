@@ -28,9 +28,8 @@ export interface AdminBoard {
   path: string; // 최상위부터 자기까지의 이름 (구분자 /)
   postCount: number; // 삭제되지 않은 게시글 수
   authCount: number; // 권한 규칙 수 (0이면 관리자만 볼 수 있음)
-  // 현재 목록 응답에는 없음. 백엔드 select에 추가되면 수정 화면에서 현재 값을 보여 준다.
-  isAnonymous?: boolean;
-  allowSecret?: boolean;
+  isAnonymous: boolean; // 익명 게시판 (작성자를 본인 외에 가림)
+  allowSecret: boolean; // 비밀글 허용
 }
 
 // GET /boards/:boardId/auths 항목 - 게시판 권한 규칙

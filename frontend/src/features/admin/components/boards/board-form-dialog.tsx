@@ -68,8 +68,6 @@ function BoardForm({
   const [errors, setErrors] = useState<{ name?: string; description?: string }>({});
 
   const isCategory = type === "CATEGORY";
-  // 수정 시 목록 응답에 현재 값이 없으면 옵션을 보내지 않는다. (보내면 모르는 값을 false로 덮어쓰게 됨)
-  const optionsKnown = !editing || (editing.isAnonymous !== undefined && editing.allowSecret !== undefined);
 
   // 상위 후보: 카테고리만 (자기 자신 제외). 카테고리는 최상위에만 둘 수 있다.
   const categories = boards.filter((b) => b.type === "CATEGORY" && b.id !== editing?.id);
@@ -98,7 +96,7 @@ function BoardForm({
       type,
       parentBoardId: isCategory || parentValue === ROOT ? null : Number(parentValue),
       description: trimmedDescription,
-      ...(!isCategory && optionsKnown ? { isAnonymous, allowSecret } : {}),
+      ...(!isCategory ? { isAnonymous, allowSecret } : {}),
     });
   };
 
@@ -183,20 +181,13 @@ function BoardForm({
             label="익명 게시판"
             checked={isAnonymous}
             onChange={setIsAnonymous}
-            disabled={!optionsKnown}
           />
           <OptionCheckbox
             id="board-secret"
             label="비밀글 허용"
             checked={allowSecret}
             onChange={setAllowSecret}
-            disabled={!optionsKnown}
           />
-          {!optionsKnown && (
-            <p className="text-xs text-muted-foreground">
-              현재 설정값을 불러오지 못해 수정 화면에서는 옵션을 바꿀 수 없습니다. (저장해도 기존 값이 유지됩니다)
-            </p>
-          )}
         </fieldset>
       )}
 

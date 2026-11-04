@@ -8,7 +8,10 @@
 //   글은 쓰기 권한, 댓글은 댓글 권한, 조회·좋아요는 읽기 권한이 있는 회원만 만든다. (화면·API와 같은 규칙)
 // - 작성 당시 소속은 OrganizationService.getPrimaryOrganizationNames, 본문은 sanitizeEditorHtml로 정제한다.
 // - 작성일은 실행 시점 기준 최근 30일 (평일·업무시간 위주, 오늘 글 몇 개 포함)
-// - 고정·비밀글·캘린더 일정은 만들지 않는다. (캘린더 게시판은 일정이 필수라 대상에서 제외)
+// - 비밀글 허용 게시판은 글의 SECRET_RATE(80%)를 비밀글로 만든다. 비밀글의 조회·좋아요·댓글은 볼 수 있는 사람(게시판 관리자)만.
+// - 헬프데스크·인사 문의(질문 게시판): 새 글로 문의하고 댓글 권한자가 답변 1개만 단다. (대댓글·잡담 없음, 일부 글은 미답변)
+// - 전체 공지는 댓글을 만들지 않는다. 글쓴이는 자기 글에 최상위 댓글을 달지 않는다.
+// - 고정·캘린더 일정은 만들지 않는다. (캘린더 게시판은 일정이 필수라 대상에서 제외)
 // - 대상 게시판에 게시글이 이미 있으면 중단한다. (--reset으로만 지움)
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -382,8 +385,8 @@ const COMMENTS: Record<Kind, string[]> = {
     rule: [ '확인했습니다.', '변경 사항 정리 감사합니다.', '팀 내 공유하겠습니다.', '시행일 이전 건은 기존 규정을 따르면 되나요?' ],
     archive: [ '자료 감사합니다!', '잘 쓰겠습니다.', '최신본 업데이트 감사해요.', '필요했던 자료인데 감사합니다.' ],
     exec: [ '확인했습니다.', '회의 전까지 의견 정리하겠습니다.', '관련 자료 추가로 공유드리겠습니다.' ],
-    help: [ '저도 같은 증상이 있어요.', '헬프데스크입니다. 확인 후 연락드리겠습니다.', '원격 지원 요청 링크 보내드렸습니다.' ],
-    hr: [ '인사팀입니다. 개별 메일로 안내드렸습니다.', '저도 궁금했던 내용이에요.' ],
+    help: [ '헬프데스크입니다. 확인 후 연락드리겠습니다.' ],
+    hr: [ '인사팀입니다. 개별 메일로 안내드렸습니다.' ],
     free: [ '좋은 정보 감사합니다.', '오 좋네요 👍', '저도 궁금했어요.' ],
     team: [ '확인했습니다.', '공유 감사합니다.', '수고 많으셨습니다.', '내용 확인했습니다. 의견은 따로 드릴게요.', '회의 때 같이 이야기해요.' ],
 };
@@ -391,38 +394,38 @@ const COMMENTS: Record<Kind, string[]> = {
 // 글별 댓글 (제목으로 찾는다). 질문 글은 첫 댓글이 답변이 되도록 앞에 둔다.
 const COMMENTS_BY_TITLE: Record<string, string[]> = {
     // 헬프데스크
-    '노트북이 갑자기 너무 느려졌어요': [ '헬프데스크입니다. 어제 배포된 윈도우 업데이트 이후 같은 문의가 많습니다. 재부팅 2회 해 보시고 그래도 느리면 알려주세요.', '저도 오늘 아침부터 똑같아요.', '재부팅하니 좀 나아졌습니다.' ],
-    'VPN 접속이 안 됩니다': [ '인증서가 어제 갱신되었습니다. VPN 프로그램에서 [인증서 다시 받기]를 눌러 주세요.', '저도 같은 오류였는데 인증서 다시 받으니 됩니다.' ],
-    '3층 프린터 용지 걸림': [ '2번 트레이 롤러 교체 요청해 두었습니다. 오늘은 1번 트레이로 출력해 주세요.', '아까 저도 걸려서 한참 씨름했어요 ㅠ' ],
-    '메일함 용량이 가득 찼다고 나와요': [ '용량 증설은 어렵고, 1년 지난 메일을 보관함(PST)으로 옮기면 됩니다. 방법은 개별 메일로 보내드렸습니다.', '저도 같은 경고 떴는데 첨부파일 큰 메일 지우니 해결됐어요.' ],
+    '노트북이 갑자기 너무 느려졌어요': [ '헬프데스크입니다. 어제 배포된 윈도우 업데이트 이후 같은 문의가 많습니다. 재부팅 2회 해 보시고 그래도 느리면 알려주세요.' ],
+    'VPN 접속이 안 됩니다': [ '인증서가 어제 갱신되었습니다. VPN 프로그램에서 [인증서 다시 받기]를 눌러 주세요.' ],
+    '3층 프린터 용지 걸림': [ '2번 트레이 롤러 교체 요청해 두었습니다. 오늘은 1번 트레이로 출력해 주세요.' ],
+    '메일함 용량이 가득 찼다고 나와요': [ '용량 증설은 어렵고, 1년 지난 메일을 보관함(PST)으로 옮기면 됩니다. 방법은 개별 메일로 보내드렸습니다.' ],
     '비밀번호 초기화 요청': [ '초기화했습니다. 임시 비밀번호는 문자로 발송했습니다. 로그인 후 바로 변경해 주세요.' ],
-    '듀얼 모니터 추가 요청': [ '재고 확인해 보니 27인치 1대 있습니다. 내일 오전에 설치해 드릴게요.', '저도 신청하고 싶은데 팀장님 승인 받아야 하나요?' ],
-    '소프트웨어 설치 요청 (Postman)': [ '보안 검토 완료된 프로그램이라 원격으로 설치해 드리겠습니다. 오후 3시에 자리에 계신가요?', '저희 팀도 필요한데 같이 설치 가능할까요?' ],
-    '대회의실 TV에 노트북 연결이 안 돼요': [ '대회의실 HDMI 케이블 교체했습니다. 지금 다시 해 보세요.', '저번에도 그랬는데 TV 입력을 HDMI2로 바꾸면 되더라고요.' ],
-    '5층 와이파이가 자주 끊깁니다': [ '5층 창가 쪽 AP 점검 일정 잡았습니다. 그동안은 유선 랜을 써 주세요.', '저도 창가 자리인데 같은 증상이에요.', '맞아요, 화상회의 중에 계속 끊겨요.' ],
-    '메신저 알림이 안 와요': [ '메신저 설정 → 알림 → "방해 금지 시간"이 켜져 있는지 확인해 보세요.', '저도 그거였어요. 방해 금지 시간 끄니까 됩니다.' ],
-    '엑셀 라이선스 만료 메시지': [ '라이선스 서버 점검 때문입니다. 지금은 정상화되었으니 엑셀을 다시 실행해 주세요.', '저도 아까 떴는데 지금은 괜찮네요.' ],
+    '듀얼 모니터 추가 요청': [ '재고 확인해 보니 27인치 1대 있습니다. 내일 오전에 설치해 드릴게요.' ],
+    '소프트웨어 설치 요청 (Postman)': [ '보안 검토 완료된 프로그램이라 원격으로 설치해 드리겠습니다. 오후 3시에 자리에 계신가요?' ],
+    '대회의실 TV에 노트북 연결이 안 돼요': [ '대회의실 HDMI 케이블 교체했습니다. 지금 다시 해 보세요.' ],
+    '5층 와이파이가 자주 끊깁니다': [ '5층 창가 쪽 AP 점검 일정 잡았습니다. 그동안은 유선 랜을 써 주세요.' ],
+    '메신저 알림이 안 와요': [ '메신저 설정 → 알림 → "방해 금지 시간"이 켜져 있는지 확인해 보세요.' ],
+    '엑셀 라이선스 만료 메시지': [ '라이선스 서버 점검 때문입니다. 지금은 정상화되었으니 엑셀을 다시 실행해 주세요.' ],
     '키보드 교체 요청': [ '새 키보드 자리에 가져다 드렸습니다. 기존 키보드는 회수하겠습니다.' ],
     '공유 폴더 접근 권한 요청': [ '폴더 관리자(사업기획팀장) 승인 확인 후 권한 부여했습니다. 재로그인 후 확인해 주세요.' ],
-    '화상회의 때 마이크가 안 잡혀요': [ '화상회의 프로그램 설정에서 입력 장치를 헤드셋으로 직접 선택해 보세요.', '블루투스 헤드셋이면 "헤드셋 모드"로 연결되어 있는지도 확인해 보세요.' ],
-    '인트라넷 로그인 후 화면이 하얗게 나와요': [ '크롬 캐시 문제로 보입니다. Ctrl + Shift + R로 새로고침해 보세요.', '저도 그랬는데 시크릿 창에서는 잘 됐어요.' ],
+    '화상회의 때 마이크가 안 잡혀요': [ '화상회의 프로그램 설정에서 입력 장치를 헤드셋으로 직접 선택해 보세요.' ],
+    '인트라넷 로그인 후 화면이 하얗게 나와요': [ '크롬 캐시 문제로 보입니다. Ctrl + Shift + R로 새로고침해 보세요.' ],
     '외부 메일 첨부파일이 차단됩니다': [ '보안 정책상 zip은 자동 차단됩니다. 보낸 분께 공유 링크로 다시 보내 달라고 요청해 주세요.' ],
     '노트북 배터리가 금방 닳아요': [ '보증 기간 안이라 무상 교체 가능합니다. 노트북을 헬프데스크로 가져와 주세요. (1시간 소요)' ],
     '스캐너 드라이버 설치 요청': [ '원격으로 드라이버 설치했습니다. 스캔 다시 해 보세요.' ],
-    '휴대폰에 회사 메일 연동 방법': [ '모바일 연동 가이드를 메일로 보내드렸습니다. 서버 주소는 보안상 게시판에 올리지 않습니다.', '저도 가이드 받고 5분 만에 설정했어요.' ],
+    '휴대폰에 회사 메일 연동 방법': [ '모바일 연동 가이드를 메일로 보내드렸습니다. 서버 주소는 보안상 게시판에 올리지 않습니다.' ],
     '개발 서버 접속 권한 요청': [ '정보보안팀 승인 후 계정 생성했습니다. 최초 접속 시 키 등록이 필요합니다.' ],
     // 인사 문의
-    '남은 연차 이월이 되나요?': [ '인사팀입니다. 연차는 원칙적으로 이월되지 않고, 사용 촉진 후 남은 연차는 소멸됩니다. 연말 전에 사용 계획을 세워 주세요.', '저도 3일 남았는데 얼른 써야겠네요.' ],
+    '남은 연차 이월이 되나요?': [ '인사팀입니다. 연차는 원칙적으로 이월되지 않고, 사용 촉진 후 남은 연차는 소멸됩니다. 연말 전에 사용 계획을 세워 주세요.' ],
     '경조휴가 신청 방법 문의': [ '형제자매 결혼은 경조휴가 1일입니다. 전자결재 → 휴가 신청 → "경조휴가"로 신청하시고 청첩장을 첨부해 주세요.' ],
     '재직증명서 발급 문의': [ '인트라넷 마이페이지 → 증명서 발급에서 바로 출력하실 수 있습니다. (직인 포함)' ],
-    '육아휴직 신청 절차가 궁금합니다': [ '휴직 시작 30일 전까지 신청하시면 됩니다. 필요 서류는 개별 메일로 안내드렸습니다.', '저도 내년에 계획 중이라 궁금했던 내용이에요.' ],
-    '급여명세서에 식대가 빠진 것 같아요': [ '확인해 보니 이번 달 식대가 누락되었습니다. 다음 달 급여에 소급 지급됩니다. 불편을 드려 죄송합니다.', '저도 확인해 보니 빠져 있네요.' ],
+    '육아휴직 신청 절차가 궁금합니다': [ '휴직 시작 30일 전까지 신청하시면 됩니다. 필요 서류는 개별 메일로 안내드렸습니다.' ],
+    '급여명세서에 식대가 빠진 것 같아요': [ '확인해 보니 이번 달 식대가 누락되었습니다. 다음 달 급여에 소급 지급됩니다. 불편을 드려 죄송합니다.' ],
     '원천징수영수증 발급': [ '홈택스에서 직접 발급하시거나, 인사팀에 요청하시면 메일로 보내드립니다.' ],
     '부서 이동 신청 문의': [ '현 부서 근무 1년 이상이면 사내 공모에 지원할 수 있습니다. 공모 공지는 매 분기 초에 올라갑니다.' ],
     '건강검진 대상인지 확인 부탁드립니다': [ '확인해 보니 올해 대상이십니다. 지정 병원 예약 후 결과지를 제출해 주세요.' ],
-    '반차 사용 시간 기준': [ '오전 반차는 09:00~13:00, 오후 반차는 14:00~18:00 기준입니다.', '점심시간은 반차에 포함되지 않는 거죠?' ],
+    '반차 사용 시간 기준': [ '오전 반차는 09:00~13:00, 오후 반차는 14:00~18:00 기준입니다.' ],
     '야근 식대 청구 방법': [ '21시 이후 근무 시 1만원까지 법인카드로 결제하시고 경비 청구에 "야근 식대"로 올려 주세요.' ],
-    '외부 교육비 지원 문의': [ '직무 관련 교육은 연 100만원까지 지원됩니다. 수강 전에 교육 신청 품의를 올려 주세요.', '저도 신청하려던 참인데 감사합니다.' ],
+    '외부 교육비 지원 문의': [ '직무 관련 교육은 연 100만원까지 지원됩니다. 수강 전에 교육 신청 품의를 올려 주세요.' ],
     '퇴직금 중간정산 가능 여부': [ '무주택자의 주택 구입은 중간정산 사유에 해당합니다. 필요 서류는 개별로 안내드리겠습니다.' ],
     '복지포인트 사용처 문의': [ '안경은 의료비 항목으로 사용 가능합니다. 영수증을 복지몰에 등록해 주세요.' ],
     // 자유게시판
@@ -469,32 +472,27 @@ const COMMENTS_BY_TITLE: Record<string, string[]> = {
 };
 
 // 답글 (종류별). 질문 글은 글쓴이가 답변에 고마움을 표시하는 경우가 많다.
-const REPLIES: Record<Kind, string[]> = {
-    notice: [ '감사합니다.', '네 확인했습니다.', '넵 알겠습니다.' ],
+// 질문 게시판(help·hr)과 전체 공지는 답글을 만들지 않으므로 없다.
+const REPLIES: Partial<Record<Kind, string[]>> = {
     rule: [ '네 그렇게 적용됩니다.', '감사합니다.', '확인했습니다.' ],
     archive: [ '감사합니다!', '잘 쓰겠습니다.' ],
     exec: [ '네 알겠습니다.', '감사합니다.' ],
-    help: [ '감사합니다! 해결됐어요.', '말씀하신 대로 해 보겠습니다.', '확인 감사합니다.', '저도 이 방법으로 해결했어요.' ],
-    hr: [ '답변 감사합니다.', '확인했습니다!', '안내 감사합니다. 그렇게 하겠습니다.', '추가로 궁금한 점은 다시 문의드릴게요.' ],
     free: [ '저도요!', '감사합니다!', '오 좋은 정보네요', '공감합니다 ㅎㅎ' ],
     team: [ '감사합니다.', '넵 알겠습니다.', '그렇게 진행하겠습니다.', '확인했습니다.' ],
 };
 
 // 물음표로 끝나는 댓글에 다는 답글 (글쓴이가 답한다)
-const ANSWER_REPLIES: Record<Kind, string[]> = {
-    notice: [ '네 해당됩니다.', '자세한 내용은 담당 부서로 문의해 주세요.' ],
+const ANSWER_REPLIES: Partial<Record<Kind, string[]>> = {
     rule: [ '네 시행일 이전 건은 기존 규정을 따릅니다.' ],
     archive: [ '네 준비되면 다시 올리겠습니다.' ],
     exec: [ '네 그렇게 하겠습니다.' ],
-    help: [ '네 맞습니다. 같은 방법으로 해 보세요.', '네 가능합니다.' ],
-    hr: [ '네 맞습니다.', '네 포함되지 않습니다.' ],
     free: [ '네 가능해요!', '네 괜찮아요 ㅎㅎ 편하게 오세요.', '쪽지로 알려드릴게요!' ],
     team: [ '네 맞습니다.', '네 그렇게 하겠습니다.' ],
 };
 
 // 종류별 분량 (댓글 수 범위, 좋아요 비율, 조회 비율)
 const ACTIVITY: Record<Kind, { comments: [number, number]; likeRate: number; viewRate: number }> = {
-    notice: { comments: [ 0, 4 ], likeRate: 0.08, viewRate: 0.55 },
+    notice: { comments: [ 0, 0 ], likeRate: 0.08, viewRate: 0.55 },   // 공지는 댓글 없음
     rule: { comments: [ 0, 2 ], likeRate: 0.03, viewRate: 0.35 },
     archive: { comments: [ 0, 3 ], likeRate: 0.06, viewRate: 0.25 },
     exec: { comments: [ 0, 3 ], likeRate: 0.2, viewRate: 0.8 },
@@ -517,13 +515,15 @@ const BOARD_PLAN: { name: string; kind: Kind; count: number; templates: Template
 ];
 const TEAM_POSTS_PER_BOARD = 4;
 const TODAY_POSTS = 6; // 목록의 "오늘 HH:mm" 표시 확인용
+const SECRET_RATE = 0.8; // 비밀글 허용 게시판에서 비밀글 비율
+const QA_ANSWER_RATE = 0.85; // 질문 게시판에서 답변이 달린 글 비율
 
 interface Member { id: number; role: UserRole }
 interface PlannedPost { boardId: number; boardName: string; kind: Kind; template: Template; team: string }
 
 async function main(){
     const boards = await prisma.board.findMany({
-        select: { id: true, name: true, type: true },
+        select: { id: true, name: true, type: true, allowSecret: true },
         where: { deleted: false, type: { in: [ BoardType.NORMAL, BoardType.NOTICE, BoardType.ALBUM ] } },
         orderBy: { id: 'asc' },
     });
@@ -605,7 +605,15 @@ async function main(){
     const dated = shuffle( writable ).map( ( plan, i ) => ({ plan, at: randomPostDate( i < TODAY_POSTS ) }) )
         .sort( ( a, b ) => a.at.getTime() - b.at.getTime() );   // id 순서 = 작성 순서
 
-    const summary = { posts: 0, comments: 0, deletedComments: 0, likes: 0, views: 0 };
+    // 비밀글: 비밀글 허용 게시판마다 글의 SECRET_RATE만큼 (게시판별로 섞어서 고른다)
+    const secretPlans = new Set<PlannedPost>();
+    for( const board of boards.filter( ( b ) => b.allowSecret && targetBoardIds.includes( b.id ) ) ){
+        const inBoard = writable.filter( ( p ) => p.boardId === board.id );
+        sample( inBoard, Math.round( inBoard.length * SECRET_RATE ) ).forEach( ( p ) => secretPlans.add( p ) );
+    }
+    const isAdminOf = ( boardId: number, m: Member ) => !!permOf.get( `${ boardId }:${ m.id }` )?.admin;
+
+    const summary = { posts: 0, secret: 0, comments: 0, deletedComments: 0, likes: 0, views: 0 };
 
     await prisma.$transaction( async ( tx ) => {
         if( existing > 0 ){
@@ -625,8 +633,13 @@ async function main(){
             const { html: content, text: contentText } = sanitizeEditorHtml( plan.template.body( ctx ) );
             const activity = ACTIVITY[ plan.kind ];
 
+            // 비밀글은 작성자와 게시판 관리자만 볼 수 있다. (PostsService.canViewSecret과 같은 기준)
+            // 볼 수 없는 사람은 조회·좋아요·댓글을 남길 수 없으므로(상세·좋아요·댓글 API 모두 403) 대상에서 뺀다.
+            const isSecret = secretPlans.has( plan );
+            const canSee = ( m: Member ) => !isSecret || m.id === author.id || isAdminOf( plan.boardId, m );
+
             // 조회·좋아요 (작성자 제외, 읽기 권한자 중에서)
-            const readers = usersWith( plan.boardId, 'read' ).filter( ( m ) => m.id !== author.id );
+            const readers = usersWith( plan.boardId, 'read' ).filter( ( m ) => m.id !== author.id && canSee( m ) );
             const freshness = Math.min( 1, ( NOW.getTime() - at.getTime() ) / ( 7 * 24 * HOUR ) + 0.2 ); // 오래된 글일수록 많이 봄
             const viewers = sample( readers, Math.round( readers.length * activity.viewRate * freshness * ( 0.5 + random() ) ) );
             const likers = sample( viewers, Math.round( viewers.length * activity.likeRate * ( 0.5 + random() * 1.5 ) ) );
@@ -645,6 +658,7 @@ async function main(){
                     contentText,
                     viewCount,
                     likeCount: likers.length,
+                    isSecret,
                     createdAt: at,
                     createdId: author.id,
                     updatedAt: at,
@@ -652,6 +666,7 @@ async function main(){
                 },
             });
             summary.posts++;
+            if( isSecret ) summary.secret++;
 
             if( viewers.length ){
                 await tx.postView.createMany({ data: viewers.map( ( v ) => ({ postId: post.id, userId: v.id, viewedAt: after( at, 72 ) }) ) });
@@ -664,14 +679,18 @@ async function main(){
 
             // 댓글: 글별 댓글(COMMENTS_BY_TITLE)이 있으면 그 문장을 순서대로, 없으면 종류별 기본 문장을 섞어서 쓴다.
             // 같은 글에서 같은 문장이 반복되지 않게 한 번씩만 쓰고, 일부는 답글로 단다. 작성 시각은 글 이후 순서대로(업무시간 위주).
-            const commenters = usersWith( plan.boardId, 'comment' );
+            // 질문 게시판(help·hr)은 질문자가 새 글로 문의하고, 댓글 권한자가 답변 1개만 단다. (대댓글 없음)
+            const commenters = usersWith( plan.boardId, 'comment' ).filter( canSee );
             if( !commenters.length ) continue;
+            const qa = plan.kind === 'help' || plan.kind === 'hr';
             const title = plan.template.title( ctx );
             const specific = COMMENTS_BY_TITLE[ title ];
             const pool = specific ?? shuffle( COMMENTS[ plan.kind ] );
             const [ minCount, maxCount ] = activity.comments;
-            const topCount = Math.min( pool.length, specific ? randInt( Math.max( minCount, 1 ), pool.length ) : randInt( minCount, maxCount ) );
-            const replyCount = topCount ? randInt( 0, Math.ceil( topCount / 2 ) ) : 0;
+            const topCount = qa
+                ? ( random() < QA_ANSWER_RATE ? 1 : 0 )
+                : Math.min( pool.length, specific ? randInt( Math.max( minCount, 1 ), pool.length ) : randInt( minCount, maxCount ) );
+            const replyCount = topCount && !qa ? randInt( 0, Math.ceil( topCount / 2 ) ) : 0;
             const authorCanComment = commenters.some( ( c ) => c.id === author.id );
             const created: { id: number; at: Date; authorId: number; text: string; hasReply: boolean }[] = [];
             let cursor = at;
@@ -682,10 +701,12 @@ async function main(){
                 const parent = asReply ? pick( created ) : null;
                 // 질문(물음표) 댓글에는 글쓴이가 답하고, 그 외 답글도 글쓴이가 다는 경우가 많다.
                 const isQuestion = !!parent && parent.text.trim().endsWith( '?' ) && parent.authorId !== author.id && authorCanComment;
-                const writer = isQuestion || ( parent && authorCanComment && parent.authorId !== author.id && random() < 0.6 )
-                    ? author
-                    : pick( commenters.filter( ( c ) => c.id !== parent?.authorId ) );
-                const text = !parent ? pool[ top ] : isQuestion ? pick( ANSWER_REPLIES[ plan.kind ] ) : pick( REPLIES[ plan.kind ] );
+                // 최상위 댓글은 글쓴이가 달지 않는다. (자기 글에는 답글로만 반응)
+                const others = commenters.filter( ( c ) => c.id !== author.id && c.id !== parent?.authorId );
+                const useAuthor = isQuestion || ( !!parent && authorCanComment && parent.authorId !== author.id && random() < 0.6 );
+                if( !useAuthor && !others.length ) break;
+                const writer = useAuthor ? author : pick( others );
+                const text = !parent ? pool[ top ] : isQuestion ? pick( ANSWER_REPLIES[ plan.kind ]! ) : pick( REPLIES[ plan.kind ]! );
                 cursor = afterInWorkHours( cursor, 18 );
                 const n = await orgOf( writer.id );
                 const row = await tx.comment.create({
@@ -722,7 +743,7 @@ async function main(){
         }
     }, { timeout: 5 * 60 * 1000, maxWait: 10 * 1000 } );
 
-    console.log( `완료: 게시글 ${ summary.posts }개, 댓글 ${ summary.comments }개(삭제 표시 ${ summary.deletedComments }개), 좋아요 ${ summary.likes }개, 조회 기록 ${ summary.views }개` );
+    console.log( `완료: 게시글 ${ summary.posts }개(비밀글 ${ summary.secret }개), 댓글 ${ summary.comments }개(삭제 표시 ${ summary.deletedComments }개), 좋아요 ${ summary.likes }개, 조회 기록 ${ summary.views }개` );
 }
 
 main()

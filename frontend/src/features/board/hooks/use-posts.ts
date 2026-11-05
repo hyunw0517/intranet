@@ -12,6 +12,8 @@ export const postKeys = {
   all: [...boardKeys.all, "posts"] as const,
   lists: (boardId: number) => [...postKeys.all, "list", boardId] as const,
   list: (boardId: number, query: PostListQuery) => [...postKeys.lists(boardId), query] as const,
+  // 캘린더 일정은 목록과 응답 모양이 달라 lists 아래에 두지 않는다. (syncListAfterView가 lists 아래를 목록 모양으로 고침)
+  events: (boardId: number) => [...postKeys.all, "events", boardId] as const,
   detail: (boardId: number, postId: number) => [...postKeys.all, "detail", boardId, postId] as const,
   comments: (boardId: number, postId: number) => [...postKeys.all, "comments", boardId, postId] as const,
 };
@@ -81,7 +83,12 @@ export function usePostCache(boardId: number) {
         prev ? { ...prev, ...patch(prev) } : prev,
       ),
     // 목록(제목·고정·댓글 수·좋아요 수)은 다시 받아도 부작용이 없다.
-    invalidateLists: () => queryClient.invalidateQueries({ queryKey: postKeys.lists(boardId) }),
+    // 글 작성·수정·삭제 후 호출하므로 캘린더 일정(일정 날짜·제목)도 함께 다시 받는다.
+    invalidateLists: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: postKeys.lists(boardId) }),
+        queryClient.invalidateQueries({ queryKey: postKeys.events(boardId) }),
+      ]),
     // 수정·삭제 후: 지금 보고 있는 화면에서 바로 다시 요청하지 않고(조회수·404 깜빡임 방지) 오래된 값으로 표시만 한다.
     // 다음에 상세에 들어올 때 새로 조회한다.
     markDetailStale: (postId: number) =>

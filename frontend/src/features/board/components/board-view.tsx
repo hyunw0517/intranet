@@ -17,6 +17,7 @@ import { BOARD_TYPE_LABEL } from "@/types/board";
 import { useBoardNavigation } from "../hooks/use-board-navigation";
 import { usePosts } from "../hooks/use-posts";
 import { BoardNotFound } from "./board-not-found";
+import { CalendarBoard } from "./calendar-board";
 import { PostGrid } from "./post-grid";
 import { PostList } from "./post-list";
 
@@ -104,6 +105,10 @@ export function BoardView({ boardId }: { boardId: number }) {
         {board.isAnonymous && " · 익명"}
       </p>
 
+      {/* 캘린더 게시판은 달력(기본)·월간 일정 목록으로 본다. (검색·정렬·페이지 목록 대신) */}
+      {board.type === "CALENDAR" ? (
+        <CalendarBoard boardId={boardId} board={board} />
+      ) : (
       <div className="grid gap-4">
         <BoardToolbar
           key={searchParams.toString()}
@@ -141,6 +146,7 @@ export function BoardView({ boardId }: { boardId: number }) {
 
         {meta.total > 0 && <PaginationBar meta={meta} onPageChange={(page) => updateFilters({ page })} />}
       </div>
+      )}
     </>
   );
 }

@@ -15,6 +15,15 @@ export function kstDayStart( date: Date ): Date {
     return new Date( midnight - KST_OFFSET_MS );
 }
 
+//* 주어진 시각의 KST 연·월 경로 ("2026/11")
+// 업로드 파일 저장 위치(images/2026/11/<uuid>.png)에 쓴다. KST 11월 1일 08시(UTC 10월 31일)도 11월 폴더로 간다.
+export function kstYearMonthPath( date: Date ): string {
+    const kst = new Date( date.getTime() + KST_OFFSET_MS );
+    const month = String( kst.getUTCMonth() + 1 ).padStart( 2, '0' );
+
+    return `${kst.getUTCFullYear()}/${month}`;
+}
+
 //* 주어진 시각이 속한 KST 날짜의 23:59:59
 // 종료일을 포함하는 기간 조회(end >= 조회 시작)에 맞춰 그날 마지막 초로 둔다.
 export function kstDayEnd( date: Date ): Date {

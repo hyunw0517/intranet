@@ -20,6 +20,7 @@ import { formatEventRange } from "../event-date";
 import { usePost, usePostCache } from "../hooks/use-posts";
 import { PostNotFound } from "./board-not-found";
 import { CommentSection } from "./comment-section";
+import { PostAttachments } from "./post-attachments";
 import { PostAuthorLabel } from "./post-author";
 import { RichTextContent } from "./rich-text-content";
 
@@ -102,6 +103,8 @@ export function PostDetailView({ boardId, postId }: { boardId: number; postId: n
         </header>
 
         <RichTextContent html={post.content} />
+
+        <PostAttachments boardId={boardId} postId={post.id} files={post.files} />
 
         <PostActions boardId={boardId} post={post} />
       </article>

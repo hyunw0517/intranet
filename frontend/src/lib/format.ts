@@ -40,3 +40,10 @@ export function formatListDate(value: string) {
   const { date, time } = toKstParts(value);
   return date === toKstParts(new Date().toISOString()).date ? time : date;
 }
+
+// 파일 크기 (1,024 단위, 소수 한 자리)
+export function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}

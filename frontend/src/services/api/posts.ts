@@ -1,5 +1,5 @@
 // 백엔드 posts.controller 대응 (/boards/:boardId/posts/*)
-import { apiFetch } from "@/services/api-client";
+import { apiFetch, apiFetchBlob } from "@/services/api-client";
 import type { PostDetail, PostListResult } from "@/types/post";
 
 // GET 정렬 기준 (PostSortBy) - 방향(order)은 생략하면 desc
@@ -29,6 +29,10 @@ export interface PostInput {
   eventStartAt?: string | null;
   eventEndAt?: string | null;
   isAllDay?: boolean | null;
+  // 첨부파일 id 최종 목록 (먼저 uploadAttachment로 올린 파일, 순서 = 표시 순서)
+  // 수정에서 생략하면 기존 첨부 유지, 배열을 보내면 이 목록으로 맞춘다. (빠진 파일은 삭제)
+  // 본문 이미지는 보내지 않는다. 서버가 본문 <img>에서 찾아 연결하고, 다른 글의 이미지는 본문에서 제거한다.
+  attachmentIds?: number[];
 }
 
 const base = (boardId: number) => `/boards/${boardId}/posts`;
@@ -61,6 +65,11 @@ export function deletePost(boardId: number, postId: number) {
 // 게시판 관리자만. 게시판당 최대 10개 (초과 시 400)
 export function pinPost(boardId: number, postId: number, isPinned: boolean) {
   return apiFetch<boolean>(`${base(boardId)}/${postId}/pin`, { method: "PATCH", body: { isPinned } });
+}
+
+// 첨부파일 다운로드 (게시글 읽기 권한, Bearer 헤더가 필요해 fetch → Blob)
+export function downloadPostFile(boardId: number, postId: number, fileId: number) {
+  return apiFetchBlob(`${base(boardId)}/${postId}/files/${fileId}`);
 }
 
 // 이미 눌렀으면 409

@@ -17,6 +17,7 @@ import { BOARD_TYPE_LABEL } from "@/types/board";
 import { useBoardNavigation } from "../hooks/use-board-navigation";
 import { usePosts } from "../hooks/use-posts";
 import { BoardNotFound } from "./board-not-found";
+import { PostGrid } from "./post-grid";
 import { PostList } from "./post-list";
 
 const SEARCH_FIELDS = { title: "제목", content: "내용", author: "작성자" } as const;
@@ -129,7 +130,12 @@ export function BoardView({ boardId }: { boardId: number }) {
           <EmptyState message={searching ? "검색 결과가 없습니다." : "아직 게시글이 없습니다."} />
         ) : (
           <div className={cn(isFetching && "opacity-60 transition-opacity")}>
-            <PostList boardId={boardId} board={board} perm={perm} pinned={pinned} posts={data.data} />
+            {/* 앨범 게시판은 썸네일 그리드, 나머지는 행 목록 */}
+            {board.type === "ALBUM" ? (
+              <PostGrid boardId={boardId} board={board} perm={perm} pinned={pinned} posts={data.data} />
+            ) : (
+              <PostList boardId={boardId} board={board} perm={perm} pinned={pinned} posts={data.data} />
+            )}
           </div>
         )}
 

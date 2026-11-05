@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Res, StreamableFile } from "@nestjs/common";
+import type { Response } from "express";
 import { PostsService } from "./posts.service";
 import { Roles } from "src/auth/decorator/roles.decorator";
 import { UserRole, Users } from "src/generated/prisma/client";
@@ -94,6 +95,30 @@ export class PostsController {
 
     ){
         return this.postsService.likePost( user, boardId, postId );
+    }
+
+    //* 첨부파일 다운로드 (게시글 읽기 권한)
+    // 프론트는 <a href>가 아니라 fetch(Bearer 헤더)로 받아 blob으로 저장한다.
+    @Get(':postId/files/:fileId')
+    @Roles(UserRole.USER)
+    async downloadFile(
+        @User() user: Pick<Users, 'id' | 'role'>,
+        @Param('boardId', ParseIntPipe) boardId: number,
+        @Param('postId', ParseIntPipe) postId: number,
+        @Param('fileId', ParseIntPipe) fileId: number,
+        @Res({ passthrough: true }) res: Response,
+    ) {
+        const { stream, originalName, size } = await this.postsService.openAttachment( user, boardId, postId, fileId );
+
+        // 어떤 형식이든 브라우저가 열지(실행하지) 않고 내려받게 한다. (업로드한 html 등이 우리 출처에서 실행되는 것 방지)
+        res.setHeader( 'X-Content-Type-Options', 'nosniff' );
+
+        return new StreamableFile( stream, {
+            type: 'application/octet-stream',
+            length: size,
+            // 한글 파일명: RFC 5987 filename* (UTF-8 퍼센트 인코딩), 구형 클라이언트용 filename은 ASCII 대체
+            disposition: `attachment; filename="download"; filename*=UTF-8''${encodeURIComponent( originalName )}`,
+        });
     }
 
     //* 게시글 좋아요 취소

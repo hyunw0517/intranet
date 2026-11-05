@@ -1,5 +1,6 @@
 // 게시글·댓글 응답 타입 (백엔드 posts.service / comments.service 응답 기준, 날짜는 ISO 문자열)
 import type { BoardType } from "./board";
+import type { FileInfo } from "./file";
 import type { PageMeta } from "./pagination";
 
 // 게시판 권한 판정 결과 (BoardPermission) - 버튼 표시용. 실제 차단은 각 API가 서버에서 다시 검사한다.
@@ -56,6 +57,11 @@ export interface PostListItem extends AuthorSnapshot {
   createdAt: string;
   updatedAt: string;
   _count: { comments: number }; // 삭제되지 않은 댓글 수
+  // 대표 이미지(본문 첫 번째 이미지) 썸네일 주소. 앨범 게시판만 값이 있고,
+  // 이미지가 없는 글·볼 수 없는 비밀글·앨범이 아닌 게시판은 null
+  thumbnailUrl: string | null;
+  // 본문 이미지 수 (앨범 카드의 "+추가 이미지 수" 표시용). 앨범이 아닌 게시판·볼 수 없는 비밀글은 0
+  imageCount: number;
 }
 
 // GET /boards/:boardId/posts 응답
@@ -91,6 +97,7 @@ export interface PostDetail extends AuthorSnapshot {
     comment: boolean;
   };
   liked: boolean; // 내가 좋아요를 눌렀는지 (좋아요 버튼의 처음 상태)
+  files: FileInfo[]; // 첨부파일 (본문 이미지는 content 안에 있다)
 }
 
 // GET /boards/:boardId/posts/:postId/comments 항목

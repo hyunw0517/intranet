@@ -13,6 +13,12 @@ interface PostListProps {
   posts: PostListItem[];
 }
 
+// 열 수 있는 글인지 (목록·앨범 그리드 공용): 비밀글은 작성자 본인·게시판 관리자만. 서버는 볼 수 없는 비밀글의 작성자를 null로 보낸다.
+// (익명 게시판에서도 본인 글은 작성자가 오므로, 작성자가 있으면 본인 글이거나 볼 수 있는 글이다)
+export function canOpenPost(post: PostListItem, perm: BoardPermission) {
+  return !post.isSecret || perm.admin || post.author !== null;
+}
+
 // 열 너비 (머리글과 행이 같은 값을 쓴다): 제목 | 작성자 | 작성일 | 조회 | 좋아요
 const COLUMNS = "lg:grid lg:grid-cols-[minmax(0,1fr)_11rem_5.5rem_3.5rem_3.5rem] lg:items-center lg:gap-4";
 
@@ -60,9 +66,7 @@ function PostRow({
   post: PostListItem;
   pinned?: boolean;
 }) {
-  // 열 수 있는 글인지: 비밀글은 작성자 본인·게시판 관리자만. 서버는 볼 수 없는 비밀글의 작성자를 null로 보낸다.
-  // (익명 게시판에서도 본인 글은 작성자가 오므로, 작성자가 있으면 본인 글이거나 볼 수 있는 글이다)
-  const canOpen = !post.isSecret || perm.admin || post.author !== null;
+  const canOpen = canOpenPost(post, perm);
   const comments = post._count.comments;
 
   const title = (

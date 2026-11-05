@@ -53,6 +53,7 @@ export function PostCreateView({ boardId }: { boardId: number }) {
         board={data.board}
         initial={EMPTY_POST_FORM}
         showPin={data.perm.admin}
+        requireImage={data.board.type === "ALBUM"}
         submitLabel="등록"
         cancelHref={listHref}
         pending={mutation.isPending || mutation.isSuccess}
@@ -109,6 +110,7 @@ export function PostEditView({ boardId, postId }: { boardId: number; postId: num
           isSecret: data.isSecret,
           isPinned: data.isPinned,
           event: toEventInput(data.eventStartAt, data.eventEndAt, data.isAllDay),
+          files: data.files,
         }}
         showPin={false}
         submitLabel="저장"

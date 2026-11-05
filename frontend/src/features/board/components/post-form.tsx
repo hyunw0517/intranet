@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import type { PostInput } from "@/services/api/posts";
 import type { PostBoardInfo } from "@/types/post";
 import { EMPTY_EVENT, toEventPayload, validateEvent, type EventInput } from "../event-date";
+import type { FileInfo } from "@/types/file";
+import { AttachmentField } from "./attachment-field";
 import { RichTextEditor } from "./rich-text-editor";
 
 const TITLE_MAX = 100; // CreatePostDto @Length(1, 100)
@@ -21,14 +23,23 @@ export interface PostFormValues {
   isSecret: boolean;
   isPinned: boolean;
   event: EventInput;
+  files: FileInfo[]; // 첨부파일 (수정 화면은 기존 첨부)
 }
 
-export const EMPTY_POST_FORM: PostFormValues = { title: "", content: "", isSecret: false, isPinned: false, event: EMPTY_EVENT };
+export const EMPTY_POST_FORM: PostFormValues = {
+  title: "",
+  content: "",
+  isSecret: false,
+  isPinned: false,
+  event: EMPTY_EVENT,
+  files: [],
+};
 
 interface PostFormProps {
   board: PostBoardInfo;
   initial: PostFormValues;
   showPin: boolean; // 작성 화면 + 게시판 관리자일 때만 (수정 화면의 고정은 상세에서 따로 한다)
+  requireImage?: boolean; // 앨범 게시판 작성 화면만 (수정은 검사하지 않는다 - 서버 규칙과 같음)
   submitLabel: string;
   cancelHref: string;
   pending: boolean;
@@ -39,26 +50,43 @@ interface PostFormProps {
 // 게시글 작성·수정 폼
 // 게시판 설정에 따라 입력이 달라진다. (서버도 같은 기준으로 값을 무시·검사한다)
 // - 비밀글: 비밀글 허용 게시판만 / 일정: 캘린더 게시판만 / 고정: 작성 화면의 게시판 관리자만
-export function PostForm({ board, initial, showPin, submitLabel, cancelHref, pending, serverError, onSubmit }: PostFormProps) {
+// - 앨범 게시판 작성: 본문 이미지 1개 이상 (첫 번째 이미지가 목록 그리드의 대표 이미지)
+export function PostForm({
+  board,
+  initial,
+  showPin,
+  requireImage = false,
+  submitLabel,
+  cancelHref,
+  pending,
+  serverError,
+  onSubmit,
+}: PostFormProps) {
   const [title, setTitle] = useState(initial.title);
   const [content, setContent] = useState(initial.content);
   const [contentEmpty, setContentEmpty] = useState(!initial.content);
   const [isSecret, setIsSecret] = useState(initial.isSecret);
   const [isPinned, setIsPinned] = useState(initial.isPinned);
   const [event, setEvent] = useState(initial.event);
-  const [errors, setErrors] = useState<{ title?: string; event?: string }>({});
+  const [files, setFiles] = useState(initial.files);
+  const [errors, setErrors] = useState<{ title?: string; event?: string; content?: string }>({});
+  // 이미지·첨부 업로드 중에는 등록을 막는다. (올라가기 전 파일이 빠진 채 저장되지 않게)
+  const [imageUploading, setImageUploading] = useState(false);
+  const [fileUploading, setFileUploading] = useState(false);
+  const uploading = imageUploading || fileUploading;
 
   const isCalendar = board.type === "CALENDAR";
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (pending) return;
+    if (pending || uploading) return;
 
     const next: typeof errors = {};
     if (!title.trim()) next.title = "제목을 입력하세요.";
     if (isCalendar) next.event = validateEvent(event) ?? undefined;
+    if (requireImage && !content.includes("<img")) next.content = "앨범 게시판은 본문에 이미지를 1개 이상 넣어야 합니다.";
     setErrors(next);
-    if (next.title || next.event) return;
+    if (next.title || next.event || next.content) return;
 
     onSubmit({
       title: title.trim(),
@@ -67,6 +95,8 @@ export function PostForm({ board, initial, showPin, submitLabel, cancelHref, pen
       ...(board.allowSecret ? { isSecret } : {}),
       ...(showPin ? { isPinned } : {}),
       ...(isCalendar ? toEventPayload(event) : {}),
+      // 항상 최종 목록을 보낸다. (수정에서 모두 빼면 빈 배열 → 서버가 기존 첨부 삭제)
+      attachmentIds: files.map((f) => f.id),
     });
   };
 
@@ -100,7 +130,10 @@ export function PostForm({ board, initial, showPin, submitLabel, cancelHref, pen
       )}
 
       <div className="grid gap-1.5">
-        <Label id="post-content-label">내용</Label>
+        <Label id="post-content-label">
+          내용
+          {requireImage && <span className="font-normal text-muted-foreground">(이미지 1개 이상, 첫 번째 이미지가 대표 이미지)</span>}
+        </Label>
         <RichTextEditor
           id="post-content"
           labelledBy="post-content-label"
@@ -108,9 +141,18 @@ export function PostForm({ board, initial, showPin, submitLabel, cancelHref, pen
           onChange={(html, isEmpty) => {
             setContent(html);
             setContentEmpty(isEmpty);
+            if (errors.content && html.includes("<img")) setErrors((prev) => ({ ...prev, content: undefined }));
           }}
+          onUploadingChange={setImageUploading}
         />
+        {errors.content && (
+          <p id="post-content-message" role="alert" className="text-xs text-destructive">
+            {errors.content}
+          </p>
+        )}
       </div>
+
+      <AttachmentField value={files} onChange={setFiles} onUploadingChange={setFileUploading} />
 
       {(board.allowSecret || showPin) && (
         <div className="flex flex-wrap gap-x-6 gap-y-3">
@@ -139,9 +181,9 @@ export function PostForm({ board, initial, showPin, submitLabel, cancelHref, pen
         <Button asChild variant="outline">
           <Link href={cancelHref}>취소</Link>
         </Button>
-        <Button type="submit" disabled={pending}>
-          {pending && <Loader2 className="animate-spin" aria-hidden />}
-          {submitLabel}
+        <Button type="submit" disabled={pending || uploading}>
+          {(pending || uploading) && <Loader2 className="animate-spin" aria-hidden />}
+          {uploading ? "파일 올리는 중" : submitLabel}
         </Button>
       </div>
     </form>

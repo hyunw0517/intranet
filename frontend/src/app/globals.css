@@ -181,4 +181,22 @@
   .rich-text hr {
     @apply my-6 border-border;
   }
+  /* 본문 이미지: 본문 폭을 넘지 않게 (원본 비율 유지) */
+  .rich-text img {
+    @apply h-auto max-w-full rounded-md;
+  }
+  /* 외부 영상 (YouTube·Vimeo 임베드): 본문 폭에 맞춘 16:9 */
+  .rich-text [data-video-embed] {
+    @apply aspect-video w-full overflow-hidden rounded-md bg-muted;
+  }
+  .rich-text [data-video-embed] iframe {
+    @apply size-full border-0;
+  }
+  .rich-text [data-video-embed].ProseMirror-selectednode {
+    @apply outline-2 outline-ring;
+  }
+  /* 에디터에서 선택한 이미지 표시 (Tiptap이 붙이는 클래스) */
+  .rich-text img.ProseMirror-selectednode {
+    @apply outline-2 outline-ring;
+  }
 }

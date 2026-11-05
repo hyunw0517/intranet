@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { BoardType, Prisma, Users } from "src/generated/prisma/client";
+import { BoardType, FileTargetType, Prisma, Users } from "src/generated/prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
 import { BoardAuthService } from "./board-auth.service";
 import { PaginatePostQueryDto, PostSortBy } from "./dto/paginate-post-query.dto";
@@ -10,7 +10,9 @@ import { OrganizationService } from "src/organization/organization.service";
 import { UpdatePostDto } from "./dto/update-post.dto";
 import { MAX_PINNED_POSTS } from "./const/post.const";
 import { kstDayEnd, kstDayStart } from "src/common/util/date.util";
-import { sanitizeEditorHtml } from "src/common/util/sanitize-html.util";
+import { extractImageNames, sanitizeEditorHtml } from "src/common/util/sanitize-html.util";
+import { FileInfo, FilesService } from "src/common/files.service";
+import { FileKind } from "src/common/const/file.const";
 
 // 비밀글·익명 게시판에서 가리는 작성자 관련 필드
 type AuthorField = 'author' | 'authorDepartmentName' | 'authorPositionName' | 'authorJobTitleName';
@@ -22,6 +24,7 @@ export class PostsService {
         private readonly prisma: PrismaService, 
         private readonly boardAuthService: BoardAuthService, 
         private readonly organizationService: OrganizationService,
+        private readonly filesService: FilesService,
     ){}
 
     async paginatePost( 
@@ -92,13 +95,34 @@ export class PostsService {
             ),
         ]);
 
+        // 앨범 게시판: 대표 이미지(본문 첫 번째 이미지)의 썸네일 주소 + 본문 이미지 수 (카드의 "+추가 이미지 수" 표시용)
+        // 볼 수 없는 비밀글은 제목처럼 썸네일·이미지 수도 내려주지 않는다. (대표 이미지가 없으면 null → 화면에서 대체 이미지)
+        let thumbnails: Map<number, FileInfo> | null = null;
+        let imageCounts: Map<number, number> | null = null;
+        if ( board.type === BoardType.ALBUM ) {
+            const viewableIds = [ ...pinned, ...list.data ]
+                .filter( row => this.canViewSecret( row.isSecret, row.author.id, user.id, perm.admin ) )
+                .map( row => row.id );
+
+            [ thumbnails, imageCounts ] = await Promise.all([
+                this.filesService.findFirstByTargets( FileTargetType.POST_IMAGE, viewableIds ),
+                this.filesService.countByTargets( FileTargetType.POST_IMAGE, viewableIds ),
+            ]);
+        }
+
+        const toItem = ( row: ( typeof list.data )[number] ) => ({
+            ...this.maskListPost( row, user, perm, board.isAnonymous ),
+            thumbnailUrl: thumbnails?.get( row.id )?.thumbnailUrl ?? null,
+            imageCount: imageCounts?.get( row.id ) ?? 0,    // 앨범이 아니거나 볼 수 없는 비밀글은 0
+        });
+
         // 게시판 정보·권한도 함께 내려준다. (게시판 이름, 글쓰기 버튼, 비밀글 체크박스 표시용)
         return {
             board,
             perm,
-            pinned: pinned.map( row => this.maskListPost( row, user, perm, board.isAnonymous ) ),
+            pinned: pinned.map( toItem ),
             ...list,
-            data: list.data.map( row => this.maskListPost( row, user, perm, board.isAnonymous ) ),
+            data: list.data.map( toItem ),
         };
     }
 
@@ -257,23 +281,37 @@ export class PostsService {
         // 작성자 대표 소속/직급
         const author = await this.organizationService.getPrimaryOrganizationNames( user.id );
 
-        // INSERT
-        return await this.prisma.post.create({
-            data: {
-                boardId,
-                authorId: user.id,
-                authorPositionName: author.positionName,
-                authorDepartmentName: author.departmentName,
-                authorJobTitleName: author.jobTitleName,
-                title: body.title,
-                ...this.toContentFields( body.content ),
-                isPinned,
-                // 비밀글을 허용하지 않는 게시판이면 요청 값을 무시하고 false로 저장
-                isSecret: board.allowSecret && ( body.isSecret ?? false ),
-                ...this.resolveEventFields( board.type, body ),
-                createdId: user.id,
-                updatedId: user.id,
-            },
+        // 본문 정제 + 본문 이미지 id
+        const { imageIds, ...contentFields } = await this.toContentFields( body.content, user.id, null );
+
+        // 앨범 게시판은 작성할 때 이미지가 1개 이상 있어야 한다. (수정·타입 변경으로 이미지가 없어진 글은 대체 이미지로 표시)
+        if( board.type === BoardType.ALBUM && imageIds.length === 0 ){
+            throw new BadRequestException('앨범 게시판은 본문에 이미지를 1개 이상 넣어야 합니다.');
+        }
+
+        // 글 저장과 파일 연결을 한 트랜잭션으로 (파일 연결이 실패하면 글도 저장하지 않는다)
+        return await this.prisma.$transaction( async ( tx ) => {
+            const post = await tx.post.create({
+                data: {
+                    boardId,
+                    authorId: user.id,
+                    authorPositionName: author.positionName,
+                    authorDepartmentName: author.departmentName,
+                    authorJobTitleName: author.jobTitleName,
+                    title: body.title,
+                    ...contentFields,
+                    isPinned,
+                    // 비밀글을 허용하지 않는 게시판이면 요청 값을 무시하고 false로 저장
+                    isSecret: board.allowSecret && ( body.isSecret ?? false ),
+                    ...this.resolveEventFields( board.type, body ),
+                    createdId: user.id,
+                    updatedId: user.id,
+                },
+            });
+
+            await this.syncPostFiles( tx, post.id, user.id, imageIds, body.attachmentIds ?? [] );
+
+            return post;
         });
 
     }
@@ -306,6 +344,9 @@ export class PostsService {
             }),
         ]);
 
+        // 첨부파일 목록 (본문 이미지는 본문 HTML에 들어 있으므로 제외)
+        const files = await this.filesService.listByTarget( FileTargetType.POST, postId );
+
         // 버튼 표시용 권한 (서버 판정 결과, 실제로 막는 것은 각 API의 검사)
         const isAuthor = post.author.id === user.id;
         const can = {
@@ -323,6 +364,7 @@ export class PostsService {
         return {
             ...detail,
             liked: myLike !== null,     // 내가 좋아요를 눌렀는지
+            files,                      // 첨부파일 (다운로드: GET .../posts/:postId/files/:fileId)
             board,
             can,
         };
@@ -340,24 +382,34 @@ export class PostsService {
         // 작성자 대표 소속/직급
         const author = await this.organizationService.getPrimaryOrganizationNames( user.id );
 
-        return await this.prisma.post.update({
-            where: {
-                id: postId,
-            },
-            data: {
-                authorId: user.id,
-                authorPositionName: author.positionName,
-                authorDepartmentName: author.departmentName,
-                authorJobTitleName: author.jobTitleName,
-                title: body.title,
-                ...this.toContentFields( body.content ),
-                // 고정 여부는 별도 API(pinPost)에서만 바꾼다. (작성자 수정으로 관리자가 고정한 글이 풀리지 않게)
-                // 비밀글을 허용하지 않는 게시판이면 기존 값 유지 (허용 → 비허용으로 바뀐 게시판의 기존 비밀글이 공개되지 않게)
-                isSecret: board.allowSecret ? ( body.isSecret ?? false ) : undefined,
-                ...this.resolveEventFields( board.type, body ),
-                updatedId: user.id,
-                editedAt: new Date(),
-            },
+        // 본문 정제 + 본문 이미지 id (이 글에 이미 연결된 이미지도 유지 대상)
+        const { imageIds, ...contentFields } = await this.toContentFields( body.content, user.id, postId );
+
+        return await this.prisma.$transaction( async ( tx ) => {
+            const post = await tx.post.update({
+                where: {
+                    id: postId,
+                },
+                data: {
+                    authorId: user.id,
+                    authorPositionName: author.positionName,
+                    authorDepartmentName: author.departmentName,
+                    authorJobTitleName: author.jobTitleName,
+                    title: body.title,
+                    ...contentFields,
+                    // 고정 여부는 별도 API(pinPost)에서만 바꾼다. (작성자 수정으로 관리자가 고정한 글이 풀리지 않게)
+                    // 비밀글을 허용하지 않는 게시판이면 기존 값 유지 (허용 → 비허용으로 바뀐 게시판의 기존 비밀글이 공개되지 않게)
+                    isSecret: board.allowSecret ? ( body.isSecret ?? false ) : undefined,
+                    ...this.resolveEventFields( board.type, body ),
+                    updatedId: user.id,
+                    editedAt: new Date(),
+                },
+            });
+
+            // 첨부는 attachmentIds를 보냈을 때만 맞춘다. (안 보내면 기존 첨부 유지)
+            await this.syncPostFiles( tx, postId, user.id, imageIds, body.attachmentIds );
+
+            return post;
         });
     }
 
@@ -369,28 +421,88 @@ export class PostsService {
     ) {
         await this.checkPost(boardId, postId, user, 'delete');
 
-        await this.prisma.post.update({
-            where: { 
-                id: postId
-            },
-            data: { 
-                deleted: true,
-                deletedAt: new Date(),
-                deletedId: user.id,
-            },
+        // 글과 연결 파일(첨부·본문 이미지)을 함께 soft delete (실제 파일은 남겨 둔다)
+        await this.prisma.$transaction( async ( tx ) => {
+            await tx.post.update({
+                where: {
+                    id: postId
+                },
+                data: {
+                    deleted: true,
+                    deletedAt: new Date(),
+                    deletedId: user.id,
+                },
+            });
+
+            await this.filesService.softDeleteByTarget( tx, [ FileTargetType.POST, FileTargetType.POST_IMAGE ], postId, user.id );
         });
 
         return true;
     }
 
-    //* 본문 정제 (작성·수정 공용) → 저장용 HTML + 검색용 텍스트
-    // 허용 목록 외의 태그·속성은 제거하고, 정제 후 내용이 없으면 null로 저장한다.
-    private toContentFields(
-        content: string | null | undefined,
-    ){
-        const { html, text } = sanitizeEditorHtml( content );
+    //* 첨부파일 다운로드 (게시글 읽기 권한 확인 후 스트림)
+    async openAttachment(
+        user: Pick<Users, 'id' | 'role'>,
+        boardId: number,
+        postId: number,
+        fileId: number,
+    ) {
+        await this.checkPost( boardId, postId, user, 'read' );
 
-        return { content: html, contentText: text };
+        return this.filesService.openTargetFile( fileId, FileTargetType.POST, postId );
+    }
+
+    //* 본문 정제 (작성·수정 공용) → 저장용 HTML + 검색용 텍스트 + 본문 이미지 id
+    // 허용 목록 외의 태그·속성은 제거하고, 정제 후 내용이 없으면 null로 저장한다.
+    // 본문 이미지는 "내가 올린 미연결 이미지 + 이 글에 이미 연결된 이미지"만 남긴다.
+    // (다른 글의 이미지 주소를 붙여 넣으면 그 글이 삭제될 때 함께 깨지므로 본문에서 제거)
+    private async toContentFields(
+        content: string | null | undefined,
+        userId: number,
+        postId: number | null,
+    ){
+        const first = sanitizeEditorHtml( content );
+        const names = extractImageNames( first.html );
+        const usable = await this.filesService.findUsableImages( names, userId, FileTargetType.POST_IMAGE, postId );
+
+        // 쓸 수 없는 이미지가 있을 때만 한 번 더 정제해 제거한다.
+        const { html, text } = usable.size === names.length
+            ? first
+            : sanitizeEditorHtml( first.html, { allowImage: ( name ) => usable.has( name ) } );
+
+        // 본문 순서 = 이미지 순서 (앨범 대표 이미지는 첫 번째 이미지)
+        const imageIds = extractImageNames( html ).map( ( name ) => usable.get( name )! );
+
+        return { content: html, contentText: text, imageIds };
+    }
+
+    //* 게시글 파일 연결 (작성·수정 공용, 트랜잭션 안에서)
+    // - 본문 이미지: 항상 본문 기준으로 맞춘다. (본문에서 지운 이미지는 삭제)
+    // - 첨부: attachmentIds가 undefined면 건드리지 않는다.
+    private async syncPostFiles(
+        tx: Prisma.TransactionClient,
+        postId: number,
+        userId: number,
+        imageIds: number[],
+        attachmentIds: number[] | undefined,
+    ){
+        await this.filesService.syncTargetFiles( tx, {
+            kind: FileKind.IMAGE,
+            targetType: FileTargetType.POST_IMAGE,
+            targetId: postId,
+            fileIds: imageIds,
+            userId,
+        });
+
+        if ( attachmentIds !== undefined ) {
+            await this.filesService.syncTargetFiles( tx, {
+                kind: FileKind.ATTACHMENT,
+                targetType: FileTargetType.POST,
+                targetId: postId,
+                fileIds: attachmentIds,
+                userId,
+            });
+        }
     }
 
     //* 일정 필드 정리 (작성·수정 공용)

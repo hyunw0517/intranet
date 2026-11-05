@@ -110,11 +110,11 @@ function send(path: string, options: ApiRequestOptions) {
   });
 }
 
-export async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+// 요청 + access token 만료 시 재발급 1회 → 원래 요청 1회 재시도
+// /auth/* 요청은 재발급 대상이 아니다. (재발급 자체가 401이면 무한 반복되므로)
+async function sendWithRefresh(path: string, options: ApiRequestOptions) {
   let res = await send(path, options);
 
-  // access token 만료 → 재발급 1회 → 원래 요청 1회 재시도
-  // /auth/* 요청은 재발급 대상이 아니다. (재발급 자체가 401이면 무한 반복되므로)
   if (res.status === 401 && !options.skipAuth && !path.startsWith("/auth/")) {
     const newToken = await refreshAccessToken();
     if (newToken) {
@@ -124,13 +124,30 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
     }
   }
 
+  return res;
+}
+
+function toApiError(status: number, data: unknown) {
+  const err = (typeof data === "object" && data !== null ? data : {}) as NestErrorBody;
+  const messages = Array.isArray(err.message) ? err.message : err.message ? [err.message] : [];
+  return new ApiError(status, messages, data);
+}
+
+export async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const res = await sendWithRefresh(path, options);
   const data = await parseBody(res);
 
-  if (!res.ok) {
-    const err = (typeof data === "object" && data !== null ? data : {}) as NestErrorBody;
-    const messages = Array.isArray(err.message) ? err.message : err.message ? [err.message] : [];
-    throw new ApiError(res.status, messages, data);
-  }
+  if (!res.ok) throw toApiError(res.status, data);
 
   return data as T;
+}
+
+// 파일 응답을 Blob으로 받는다. (첨부 다운로드)
+// <a href>로는 Authorization 헤더를 보낼 수 없어 fetch로 받은 뒤 화면에서 저장한다.
+export async function apiFetchBlob(path: string, options: ApiRequestOptions = {}): Promise<Blob> {
+  const res = await sendWithRefresh(path, options);
+
+  if (!res.ok) throw toApiError(res.status, await parseBody(res));
+
+  return res.blob();
 }

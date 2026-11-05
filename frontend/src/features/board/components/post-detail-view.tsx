@@ -19,6 +19,7 @@ import type { PostDetail } from "@/types/post";
 import { formatEventRange } from "../event-date";
 import { usePost, usePostCache } from "../hooks/use-posts";
 import { PostNotFound } from "./board-not-found";
+import { readBoardListHref, useBoardListHref } from "../board-list-href";
 import { CommentSection } from "./comment-section";
 import { PostAttachments } from "./post-attachments";
 import { PostAuthorLabel } from "./post-author";
@@ -115,9 +116,11 @@ export function PostDetailView({ boardId, postId }: { boardId: number; postId: n
 }
 
 function BackLink({ boardId, label }: { boardId: number; label: string }) {
+  // 보던 목록 조건(페이지·검색, 달력의 년월·보기)으로 돌아간다.
+  const listHref = useBoardListHref(boardId);
   return (
     <Button asChild variant="ghost" size="sm" className="w-fit -ml-2 text-muted-foreground">
-      <Link href={`/boards/${boardId}`}>
+      <Link href={listHref}>
         <ChevronLeft aria-hidden />
         {label}
       </Link>
@@ -148,7 +151,7 @@ function PostActions({ boardId, post }: { boardId: number; post: PostDetail }) {
       setConfirmOpen(false);
       cache.markDetailStale(post.id);
       await cache.invalidateLists();
-      router.replace(`/boards/${boardId}`);
+      router.replace(readBoardListHref(boardId));
       toast.success("게시글을 삭제했습니다.");
     },
     onError: (error) => toast.error(getErrorMessage(error)),

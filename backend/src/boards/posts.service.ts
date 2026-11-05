@@ -8,7 +8,7 @@ import { BoardPermission } from "./interface/board-permission.interface";
 import { CreatePostDto } from "./dto/create-post.dto";
 import { OrganizationService } from "src/organization/organization.service";
 import { UpdatePostDto } from "./dto/update-post.dto";
-import { MAX_PINNED_POSTS } from "./const/post.const";
+import { MAX_CALENDAR_RANGE_DAYS, MAX_PINNED_POSTS } from "./const/post.const";
 import { kstDayEnd, kstDayStart } from "src/common/util/date.util";
 import { extractImageNames, sanitizeEditorHtml } from "src/common/util/sanitize-html.util";
 import { FileInfo, FilesService } from "src/common/files.service";
@@ -124,6 +124,94 @@ export class PostsService {
             ...list,
             data: list.data.map( toItem ),
         };
+    }
+
+    //* 캘린더 일정 조회 (통합 조회 / 게시판 하나)
+    // - 대상 게시판: { boardId } → 그 게시판(읽기 권한 없으면 404, 캘린더가 아니면 400)
+    //                { boardIds } → 볼 수 있는 캘린더 게시판과의 교집합 (null이면 볼 수 있는 캘린더 전체)
+    // - 기간: 겹치는 일정 모두 (eventStartAt < end && eventEndAt >= start) → 여러 날 일정이 기간 앞뒤로 걸쳐도 빠지지 않음
+    // - 비밀글 일정은 작성자 본인에게만 보인다. (게시판 관리자·시스템 관리자도 달력·일정 목록에서는 볼 수 없음, 사용자 결정)
+    //   게시글 상세는 기존 규칙(작성자 + 게시판 관리자)을 따른다.
+    // - 익명 캘린더 게시판은 본인 일정이 아니면 작성자를 가린다.
+    async findCalendarEvents(
+        user: Pick<Users, 'id' | 'role'>,
+        target: { boardId: number } | { boardIds: number[] | null },
+        start: Date,
+        end: Date,
+    ){
+        if( end <= start ){
+            throw new BadRequestException('조회 종료일시는 시작일시보다 뒤여야 합니다.');
+        }
+        // 달력 한 화면(최대 6주) + 여유. 범위 제한 없이 열어 두면 한 번에 모든 일정을 읽을 수 있다.
+        if( end.getTime() - start.getTime() > MAX_CALENDAR_RANGE_DAYS * 24 * 60 * 60 * 1000 ){
+            throw new BadRequestException(`일정은 한 번에 ${MAX_CALENDAR_RANGE_DAYS}일까지 조회할 수 있습니다.`);
+        }
+
+        const boards = await this.resolveCalendarBoards( user, target );
+        if( boards.length === 0 ){
+            return { boards: [], events: [] };
+        }
+        const anonymousIds = new Set( boards.filter( b => b.isAnonymous ).map( b => b.id ) );
+
+        const rows = await this.prisma.post.findMany({
+            select: {
+                id: true,
+                boardId: true,
+                title: true,
+                eventStartAt: true,
+                eventEndAt: true,
+                isAllDay: true,
+                isSecret: true,
+                author: { select: { id: true, name: true, nickname: true } },
+            },
+            where: {
+                boardId: { in: boards.map( b => b.id ) },
+                deleted: false,
+                eventStartAt: { lt: end },
+                eventEndAt: { gte: start },
+                OR: [ { isSecret: false }, { authorId: user.id } ],
+            },
+            orderBy: [ { eventStartAt: 'asc' }, { id: 'asc' } ],
+        });
+
+        return {
+            boards: boards.map( ( { id, name } ) => ({ id, name }) ),
+            events: rows.map( ( row ) => ({
+                ...row,
+                author: this.isAuthorHidden( anonymousIds.has( row.boardId ), row.author.id, user.id ) ? null : row.author,
+            }) ),
+        };
+    }
+
+    //* 일정을 조회할 캘린더 게시판 (id·이름·익명 여부)
+    private async resolveCalendarBoards(
+        user: Pick<Users, 'id' | 'role'>,
+        target: { boardId: number } | { boardIds: number[] | null },
+    ){
+        if( 'boardId' in target ){
+            const { board } = await this.boardAuthService.assertBoardPermission( target.boardId, user, 'read' );
+            if( board.type !== BoardType.CALENDAR ){
+                throw new BadRequestException('캘린더 게시판이 아닙니다.');
+            }
+            return [ { id: board.id, name: board.name, isAnonymous: board.isAnonymous } ];
+        }
+
+        // 읽기 권한 판정은 내비게이션과 같은 로직을 쓴다. (메뉴에 보이는 캘린더 = 일정을 볼 수 있는 캘린더)
+        const navigation = await this.boardAuthService.getUserBoardNavigate( user );
+        const requested = target.boardIds ? new Set( target.boardIds ) : null;
+        const ids = navigation
+            .filter( ( b ) => b.type === BoardType.CALENDAR && ( !requested || requested.has( b.id ) ) )
+            .map( ( b ) => b.id );
+
+        if( ids.length === 0 ){
+            return [];
+        }
+
+        return this.prisma.board.findMany({
+            select: { id: true, name: true, isAnonymous: true },
+            where: { id: { in: ids }, deleted: false },
+            orderBy: [ { sortOrder: 'asc' }, { id: 'asc' } ],
+        });
     }
 
     //* 게시글 목록 select (일반 조회·정렬 조회 공용)

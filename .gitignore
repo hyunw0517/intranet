@@ -81,3 +81,4 @@ claude_guide[0-9]*.md
 CLAUDE.md
 Plan.md
 docs/*
+/AGENTS.md

@@ -686,6 +686,7 @@ export class UsersService {
       select: {
         id: true,
         empNo: true,
+        role: true, // 새 access token에 넣을 권한
         tokenVersion: true,
       },
     });
@@ -705,9 +706,28 @@ export class UsersService {
       select: {
         id: true,
         empNo: true,
+        role: true, // 새 access token에 넣을 권한
         tokenVersion: true,
       },
     });
+  }
+
+  //* 내 정보 조회 (GET /users/me)
+  //  - access token 검증은 DB를 보지 않으므로(req.user = payload) 회원 정보는 여기서 조회한다.
+  //  - 비밀번호 해시는 Prisma 전역 omit으로 제외된다.
+  async getMyInfo(id: number){
+    const user = await this.prisma.users.findFirst({
+      where: {
+        id,
+        deleted: false,
+      },
+    });
+
+    if( !user ){
+      throw new UnauthorizedException('존재하지 않는 사용자입니다.');
+    }
+
+    return user;
   }
 
   //* 회원 삭제 (soft delete)

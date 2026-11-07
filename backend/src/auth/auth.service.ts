@@ -12,7 +12,7 @@ import { ACCESS_TOKEN_EXPIRES_IN, REFRESH_TOKEN_EXPIRES_IN } from './const/token
 import { JwtPayload } from './types/jwt-payload.type';
 import { AuthSessionsService, SessionForToken } from './auth-sessions.service';
 
-type TokenUser = Pick<Users, 'id' | 'empNo' | 'tokenVersion'>;
+type TokenUser = Pick<Users, 'id' | 'empNo' | 'role' | 'tokenVersion'>;
 type SessionUser = Pick<Users, 'id' | 'tokenVersion'>;
 
 @Injectable()
@@ -97,14 +97,16 @@ export class AuthService {
       }
     }
 
-  //* Access Token 생성 - stateless (세션 DB를 보지 않음)
+  //* Access Token 생성 - stateless (검증할 때 회원·세션 DB를 보지 않음)
+  //    - role: RolesGuard가 이 값으로 권한을 판단한다. 권한이 바뀌면 다음 재발급(최대 10분)부터 반영된다.
   //    - sid는 "지금 기기" 표시(기기 목록)와 전체 로그아웃·비밀번호 변경 시 현재 기기 유지에 쓴다.
   private signAccessToken( user: TokenUser, sessionId: string ){
     return this.jwtService.sign({
         empNo: user.empNo,
         sub: user.id,
         type: 'access',
-        ver: user.tokenVersion, // DB의 tokenVersion과 다르면 무효 토큰
+        ver: user.tokenVersion, // 발급 당시 tokenVersion (access 검증에서는 비교하지 않음, 재발급 때 refresh로 비교)
+        role: user.role,
         sid: sessionId,
     }, {
         secret: this.configService.get<string>(ENV_JWT_SECRET),

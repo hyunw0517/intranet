@@ -3,23 +3,35 @@ import { AuthService } from "../auth.service";
 import { UsersService } from "src/users/users.service";
 import { Reflector } from "@nestjs/core";
 import { IS_PUBLIC_KEY } from "src/common/decorator/is-public.decorator";
+import { TokenUserPayload } from "../types/jwt-payload.type";
 
+/**
+ * *[토큰 검증 두 갈래]
+ *
+ * 1) access token (일반 API, 전역 AccessTokenGuard) → authenticateAccess()
+ *    서명·만료·type만 확인하고 req.user를 payload(id·empNo·role·ver)로 채운다. DB 조회 없음.
+ *    → 권한 변경·퇴사·비밀번호 변경·모든 기기 로그아웃은 access 만료(최대 10분)까지 반영되지 않는다. (2026-11-07 결정)
+ *
+ * 2) refresh token (재발급 라우트, RefreshTokenGuard) → authenticate()
+ *    서명·만료에 더해 회원 조회 → tokenVersion 일치 → 상태(ACTIVE) 확인.
+ *    → 위 변경 사항은 늦어도 다음 재발급에서 막힌다. 새 access에는 DB의 최신 role이 들어간다.
+ */
 @Injectable()
 export class BearerTokenGuard implements CanActivate {
-    
+
     constructor(
-        private readonly authService: AuthService, 
-        private readonly usersService: UsersService, 
-        private readonly reflector: Reflector, 
+        private readonly authService: AuthService,
+        private readonly usersService: UsersService,
+        private readonly reflector: Reflector,
     ){}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
 
         const isPublic = this.reflector.getAllAndOverride(
-            IS_PUBLIC_KEY, 
+            IS_PUBLIC_KEY,
             [
-                context.getHandler(), 
-                context.getClass(), 
+                context.getHandler(),
+                context.getClass(),
             ]
         )
 
@@ -32,19 +44,13 @@ export class BearerTokenGuard implements CanActivate {
             // "로그인 없이도 볼 수 있지만, 로그인했으면 개인화된 정보(예: 내가 좋아요했는지)도
             // 함께 보여준다" 같은 케이스를 위한 것. 토큰이 없거나 유효하지 않아도 공개
             // 라우트이므로 에러를 던지지 않고 그냥 비로그인으로 취급한다.
-            // 검증은 일반 라우트와 같은 authenticate()를 써서 tokenVersion·상태 체크가 빠지지 않게 한다.
+            // 공개 라우트에서도 access token만 로그인으로 인정한다. (authenticateAccess가 type 확인)
             const rawToken = req.headers['authorization'];
 
             if( rawToken ){
                 try{
                     const token = this.authService.extractTokenFromHeader(rawToken, true);
-                    await this.authenticate(req, token);
-
-                    // 공개 라우트에서도 access token만 로그인으로 인정한다.
-                    if( req.tokenType !== 'access' ){
-                        throw new UnauthorizedException('Access Token이 아닙니다.');
-                    }
-
+                    this.authenticateAccess(req, token);
                 }catch{
                     // 비로그인으로 취급 - 검증 도중 채워진 값은 지운다.
                     req.user = undefined;
@@ -66,24 +72,50 @@ export class BearerTokenGuard implements CanActivate {
 
         const token = this.authService.extractTokenFromHeader(rawToken, true);
 
-        await this.authenticate(req, token);
+        this.authenticateAccess(req, token);
 
         return true;
     }
 
-    //* 토큰 검증 -> 사용자 조회 -> 상태 체크 -> req에 저장
+    //* access token 검증 -> payload로 req.user 채우기 (DB 조회 없음, stateless)
+    protected authenticateAccess(req: any, token: string): void {
+        const result = this.authService.verifyToken(token);
+
+        if( result.type !== 'access' ){
+            throw new UnauthorizedException('Access Token이 아닙니다.');
+        }
+
+        // role이 없는 토큰 = 이 방식 이전에 발급된 토큰 → 401로 재발급을 유도한다.
+        if( !result.empNo || !result.role ){
+            throw new UnauthorizedException('잘못된 토큰입니다.');
+        }
+
+        const user: TokenUserPayload = {
+            id: result.sub,
+            empNo: result.empNo,
+            role: result.role,
+            tokenVersion: result.ver,
+        };
+
+        req.tokenPayload = result;
+        req.tokenType = result.type;
+        req.sessionId = result.sid;
+        req.user = user;
+    }
+
+    //* refresh token 검증 -> 사용자 조회 -> tokenVersion·상태 체크 -> req에 저장
     //      - 토큰을 어디서 꺼낼지(헤더/쿠키)는 호출하는 쪽이 정하고, 여기서는 검증만 한다.
-    //      - public 여부와 상관없이 무조건 검증한다. (RefreshTokenGuard에서도 사용)
+    //      - public 여부와 상관없이 무조건 검증한다. (RefreshTokenGuard에서 사용)
     protected async authenticate(req: any, token: string): Promise<void> {
-        const result = await this.authService.verifyToken(token);
+        const result = this.authService.verifyToken(token);
 
         /**
          * request에 넣을 정보
          *
-         * 1) 사용자 정보 - user
+         * 1) 사용자 정보 - user (DB에서 조회한 최신 회원 → 새 access token의 role도 이 값)
          * 2) 검증된 payload - tokenPayload (재발급 시 sid·jti로 세션 확인)
          * 3) tokenType - access | refresh
-         * 4) 세션 id - sessionId (@SessionId() 데코레이터로 꺼냄)
+         * 4) 세션 id - sessionId
          */
         if( !result.empNo ){
             throw new UnauthorizedException('잘못된 토큰입니다.');
@@ -109,24 +141,9 @@ export class BearerTokenGuard implements CanActivate {
     }
 }
 
+//* 전역 가드 - 공개 라우트가 아니면 access token 필수 (검증은 BearerTokenGuard.authenticateAccess)
 @Injectable()
-export class AccessTokenGuard extends BearerTokenGuard {
-    async canActivate(context: ExecutionContext): Promise<boolean> {
-        await super.canActivate(context);
-
-        const req = context.switchToHttp().getRequest();
-
-        if( req.isRoutePublic ){
-            return true;
-        }
-
-        if(req.tokenType !== 'access'){
-            throw new UnauthorizedException('Access Token이 아닙니다.'); 
-        }
-
-        return true; 
-    }
-}
+export class AccessTokenGuard extends BearerTokenGuard {}
 
 @Injectable()
 export class RefreshTokenGuard extends BearerTokenGuard {
@@ -146,9 +163,9 @@ export class RefreshTokenGuard extends BearerTokenGuard {
         await this.authenticate(req, token);
 
         if(req.tokenType !== 'refresh'){
-            throw new UnauthorizedException('Refresh Token이 아닙니다.'); 
+            throw new UnauthorizedException('Refresh Token이 아닙니다.');
         }
 
-        return true; 
+        return true;
     }
 }

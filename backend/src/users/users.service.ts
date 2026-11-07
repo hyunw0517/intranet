@@ -691,6 +691,25 @@ export class UsersService {
     });
   }
 
+  //* 토큰 버전 증가 (모든 기기에서 로그아웃)
+  //  - 이 사용자에게 발급된 모든 토큰(다른 기기 포함)이 무효가 된다.
+  //  - 지금 기기에 새 토큰을 발급할 수 있도록 바뀐 tokenVersion을 돌려준다.
+  async increaseTokenVersion(id: number) {
+    return await this.prisma.users.update({
+      where: {
+        id,
+      },
+      data: {
+        tokenVersion: { increment: 1 },
+      },
+      select: {
+        id: true,
+        empNo: true,
+        tokenVersion: true,
+      },
+    });
+  }
+
   //* 회원 삭제 (soft delete)
   //  - 회원 탈퇴
   //  - 본인 확인을 위해 현재 비밀번호를 먼저 검증한다.

@@ -50,7 +50,7 @@ export function register(input: RegisterInput) {
   });
 }
 
-// 로그아웃 → refresh 쿠키 삭제
+// 로그아웃 → refresh 쿠키 삭제 + 서버가 이 기기의 세션만 폐기 (다른 기기는 유지)
 export function logout() {
   return apiFetch<boolean>("/auth/logout", { method: "POST", skipAuth: true });
 }

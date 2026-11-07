@@ -48,8 +48,9 @@ export class BearerTokenGuard implements CanActivate {
                 }catch{
                     // 비로그인으로 취급 - 검증 도중 채워진 값은 지운다.
                     req.user = undefined;
-                    req.token = undefined;
+                    req.tokenPayload = undefined;
                     req.tokenType = undefined;
+                    req.sessionId = undefined;
                 }
             }
 
@@ -77,11 +78,12 @@ export class BearerTokenGuard implements CanActivate {
         const result = await this.authService.verifyToken(token);
 
         /**
-         * request에 넣을 정보 
-         * 
+         * request에 넣을 정보
+         *
          * 1) 사용자 정보 - user
-         * 2) token - token
+         * 2) 검증된 payload - tokenPayload (재발급 시 sid·jti로 세션 확인)
          * 3) tokenType - access | refresh
+         * 4) 세션 id - sessionId (@SessionId() 데코레이터로 꺼냄)
          */
         if( !result.empNo ){
             throw new UnauthorizedException('잘못된 토큰입니다.');
@@ -100,8 +102,9 @@ export class BearerTokenGuard implements CanActivate {
 
         this.authService.checkUserStatus(user); // 회원 상태 값 체크
 
-        req.token = token;
+        req.tokenPayload = result;
         req.tokenType = result.type;
+        req.sessionId = result.sid;
         req.user = user;
     }
 }
@@ -129,6 +132,7 @@ export class AccessTokenGuard extends BearerTokenGuard {
 export class RefreshTokenGuard extends BearerTokenGuard {
     // 토큰 재발급 라우트는 전역 AccessTokenGuard를 건너뛰기 위해 @IsPublic()을 붙이므로,
     // public 여부와 상관없이 항상 검증한다.
+    // 여기서는 JWT·회원 단위 검사까지만 하고, 세션(sid·jti) 확인과 교체는 AuthSessionsService.rotateSession이 한다.
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const req = context.switchToHttp().getRequest();
 

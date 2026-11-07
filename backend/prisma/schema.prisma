@@ -177,6 +177,7 @@ model Users {
   leaveRequests           LeaveRequest[]              @relation("LeaveRequestUser")             // 연차/병가 신청 목록
   chatRooms               ChatRoomMember[]    // 참여 중인 채팅방
   chatMessages            ChatMessage[]               @relation("ChatMessageSender")            // 보낸 채팅 메시지
+  authSessions            AuthSession[]       // 로그인 세션 (기기별 refresh token)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -190,7 +191,32 @@ model Users {
   @@map("users_model")
 }
 
-//* 부서 -> 모듈: Organization 
+//* 로그인 세션 -> 모듈: Auth
+//  - 로그인 1번 = 행 1개 (기기·브라우저별). refresh token payload의 sid가 이 행의 id다.
+//  - access token은 stateless로 두고, refresh token만 이 테이블로 폐기·교체(rotation)를 관리한다.
+//  - 재발급할 때마다 currentJti를 새 값으로 바꾸고, 직전 값은 previousJti에 남긴다.
+//    이미 교체된 jti가 다시 들어오면 탈취로 보고 세션을 폐기한다. (단, 교체 직후 1분은 다른 탭의 동시 요청으로 허용)
+model AuthSession {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       Int       @map("user_id")
+  tokenVersion Int       @map("token_version") // 발급 당시 Users.tokenVersion (다르면 비밀번호 변경·전체 로그아웃으로 끊긴 세션)
+  currentJti   String    @map("current_jti") @db.Uuid  // 현재 유효한 refresh token의 jti
+  previousJti  String?   @map("previous_jti") @db.Uuid // 직전 refresh token의 jti (유예 시간 판단용)
+  rotatedAt    DateTime? @map("rotated_at")   // 마지막 교체 시각
+  userAgent    String?   @map("user_agent") @db.VarChar(500) // 기기 목록 표시용
+  lastUsedAt   DateTime  @default(now()) @map("last_used_at") // 마지막 재발급 시각 (유휴 만료 판단)
+  expiresAt    DateTime  @map("expires_at")   // 절대 만료 (로그인 + 7일, 재발급해도 늘어나지 않음)
+  revokedAt    DateTime? @map("revoked_at")   // 폐기 시각 (로그아웃·기기 로그아웃·재사용 감지)
+
+  user         Users     @relation(fields: [userId], references: [id])
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("auth_session_model")
+}
+
+//* 부서 -> 모듈: Organization
 model Department {
   id        Int      @id @default(autoincrement())
   parentDepartmentId Int? @map("parent_department_id") // 상위 부서 id (최상위 부서는 NULL)

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from 'src/users/users.service';
 import * as bcrypt from 'bcrypt';
@@ -8,6 +8,12 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { ConfigService } from '@nestjs/config';
 import { ENV_HASH_ROUNDS_KEY, ENV_JWT_SECRET } from 'src/common/const/env-keys.const';
 import { Users, UserStatus } from 'src/generated/prisma/client';
+import { ACCESS_TOKEN_EXPIRES_IN, REFRESH_TOKEN_EXPIRES_IN } from './const/token-const';
+import { JwtPayload } from './types/jwt-payload.type';
+import { AuthSessionsService, SessionForToken } from './auth-sessions.service';
+
+type TokenUser = Pick<Users, 'id' | 'empNo' | 'role' | 'tokenVersion'>;
+type SessionUser = Pick<Users, 'id' | 'tokenVersion'>;
 
 @Injectable()
 export class AuthService {
@@ -16,6 +22,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly usersService: UsersService,
+    private readonly authSessionsService: AuthSessionsService,
   ){}
 
     /**
@@ -76,63 +83,140 @@ export class AuthService {
         }
     }
 
-    //* 토큰 검증
-    verifyToken( token: string ){
+    //* 토큰 검증 (서명 + 만료만 확인)
+    //    - tokenVersion·회원 상태·세션은 가드와 AuthSessionsService가 따로 확인한다.
+    //    - algorithms를 지정해 서버가 허용할 알고리즘을 정한다. (헤더의 alg를 믿지 않음 → alg: none 등 차단)
+    verifyToken( token: string ): JwtPayload {
       try{
-        return this.jwtService.verify(token, {
-          secret: this.configService.get<string>(ENV_JWT_SECRET), 
+        return this.jwtService.verify<JwtPayload>(token, {
+          secret: this.configService.get<string>(ENV_JWT_SECRET),
+          algorithms: ['HS256'],
         });
-      }catch(e){
+      }catch{
         throw new UnauthorizedException('유효하지 않거나 만료된 토큰입니다.');
       }
     }
 
-    //* 토큰 재발급
-    rotateToken( token: string, isRefreshToken: boolean ){
-
-      const decoded = this.verifyToken(token);
-
-      // sub: id,
-      // empNo: empNo, 
-      // type: 'access' | 'refresh'
-      // ver: tokenVersion
-      if( decoded.type !== 'refresh' ){
-        throw new UnauthorizedException('잘못된 토큰 방식입니다.'); 
-      }
-
-      return this.signToken({
-        id: decoded.sub,
-        empNo: decoded.empNo, 
-        tokenVersion: decoded.ver,
-      }, isRefreshToken);
-    }
-
-  //* 토큰 생성
-  //      - 3)에서 필요한 accessToken, refreshToken을 sign하는 로직 (토큰 생성)
-  signToken( 
-    user: Pick<Users, 'id' | 'empNo' | 'tokenVersion'>, 
-    isRefreshToken: boolean 
-  ){
-    const payload = {
+  //* Access Token 생성 - stateless (검증할 때 회원·세션 DB를 보지 않음)
+  //    - role: RolesGuard가 이 값으로 권한을 판단한다. 권한이 바뀌면 다음 재발급(최대 10분)부터 반영된다.
+  //    - sid는 "지금 기기" 표시(기기 목록)와 전체 로그아웃·비밀번호 변경 시 현재 기기 유지에 쓴다.
+  private signAccessToken( user: TokenUser, sessionId: string ){
+    return this.jwtService.sign({
         empNo: user.empNo,
         sub: user.id,
-        type: isRefreshToken ? 'refresh' : 'access',
-        ver: user.tokenVersion, // DB의 tokenVersion과 다르면 무효 토큰
-    };
-
-    return this.jwtService.sign(payload, {
-        secret: this.configService.get<string>(ENV_JWT_SECRET), 
-        // 유효시간 (unit: seconds) 
-        expiresIn: isRefreshToken ? 3600 : 600, 
+        type: 'access',
+        ver: user.tokenVersion, // 발급 당시 tokenVersion (access 검증에서는 비교하지 않음, 재발급 때 refresh로 비교)
+        role: user.role,
+        sid: sessionId,
+    }, {
+        secret: this.configService.get<string>(ENV_JWT_SECRET),
+        expiresIn: ACCESS_TOKEN_EXPIRES_IN, // 유효시간 (unit: seconds)
     });
   }
 
-  //* 로그인 시 accessToken, refreshToken 발급
-  loginUser( user: Pick<Users, 'id' | 'empNo' | 'tokenVersion'> ) {
-      return {
-          accessToken: this.signToken(user, false), 
-          refreshToken: this.signToken(user, true), 
-      }
+  //* Refresh Token 생성 - sid + jti로 세션 테이블과 연결
+  //    - 유효시간은 1일(유휴 만료)이지만, 세션 절대 만료(7일)가 더 가까우면 그때까지만 준다.
+  private signRefreshToken( user: TokenUser, session: SessionForToken ){
+    const secondsUntilSessionEnd = Math.floor((session.expiresAt.getTime() - Date.now()) / 1000);
+    const expiresIn = Math.min(REFRESH_TOKEN_EXPIRES_IN, secondsUntilSessionEnd);
+
+    if( expiresIn <= 0 ){
+      throw new UnauthorizedException('로그인 유지 기간이 지났습니다. 다시 로그인해 주세요.');
+    }
+
+    const token = this.jwtService.sign({
+        empNo: user.empNo,
+        sub: user.id,
+        type: 'refresh',
+        ver: user.tokenVersion,
+        sid: session.id,
+        jti: session.currentJti,
+    }, {
+        secret: this.configService.get<string>(ENV_JWT_SECRET),
+        expiresIn,
+    });
+
+    return { token, expiresIn };
+  }
+
+  //* 세션 기준으로 access + refresh 발급
+  //    - refreshTokenMaxAge는 컨트롤러가 쿠키 maxAge로 쓴다. (토큰 만료와 쿠키 만료를 맞춤)
+  private issueTokens( user: TokenUser, session: SessionForToken ){
+    const refresh = this.signRefreshToken(user, session);
+
+    return {
+      accessToken: this.signAccessToken(user, session.id),
+      refreshToken: refresh.token,
+      refreshTokenMaxAge: refresh.expiresIn,
+    };
+  }
+
+  //* 로그인(가입) - 세션을 새로 만들고 토큰 발급
+  async loginUser( user: TokenUser, userAgent?: string ) {
+    const session = await this.authSessionsService.createSession(user, userAgent);
+
+    return this.issueTokens(user, session);
+  }
+
+  //* 토큰 재발급 - refresh token 교체(rotation) + 새 access token
+  //    - RefreshTokenGuard가 서명·만료·type·tokenVersion·회원 상태를 확인한 뒤 호출된다.
+  //    - 재발급할 때마다 refresh token도 새 것으로 바뀐다. 옛 refresh token을 다시 쓰면 재사용으로 감지된다.
+  async reissueTokens( payload: JwtPayload, user: TokenUser ){
+    if( payload.type !== 'refresh' ){
+      throw new UnauthorizedException('잘못된 토큰 방식입니다.');
+    }
+
+    const session = await this.authSessionsService.rotateSession(payload, user);
+
+    return this.issueTokens(user, session);
+  }
+
+  //* 로그아웃 - 이 기기의 세션만 폐기 (다른 기기는 그대로)
+  //    - 쿠키가 없거나 이미 무효인 토큰이어도 로그아웃(쿠키 삭제)은 진행되어야 하므로 예외를 던지지 않는다.
+  //    - 이 기기의 access token은 만료(최대 10분)까지 유효하지만, 프론트가 메모리에서 지운다.
+  async logout( refreshToken?: string ){
+    if( !refreshToken ){
+      return;
+    }
+
+    let payload: JwtPayload;
+
+    try{
+      payload = this.verifyToken(refreshToken);
+    }catch{
+      return;
+    }
+
+    if( payload.type !== 'refresh' || !payload.sid ){
+      return;
+    }
+
+    await this.authSessionsService.revokeSession(payload.sid, payload.sub);
+  }
+
+  //* 모든 기기에서 로그아웃 - 지금 기기만 유지
+  //    - tokenVersion을 올려 모든 access·refresh 토큰을 즉시 무효화한다. (가드가 요청마다 ver을 비교)
+  //    - 지금 기기의 세션은 새 tokenVersion으로 갱신하고 새 토큰을 발급한다. (비밀번호 변경과 같은 방식)
+  async logoutAllDevices( user: Pick<Users, 'id'>, currentSessionId?: string, userAgent?: string ){
+    const updatedUser = await this.usersService.increaseTokenVersion(user.id);
+
+    const session = await this.authSessionsService.renewSession(currentSessionId, updatedUser, userAgent);
+
+    return this.issueTokens(updatedUser, session);
+  }
+
+  //* 로그인된 기기 목록
+  getSessions( user: SessionUser, currentSessionId?: string ){
+    return this.authSessionsService.getActiveSessions(user, currentSessionId);
+  }
+
+  //* 특정 기기 로그아웃 (본인 세션만)
+  async revokeSession( user: Pick<Users, 'id'>, sessionId: string ){
+    const revoked = await this.authSessionsService.revokeSession(sessionId, user.id);
+
+    if( !revoked ){
+      throw new NotFoundException('로그인 기기를 찾을 수 없습니다.');
+    }
   }
 
   //* 로그인 시 사번/패스워드 검증
@@ -149,7 +233,7 @@ export class AuthService {
           throw new UnauthorizedException('존재하지 않는 사용자입니다.'); 
       }
 
-      await this.usersService.verifyPassword( existingUser, user.password );
+      await this.usersService.verifyPassword( existingUser, user.password, 'login' );
 
       return existingUser;
   }
@@ -185,7 +269,8 @@ export class AuthService {
 
   //* 회원가입
   async registerWithEmpNo(
-    user: RegisterUserDto
+    user: RegisterUserDto,
+    userAgent?: string,
   ){
 
     const hash = await this.hashPassword(user.password);
@@ -201,20 +286,22 @@ export class AuthService {
       tel: user.tel,
     });
 
-    return this.loginUser(newUser);
+    return this.loginUser(newUser, userAgent);
   }
 
   //* 비밀번호 변경
   //    - 본인 확인을 위해 현재 비밀번호를 먼저 검증한다.
   //    - 새 비밀번호가 현재 비밀번호와 같으면 변경하지 않는다.
   //    - tokenVersion이 올라가 기존 토큰(다른 기기 포함)은 모두 무효가 되므로,
-  //      현재 사용자에게는 새 토큰을 발급해 응답한다.
+  //      지금 기기의 세션만 새 tokenVersion으로 갱신하고 새 토큰을 발급해 응답한다.
   async changePassword(
-    user: Pick<Users, 'id'>, 
-    body: ChangePasswordDto
+    user: Pick<Users, 'id'>,
+    body: ChangePasswordDto,
+    currentSessionId?: string,
+    userAgent?: string,
   ){
     const hash = await this.usersService.getPasswordHashById(user.id);
-    await this.usersService.verifyPassword({ password: hash }, body.currentPassword);
+    await this.usersService.verifyPassword({ password: hash }, body.currentPassword, 'confirm');
 
     if( body.currentPassword === body.newPassword ){
       throw new BadRequestException('새 비밀번호가 현재 비밀번호와 같습니다.');
@@ -224,7 +311,9 @@ export class AuthService {
 
     const updatedUser = await this.usersService.updatePassword(user.id, newHash);
 
-    return this.loginUser(updatedUser);
+    const session = await this.authSessionsService.renewSession(currentSessionId, updatedUser, userAgent);
+
+    return this.issueTokens(updatedUser, session);
   }
 
   //* (관리자) 비밀번호 초기화

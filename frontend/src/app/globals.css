@@ -1,26 +1,202 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-pretendard), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/*
+ * 디자인 토큰 (docs/frontend_requirements.md 2.3)
+ * 컴포넌트에서는 색상 값을 직접 쓰지 말고 bg-background, text-muted-foreground,
+ * border-border, bg-primary 같은 시맨틱 클래스로 사용한다.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: #5268a8;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f3f6;
+  --secondary-foreground: #18181b;
+  --muted: #f1f3f6;
+  --muted-foreground: #64748b;
+  --accent: #eef0f4;
+  --accent-foreground: #18181b;
+  --destructive: #dc2626;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #5268a8;
+  --chart-1: #5268a8;
+  --chart-2: #7d8fc2;
+  --chart-3: #a8b4d9;
+  --chart-4: #64748b;
+  --chart-5: #94a3b8;
+  --radius: 0.5rem;
+  --sidebar: #f7f8fa;
+  --sidebar-foreground: #18181b;
+  --sidebar-primary: #5268a8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eceef2;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #5268a8;
+}
+
+.dark {
+  --background: #111318;
+  --foreground: #f4f4f5;
+  --card: #1b1e25;
+  --card-foreground: #f4f4f5;
+  --popover: #1b1e25;
+  --popover-foreground: #f4f4f5;
+  --primary: #91a7eb;
+  --primary-foreground: #111318;
+  --secondary: #22262e;
+  --secondary-foreground: #f4f4f5;
+  --muted: #22262e;
+  --muted-foreground: #a1a1aa;
+  --accent: #252a33;
+  --accent-foreground: #f4f4f5;
+  --destructive: #f87171;
+  --border: #30343d;
+  --input: #30343d;
+  --ring: #91a7eb;
+  --chart-1: #91a7eb;
+  --chart-2: #6f86cc;
+  --chart-3: #4f63a0;
+  --chart-4: #a1a1aa;
+  --chart-5: #71717a;
+  --sidebar: #171a20;
+  --sidebar-foreground: #f4f4f5;
+  --sidebar-primary: #91a7eb;
+  --sidebar-primary-foreground: #111318;
+  --sidebar-accent: #23272f;
+  --sidebar-accent-foreground: #f4f4f5;
+  --sidebar-border: #30343d;
+  --sidebar-ring: #91a7eb;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    /* 기본 UI 글자 크기 14px (rem 기준값 16px은 유지) */
+    @apply bg-background text-foreground text-sm;
+  }
+  html {
+    @apply font-sans;
   }
 }
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/*
+ * 게시글 본문 (에디터 입력 영역 .ProseMirror 와 상세 화면이 같은 모양을 쓴다)
+ * 허용 태그는 백엔드 sanitize-html 허용 목록과 같다. (p, h1~h3, 글자 서식, 목록, 인용, 코드, 링크, hr)
+ */
+@layer components {
+  .rich-text {
+    @apply text-[15px] leading-7 break-words;
+  }
+  .rich-text > * + * {
+    @apply mt-3;
+  }
+  .rich-text h1 {
+    @apply mt-6 text-xl font-semibold;
+  }
+  .rich-text h2 {
+    @apply mt-6 text-lg font-semibold;
+  }
+  .rich-text h3 {
+    @apply mt-5 text-base font-semibold;
+  }
+  .rich-text ul {
+    @apply list-disc pl-6;
+  }
+  .rich-text ol {
+    @apply list-decimal pl-6;
+  }
+  .rich-text li > p {
+    @apply m-0;
+  }
+  .rich-text blockquote {
+    @apply border-l-2 border-border pl-4 text-muted-foreground;
+  }
+  .rich-text a {
+    @apply text-primary underline underline-offset-4;
+  }
+  .rich-text code {
+    @apply rounded bg-muted px-1 py-0.5 font-mono text-[0.9em];
+  }
+  .rich-text pre {
+    @apply overflow-x-auto rounded-lg bg-muted px-4 py-3 font-mono text-[13px] leading-6;
+  }
+  .rich-text pre code {
+    @apply bg-transparent p-0;
+  }
+  .rich-text hr {
+    @apply my-6 border-border;
+  }
+  /* 본문 이미지: 본문 폭을 넘지 않게 (원본 비율 유지) */
+  .rich-text img {
+    @apply h-auto max-w-full rounded-md;
+  }
+  /* 외부 영상 (YouTube·Vimeo 임베드): 본문 폭에 맞춘 16:9 */
+  .rich-text [data-video-embed] {
+    @apply aspect-video w-full overflow-hidden rounded-md bg-muted;
+  }
+  .rich-text [data-video-embed] iframe {
+    @apply size-full border-0;
+  }
+  .rich-text [data-video-embed].ProseMirror-selectednode {
+    @apply outline-2 outline-ring;
+  }
+  /* 에디터에서 선택한 이미지 표시 (Tiptap이 붙이는 클래스) */
+  .rich-text img.ProseMirror-selectednode {
+    @apply outline-2 outline-ring;
+  }
 }

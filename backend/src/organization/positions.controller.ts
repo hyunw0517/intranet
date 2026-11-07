@@ -6,6 +6,7 @@ import { Roles } from 'src/auth/decorator/roles.decorator';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
 import { PaginatePositionQueryDto } from './dto/paginate-position-query.dto';
+import { UpdateSortOrderDto } from './dto/update-sort-order.dto';
 
 
 // 소속 - 직급 전용 컨트롤러
@@ -31,6 +32,17 @@ export class PositionsController {
     @Body() body: CreatePositionDto,
   ){
     return this.positionsService.createPosition(user, body);
+  }
+
+  //* 직급 순서 변경 (드래그 정렬)
+  // 'order'는 ':id'보다 먼저 선언해야 한다. (뒤에 두면 'order'가 :id로 매칭되어 ParseIntPipe 400)
+  @Patch('order')
+  @Roles(UserRole.ADMIN)
+  patchPositionOrder(
+    @User() user: Pick<Users, 'id'>,
+    @Body() body: UpdateSortOrderDto,
+  ){
+    return this.positionsService.updatePositionOrder(user, body);
   }
 
   //* 직급 수정

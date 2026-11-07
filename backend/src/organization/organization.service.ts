@@ -69,6 +69,22 @@ export class OrganizationService {
         return user;
     }
 
+    //* 대표 소속 이름 (게시글·댓글 작성 당시, 결재 당시 등 스냅샷 저장용) → 대표 소속의 부서·직책 + 직급
+    // 대표 소속은 getUserOrganization의 정렬 규칙(isPrimary 우선)을 따르므로 첫 번째 소속이다.
+    // 컬럼 이름은 쓰는 쪽마다 다르므로(authorXxx, approverXxx 등) 일반적인 이름으로 반환한다.
+    async getPrimaryOrganizationNames(
+        userId: number,
+    ){
+        const organization = await this.getUserOrganization( userId );
+        const primary = organization.departments[0];    // 소속이 없는 회원도 있음
+
+        return {
+            positionName: organization.position?.name ?? null,
+            departmentName: primary?.department.name ?? null,
+            jobTitleName: primary?.jobTitle?.name ?? null,
+        };
+    }
+
     //* 회원 직급 지정 (null이면 해제)
     async updateUserPosition(
         userId: number,

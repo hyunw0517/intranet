@@ -5,7 +5,7 @@ import { UpdateDepartmentOrderDto } from './dto/update-department-order.dto';
 import { isSameIdSet } from 'src/common/util/id-set.util';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
-import { PaginateDepartmentQueryDto } from './dto/paginate-department-query.dto';
+import { DepartmentListQueryDto } from './dto/department-list-query.dto';
 import { toTreeList } from 'src/common/util/tree.util';
 
 @Injectable()
@@ -18,8 +18,8 @@ export class DepartmentsService {
     //* 전체 부서 조회
     // 트리 순서(상위 부서 → 하위 부서들 → 다음 상위 부서)의 평평한 목록으로 반환
     // ex) 경영지원본부 / 경영지원본부/인사팀 / 경영지원본부/총무팀 / 사업본부 / 사업본부/영업팀 ...
-    async paginateDepartment(
-        query: PaginateDepartmentQueryDto,
+    async getDepartments(
+        query: DepartmentListQueryDto,
     ) {
         // 전체를 한 번만 조회 (순서는 toTreeList에서 정함)
         const departments = await this.prisma.department.findMany({

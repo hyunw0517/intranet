@@ -27,9 +27,9 @@ export class UsersService {
   ) {
     
     const where: Prisma.UsersWhereInput = {
-      deleted: ( query.deletedOnly === true ) ? true : false, // 삭제 회원 조회 true 플래그가 있다면 삭제된 회원만 표시
+      deleted: query.deletedOnly === true, // 삭제 회원 조회 true 플래그가 있다면 삭제된 회원만 표시
       empNo: query.empNo ? { contains: query.empNo } : undefined,
-      email: query.email ? { contains: query.email } : undefined,
+      email: query.email ? { contains: query.email, mode: 'insensitive' } : undefined,
       name: query.name ? { contains: query.name, mode: 'insensitive' } : undefined,
       nickname: query.nickname ? { contains: query.nickname, mode: 'insensitive' } : undefined,
       role: query.role, 

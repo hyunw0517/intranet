@@ -630,12 +630,20 @@ model BoardAuthJobTitle {
 }
 
 //* 시설 분류 -> 모듈: Reservations (애드온)
-// 관리자가 만든다. (회의실, 차량, 장비 …) 시설을 묶어서 보여 주는 용도이며 예약 규칙(겹침 등)과는 무관하다.
-// 시설이 남아 있는 분류는 삭제할 수 없다. (2026-11-09 사용자 결정)
+// 관리자가 만든다. (회의실, 차량, 장비 …) 분류가 그 시설들의 예약 규칙(단위·운영 시간·요일·예약 가능 기간)을 정한다.
+// 시설이 남아 있는 분류는 삭제할 수 없다. (2026-11-09 사용자 결정, 상세 docs/design/features.md 6장)
+// 시각은 한국 시간 기준, 자정부터의 분. 예약은 하루 안에서만 하므로 종료는 최대 1440(24:00)
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): 단위 > 0, 0 <= 시작 < 종료 <= 1440, 예약 가능 기간 > 0
 model FacilityCategory {
   id        Int     @id @default(autoincrement())
   name      String  // 분류명
   sortOrder Int     @default(0) @map("sort_order") // 정렬 순서
+
+  slotMinutes    Int   @default(30) @map("slot_minutes")                // 예약 단위(분). 시작·종료가 운영 시작부터 이 단위에 맞아야 한다
+  openMinute     Int   @default(540) @map("open_minute")                // 운영 시작 (540 = 09:00)
+  closeMinute    Int   @default(1080) @map("close_minute")              // 운영 종료 (1080 = 18:00), 이 시각에 끝나는 예약까지 가능 [)
+  operatingDays  Int[] @default([1, 2, 3, 4, 5]) @map("operating_days") // 운영 요일 (ISO: 1 = 월 … 7 = 일)
+  maxAdvanceDays Int   @default(90) @map("max_advance_days")            // 오늘부터 며칠 앞까지 예약 가능 (반복 예약 기간 포함)
 
   facilities Facility[] // 이 분류의 시설 목록
 
@@ -679,12 +687,13 @@ model Facility {
 }
 
 //* 시설 예약 -> 모듈: Reservations (애드온)
+// DB 제약(마이그레이션 SQL에 직접 작성): 종료 > 시작, 같은 시설의 RESERVED·삭제 안 된 예약끼리 [시작, 종료) 겹침 금지 (exclusion constraint, btree_gist)
 model FacilityReservation {
   id            Int       @id @default(autoincrement())
   facilityId    Int       @map("facility_id") // 시설 id
   userId        Int       @map("user_id") // 예약자 id
-  title         String?   // 회의명
-  description   String?   // 설명 (회의 목적)
+  title         String?   // 예약 제목 (회의명 등)
+  description   String?   // 설명 (사용 목적)
   startAt       DateTime  @map("start_at") // 시작 시간
   endAt         DateTime  @map("end_at") // 종료 시간
   status        FacilityReservationStatus @default(RESERVED)

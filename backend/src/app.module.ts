@@ -36,6 +36,8 @@ import { BoardsModule } from './boards/boards.module';
     AuthModule, 
     OrganizationModule, 
     BoardsModule, 
+    // 애드온: backend/.env의 ADDONS에 있는 것만 등록된다. (src/config/addons.config.ts, AGENTS.md 10.1)
+    // ex) addonModule( 'reservations', ReservationsModule ),
   ],
   controllers: [AppController],
   providers: [

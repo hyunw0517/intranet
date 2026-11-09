@@ -9,20 +9,23 @@ import { LocalFileStorage } from './storage/local-file-storage';
 import { AuditService } from './audit.service';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
+import { AddonsController } from './addons.controller';
+import { AddonsService } from './addons.service';
 
-// 핵심 공통 모듈: 파일·알림·감사 로그. 업무 모듈(users·auth·boards·애드온)을 import하지 않는다.
+// 핵심 공통 모듈: 파일·알림·감사 로그·켜진 애드온 목록. 업무 모듈(users·auth·boards·애드온)을 import하지 않는다.
 // (업무 모듈이 이 모듈을 import해 AuditService 등을 호출하므로, 반대로 import하면 순환 참조가 된다)
 @Module({
-  controllers: [CommonController, FilesController, NotificationsController],
+  controllers: [CommonController, FilesController, NotificationsController, AddonsController],
   providers: [
     CommonService,
     FilesService,
     AuditService,
     NotificationsService,
+    AddonsService,
     // 파일 저장소: 운영에서 S3를 쓰면 S3FileStorage를 만들어 반영.
     { provide: FileStorage, useClass: LocalFileStorage },
   ],
-  exports: [CommonService, FilesService, AuditService, NotificationsService],
+  exports: [CommonService, FilesService, AuditService, NotificationsService, AddonsService],
   imports: [
      PrismaModule,
   ],

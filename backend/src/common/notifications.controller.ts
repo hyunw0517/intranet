@@ -38,6 +38,13 @@ export class NotificationsController {
         return this.notificationsService.markAllRead( user.id );
     }
 
+    //* 읽은 알림 삭제 (고정 경로라 ':id'보다 먼저 선언)
+    @Delete('read')
+    @Roles(UserRole.USER)
+    removeRead( @User() user: Pick<Users, 'id'> ) {
+        return this.notificationsService.removeRead( user.id );
+    }
+
     //* 읽음
     @Patch(':id/read')
     @Roles(UserRole.USER)

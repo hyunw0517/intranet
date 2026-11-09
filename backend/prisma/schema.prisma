@@ -54,7 +54,7 @@ enum NotificationTargetType {
   POST                // 게시글
   COMMENT             // 댓글
   APPROVAL            // 전자결재 문서
-  MEETING_RESERVATION // 회의실 예약
+  FACILITY_RESERVATION // 시설 예약
   CHAT_ROOM           // 채팅방
 }
 
@@ -72,7 +72,7 @@ enum NotificationActionType {
   APPROVAL_REQUESTED    // 결재 요청 (내 차례 도착)
   APPROVAL_APPROVED     // 결재 완료 (최종 승인)
   APPROVAL_REJECTED     // 결재 반려
-  RESERVATION_CANCELLED // 회의실 예약 취소 (사용 불가 등록 등)
+  RESERVATION_CANCELLED // 시설 예약 취소 (사용 불가 등록 등)
   CHAT_MESSAGE          // 새 채팅 메시지
 }
 
@@ -89,8 +89,9 @@ enum AuditTargetType {
   POST                // 게시글
   COMMENT             // 댓글
   FILE                // 파일
-  MEETING_ROOM        // 회의실
-  MEETING_RESERVATION // 회의실 예약
+  FACILITY_CATEGORY   // 시설 분류
+  FACILITY            // 시설
+  FACILITY_RESERVATION // 시설 예약
   APPROVAL_LINE       // 결재라인 템플릿
   APPROVAL            // 전자결재 문서
   LEAVE               // 휴가
@@ -114,8 +115,8 @@ enum AuditActionType {
   LOGIN_UNLOCKED  // 관리자 로그인 잠금 해제
 }
 
-//? 회의실 예약 상태 -> 모델: MeetingRoomReservation
-enum MeetingReservationStatus {
+//? 시설 예약 상태 -> 모델: FacilityReservation
+enum FacilityReservationStatus {
   RESERVED   // 예약
   CANCELLED  // 예약 취소
 }
@@ -214,7 +215,7 @@ model Users {
   postViews               PostView[]          // 게시글 조회 기록
   postLikes               PostLike[]          // 좋아요한 게시글 기록
   comments                Comment[]                   @relation("CommentAuthor") // 작성한 댓글 목록
-  reservations            MeetingRoomReservation[]    @relation("MeetingRoomReservationUser")   // 예약한 회의실 목록
+  reservations            FacilityReservation[]       @relation("FacilityReservationUser")      // 예약한 시설 목록
   approvalLineTemplates   ApprovalLineTemplate[]      @relation("ApprovalLineOwner")            // 소유한 개인 결재라인
   approvalLineSteps       ApprovalLineTemplateStep[]  @relation("ApprovalLineStepApprover")     // 결재라인 템플릿의 결재자로 지정된 단계
   requestedApprovals      ApprovalDocument[]          @relation("ApprovalDocumentRequester")    // 기안한 결재 문서
@@ -628,17 +629,15 @@ model BoardAuthJobTitle {
   @@map("board_auth_job_title_model")
 }
 
-//* 회의실 -> 모듈: MeetingRooms
-model MeetingRoom {
-  id          Int     @id @default(autoincrement())
-  name        String  // 회의실 명
-  location    String? // 위치
-  capacity    Int?    // 최대 인원
-  description String? // 설명
-  isActive    Boolean @default(true) @map("is_active") // 활성화 여부
+//* 시설 분류 -> 모듈: Reservations (애드온)
+// 관리자가 만든다. (회의실, 차량, 장비 …) 시설을 묶어서 보여 주는 용도이며 예약 규칙(겹침 등)과는 무관하다.
+// 시설이 남아 있는 분류는 삭제할 수 없다. (2026-11-09 사용자 결정)
+model FacilityCategory {
+  id        Int     @id @default(autoincrement())
+  name      String  // 분류명
+  sortOrder Int     @default(0) @map("sort_order") // 정렬 순서
 
-  reservations        MeetingRoomReservation[]
-  unavailablePeriods  MeetingRoomUnavailable[]
+  facilities Facility[] // 이 분류의 시설 목록
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -648,23 +647,50 @@ model MeetingRoom {
   deletedAt DateTime? @map("deleted_at")
   deletedId Int?     @map("deleted_id")
 
-  @@index([deleted, isActive])
-  @@map("meeting_room_model")
+  @@index([deleted, sortOrder])
+  @@map("facility_category_model")
 }
 
-//* 회의실 예약 -> 모듈: MeetingRooms
-model MeetingRoomReservation {
+//* 시설 (회의실·차량·장비 등) -> 모듈: Reservations (애드온)
+// 예약 시간 겹침은 시설 단위로 막는다. 같은 분류의 다른 시설끼리는 겹쳐도 된다. (2026-11-09 사용자 결정)
+model Facility {
+  id          Int     @id @default(autoincrement())
+  categoryId  Int     @map("category_id") // 분류 id (필수)
+  name        String  // 시설명
+  location    String? // 위치
+  capacity    Int?    // 최대 인원
+  description String? // 설명
+  isActive    Boolean @default(true) @map("is_active") // 활성화 여부
+
+  category            FacilityCategory @relation(fields: [categoryId], references: [id])
+  reservations        FacilityReservation[]
+  unavailablePeriods  FacilityUnavailable[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdId Int      @map("created_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedId Int      @map("updated_id")
+  deleted   Boolean  @default(false)
+  deletedAt DateTime? @map("deleted_at")
+  deletedId Int?     @map("deleted_id")
+
+  @@index([categoryId, deleted, isActive])
+  @@map("facility_model")
+}
+
+//* 시설 예약 -> 모듈: Reservations (애드온)
+model FacilityReservation {
   id            Int       @id @default(autoincrement())
-  meetingRoomId Int       @map("meeting_room_id") // 회의실 id
+  facilityId    Int       @map("facility_id") // 시설 id
   userId        Int       @map("user_id") // 예약자 id
   title         String?   // 회의명
   description   String?   // 설명 (회의 목적)
   startAt       DateTime  @map("start_at") // 시작 시간
   endAt         DateTime  @map("end_at") // 종료 시간
-  status        MeetingReservationStatus @default(RESERVED)
+  status        FacilityReservationStatus @default(RESERVED)
 
-  meetingRoom   MeetingRoom @relation(fields: [meetingRoomId], references: [id])
-  user          Users       @relation("MeetingRoomReservationUser", fields: [userId], references: [id])
+  facility      Facility    @relation(fields: [facilityId], references: [id])
+  user          Users       @relation("FacilityReservationUser", fields: [userId], references: [id])
 
   createdAt     DateTime @default(now()) @map("created_at")
   createdId     Int      @map("created_id")
@@ -674,20 +700,20 @@ model MeetingRoomReservation {
   deletedAt     DateTime? @map("deleted_at")
   deletedId     Int?     @map("deleted_id")
 
-  @@index([meetingRoomId, status, startAt, endAt])
+  @@index([facilityId, status, startAt, endAt])
   @@index([userId, status, startAt])
-  @@map("meeting_room_reservation_model")
+  @@map("facility_reservation_model")
 }
 
-//* 회의실 예약 불가 기간 -> 모듈: MeetingRooms
-model MeetingRoomUnavailable {
+//* 시설 예약 불가 기간 -> 모듈: Reservations (애드온)
+model FacilityUnavailable {
   id            Int      @id @default(autoincrement())
-  meetingRoomId Int      @map("meeting_room_id") // 회의실 id
+  facilityId    Int      @map("facility_id") // 시설 id
   startAt       DateTime @map("start_at") // 예약 불가 시작 시간
   endAt         DateTime @map("end_at") // 예약 불가 종료 시간
   reason        String?  // 예약 불가 사유
 
-  meetingRoom MeetingRoom @relation(fields: [meetingRoomId], references: [id])
+  facility    Facility @relation(fields: [facilityId], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -697,8 +723,8 @@ model MeetingRoomUnavailable {
   deletedAt DateTime? @map("deleted_at")
   deletedId Int?     @map("deleted_id")
 
-  @@index([meetingRoomId, deleted, startAt, endAt])
-  @@map("meeting_room_unavailable_model")
+  @@index([facilityId, deleted, startAt, endAt])
+  @@map("facility_unavailable_model")
 }
 
 //* 결재라인 템플릿 -> 모듈: Approvals

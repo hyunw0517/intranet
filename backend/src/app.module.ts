@@ -1,4 +1,6 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
+import { RequestContextMiddleware } from './common/context/request-context';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
@@ -16,8 +18,9 @@ import { BoardsModule } from './boards/boards.module';
   imports: [
     ConfigModule.forRoot({ 
       envFilePath: '.env', 
-      isGlobal: true 
-    }), 
+      isGlobal: true
+    }),
+    ScheduleModule.forRoot(), // @Cron 배치 (알림 보관 기간 정리)
     PrismaModule, 
     CommonModule, 
     UsersModule, 
@@ -38,4 +41,9 @@ import { BoardsModule } from './boards/boards.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  // 요청 컨텍스트(AsyncLocalStorage): 감사 로그가 작업자·IP·User-Agent를 서비스 인자 없이 읽도록 모든 요청에 적용
+  configure( consumer: MiddlewareConsumer ) {
+    consumer.apply( RequestContextMiddleware ).forRoutes( '*' );
+  }
+}

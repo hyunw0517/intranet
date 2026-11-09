@@ -48,26 +48,62 @@ enum FileTargetType {
   CHAT_MESSAGE        // 채팅 첨부파일
 }
 
-//? 대상 모듈 구분 -> 모델: Notification, Audit
-enum SystemTargetType {
-  USER      // 회원
-  POST      // 게시글
-  APPROVAL  // 전자결재
-  LEAVE     // 휴가
-  MEETING_ROOM  // 회의실
+//? 알림 대상 구분 -> 모델: Notification (받는 사람이 확인할 대상)
+enum NotificationTargetType {
+  POST                // 게시글
+  COMMENT             // 댓글
+  APPROVAL            // 전자결재 문서
   MEETING_RESERVATION // 회의실 예약
-  CHAT_MESSAGE  // 채팅
+  CHAT_ROOM           // 채팅방
 }
 
-//? 시스템 이벤트 구분 -> 모델: Notification, Audit
-enum SystemActionType {
-  SYSTEM    // 시스템
-  APPROVED  // 승인
-  REJECTED  // 반려
-  CREATE    // 생성
-  UPDATE    // 수정
-  DELETE    // 삭제
-  LOGIN     // 로그인 (Audit 전용)
+//? 알림 이벤트 구분 -> 모델: Notification (받는 사람 입장에서 무슨 일이 생겼는지)
+enum NotificationActionType {
+  SYSTEM                // 시스템 안내
+  NOTICE_CREATED        // 공지사항 등록
+  POST_COMMENTED        // 내 글에 댓글
+  COMMENT_REPLIED       // 내 댓글에 답글
+  APPROVAL_REQUESTED    // 결재 요청 (내 차례 도착)
+  APPROVAL_APPROVED     // 결재 완료 (최종 승인)
+  APPROVAL_REJECTED     // 결재 반려
+  RESERVATION_CANCELLED // 회의실 예약 취소 (사용 불가 등록 등)
+  CHAT_MESSAGE          // 새 채팅 메시지
+}
+
+//? 감사 로그 대상 구분 -> 모델: Audit (작업한 대상)
+enum AuditTargetType {
+  USER                // 회원
+  AUTH_SESSION        // 로그인 세션 (기기)
+  DEPARTMENT          // 부서
+  POSITION            // 직급
+  JOB_TITLE           // 직책
+  USER_DEPARTMENT     // 회원 소속
+  BOARD               // 게시판
+  BOARD_AUTH          // 게시판 권한
+  POST                // 게시글
+  COMMENT             // 댓글
+  FILE                // 파일
+  MEETING_ROOM        // 회의실
+  MEETING_RESERVATION // 회의실 예약
+  APPROVAL_LINE       // 결재라인 템플릿
+  APPROVAL            // 전자결재 문서
+  LEAVE               // 휴가
+}
+
+//? 감사 로그 이벤트 구분 -> 모델: Audit (작업자가 무엇을 했는지)
+enum AuditActionType {
+  CREATE          // 생성
+  UPDATE          // 수정
+  DELETE          // 삭제
+  RESTORE         // 복구
+  ROLE_CHANGE     // 권한 변경 (가입 승인 포함)
+  STATUS_CHANGE   // 상태 변경
+  LOGIN           // 로그인
+  LOGIN_FAILED    // 로그인 실패
+  LOGOUT          // 로그아웃 (기기 로그아웃 포함)
+  PASSWORD_CHANGE // 본인 비밀번호 변경
+  PASSWORD_RESET  // 관리자 비밀번호 초기화
+  TOKEN_REUSE     // refresh token 재사용 감지 (세션 폐기)
 }
 
 //? 회의실 예약 상태 -> 모델: MeetingRoomReservation
@@ -163,7 +199,9 @@ model Users {
 
   position                Position?        @relation(fields: [positionId], references: [id]) // 직급
   departments             UserDepartment[] // 소속 목록 (겸직 시 여러 개)
-  notifications           Notification[]  // 받은 알림 목록
+  notifications           Notification[]              @relation("NotificationRecipient")        // 받은 알림 목록
+  sentNotifications       Notification[]              @relation("NotificationSender")           // 보낸 알림 목록
+  audits                  Audit[]                     @relation("AuditActor")                   // 작업한 감사 로그
   posts                   Post[]                      @relation("PostAuthor")    // 작성한 게시글 목록
   postViews               PostView[]          // 게시글 조회 기록
   postLikes               PostLike[]          // 좋아요한 게시글 기록
@@ -333,42 +371,51 @@ model Files {
 }
 
 //* 사용자 알림 -> 모듈: 공용
+//  - 받는 사람마다 행 1개 (전체 공지면 직원 수만큼 createMany).
+//  - 삭제는 물리 삭제: 본인 삭제 + 90일 지난 알림은 하루 1회 배치로 정리 (soft delete 없음).
+//  - link: 알림을 만드는 쪽이 이동할 화면 주소를 정해서 저장한다. (핵심은 애드온 테이블을 조회하지 않음)
 model Notification {
   id         BigInt   @id @default(autoincrement())
   userId     Int      @map("user_id") // 수신자 id
-  targetType SystemTargetType? @map("target_type") // 알림 대상 모델
+  targetType NotificationTargetType? @map("target_type") // 알림 대상 모델
   targetId   Int?     @map("target_id") // 알림 대상 id (다형 참조라 FK 없음)
-  actionType SystemActionType  @map("action_type") // 이벤트 구분
+  actionType NotificationActionType  @map("action_type") // 이벤트 구분
   title      String   // 알림 제목
   content    String?  // 알림 내용
+  link       String?  // 눌렀을 때 이동할 프론트 주소 (예: /boards/3/posts/120)
 
   isRead     Boolean   @default(false) @map("is_read") // 확인 여부
   readAt     DateTime? @map("read_at") // 확인 시간
 
-  user       Users    @relation(fields: [userId], references: [id]) // 수신자
+  user       Users    @relation("NotificationRecipient", fields: [userId], references: [id]) // 수신자
+  sender     Users?   @relation("NotificationSender", fields: [createdId], references: [id]) // 발신자 (시스템 알림은 NULL)
 
   createdAt DateTime  @default(now()) @map("created_at")
   createdId Int?      @map("created_id") // 발신자 id
-  deleted   Boolean   @default(false)
-  deletedAt DateTime? @map("deleted_at")
-  deletedId Int?      @map("deleted_id")
 
-  @@index([userId, deleted, createdAt(sort: Desc), id(sort: Desc)]) // 내 알림 목록 (커서 페이지네이션)
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)]) // 내 알림 목록 (커서 페이지네이션)
+  @@index([userId, isRead]) // 안 읽은 알림 수
   @@index([targetType, targetId, createdAt(sort: Desc)])
+  @@index([createdAt]) // 90일 지난 알림 정리 배치
   @@map("notification_model")
 }
 
 //* 주요 DB 로그 -> 모듈: 공용 (수정/삭제 없이 쌓기만 함)
+//  - 단건: targetId에 대상 id, detail에 변경 내용.
+//  - 일괄 처리(ids 배열): 묶어서 1행. targetId는 NULL, detail에 batch: true + 대상 pk 배열 + 변경 내용.
 model Audit {
   id         BigInt   @id @default(autoincrement())
-  targetType SystemTargetType? @map("target_type") // 작업 대상 모델
-  targetId   Int?     @map("target_id") // 작업 대상 id (다형 참조라 FK 없음)
-  actionType SystemActionType  @map("action_type") // 이벤트 구분
+  targetType AuditTargetType? @map("target_type") // 작업 대상 모델
+  targetId   Int?     @map("target_id") // 작업 대상 id (다형 참조라 FK 없음, 일괄 처리는 NULL)
+  actionType AuditActionType  @map("action_type") // 이벤트 구분
 
-  content    String?  // 작업 내용
+  content    String?  // 작업 내용 (사람이 읽는 요약)
+  detail     Json?    // 변경 내용 (변경 전후 값, 일괄 처리 여부·대상 pk 배열)
 
   ipAddress  String?  @db.VarChar(45) @map("ip_address") // IPv6 방식 사용을 고려한 길이
   userAgent  String?  @map("user_agent") // 사용자 접속 환경
+
+  actor      Users?   @relation("AuditActor", fields: [createdId], references: [id]) // 작업자 (로그인 실패 등 회원이 없으면 NULL)
 
   createdAt DateTime  @default(now()) @map("created_at")
   createdId Int?      @map("created_id") // 작업자 id

@@ -17,7 +17,9 @@ export type NotificationActionType =
   | "APPROVAL_REQUESTED"
   | "APPROVAL_APPROVED"
   | "APPROVAL_REJECTED"
-  | "RESERVATION_CANCELLED"
+  | "RESERVATION_CANCELLED_BY_ADMIN"
+  | "RESERVATION_UPDATED_BY_ADMIN"
+  | "RESERVATION_DELETED_BY_ADMIN"
   | "CHAT_MESSAGE";
 
 // GET /common/notifications 의 한 행 (id는 BigInt라 문자열로 온다)

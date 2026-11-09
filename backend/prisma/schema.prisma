@@ -72,7 +72,9 @@ enum NotificationActionType {
   APPROVAL_REQUESTED    // 결재 요청 (내 차례 도착)
   APPROVAL_APPROVED     // 결재 완료 (최종 승인)
   APPROVAL_REJECTED     // 결재 반려
-  RESERVATION_CANCELLED // 시설 예약 취소 (사용 불가 등록 등)
+  RESERVATION_CANCELLED_BY_ADMIN // 관리자가 내 시설 예약을 취소함
+  RESERVATION_UPDATED_BY_ADMIN   // 관리자가 내 시설 예약 시간을 변경함
+  RESERVATION_DELETED_BY_ADMIN   // 관리자가 내 시설 예약을 삭제함
   CHAT_MESSAGE          // 새 채팅 메시지
 }
 

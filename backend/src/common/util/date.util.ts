@@ -29,3 +29,37 @@ export function kstYearMonthPath( date: Date ): string {
 export function kstDayEnd( date: Date ): Date {
     return new Date( kstDayStart( date ).getTime() + ONE_DAY_MS - 1000 );
 }
+
+//* 주어진 시각이 KST 날짜 00:00부터 몇 분째인지 (초·밀리초가 있으면 소수)
+// ex) 2026-11-10T10:30+09:00 → 630
+export function kstMinuteOfDay( date: Date ): number {
+    return ( date.getTime() - kstDayStart( date ).getTime() ) / 60000;
+}
+
+//* 주어진 시각의 KST 요일 (ISO: 1 = 월 … 7 = 일)
+export function kstIsoWeekday( date: Date ): number {
+    const day = new Date( date.getTime() + KST_OFFSET_MS ).getUTCDay(); // 0 = 일
+    return day === 0 ? 7 : day;
+}
+
+//* 주어진 시각의 KST 날짜 문자열 ("2026-11-10")
+export function kstDateString( date: Date ): string {
+    const kst = new Date( date.getTime() + KST_OFFSET_MS );
+    const month = String( kst.getUTCMonth() + 1 ).padStart( 2, '0' );
+    const day = String( kst.getUTCDate() ).padStart( 2, '0' );
+
+    return `${kst.getUTCFullYear()}-${month}-${day}`;
+}
+
+//* KST 날짜 문자열("2026-11-10") + 그날 00:00부터의 분 → 시각
+// ex) ("2026-11-10", 600) → 2026-11-10T10:00+09:00 (= 2026-11-10T01:00:00Z)
+export function kstDateAt( dateString: string, minuteOfDay: number ): Date {
+    const [ year, month, day ] = dateString.split( '-' ).map( Number );
+
+    return new Date( Date.UTC( year, month - 1, day ) - KST_OFFSET_MS + minuteOfDay * 60000 );
+}
+
+//* KST 날짜 문자열에 일 수 더하기 ("2026-11-30", 1 → "2026-12-01")
+export function addKstDays( dateString: string, days: number ): string {
+    return kstDateString( new Date( kstDateAt( dateString, 0 ).getTime() + days * ONE_DAY_MS ) );
+}

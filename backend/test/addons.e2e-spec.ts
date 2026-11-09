@@ -3,17 +3,17 @@
 // - GET /common/addons: 켜진 애드온 목록, 로그인 필요(USER 이상)
 // - addonModule(): ADDONS에 있으면 모듈이 등록되고(API 200), 없으면 등록되지 않는다(API 404)
 // - 잘못된 ADDONS면 서버(앱)가 시작되지 않는다
-// ADDONS는 테스트마다 process.env에 직접 넣고 앱을 새로 만든다. (.env.test의 값은 비어 있음)
+// ADDONS는 테스트마다 process.env에 직접 넣고 앱을 새로 만든다.
+// (AppModule 자체의 애드온 등록은 import 시점에 정해지므로, 여기서는 테스트 안에서 새로 만드는 addonModule()과 AddonsService만 바뀐다)
 
-import { Controller, Get, INestApplication, Module } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { Controller, Get, INestApplication, Module, ModuleMetadata } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { AppModule } from 'src/app.module';
 import { IsPublic } from 'src/common/decorator/is-public.decorator';
 import { addonModule } from 'src/config/addons.config';
 import { UserRole } from 'src/generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { createTestApp } from './utils/app';
 import { createTestUser, loginAs } from './utils/auth';
 import { resetDatabase } from './utils/reset-database';
 
@@ -31,14 +31,11 @@ class FakeAddonController {
 class FakeAddonModule {}
 
 // ADDONS를 바꾼 뒤 앱을 만든다. extraImports: 테스트에서만 붙이는 모듈
-async function createApp( addons: string | undefined, extraImports: Parameters<typeof Test.createTestingModule>[0]['imports'] = [] ) {
+async function createApp( addons: string | undefined, extraImports: ModuleMetadata['imports'] = [] ): Promise<INestApplication<App>> {
     if ( addons === undefined ) delete process.env.ADDONS;
     else process.env.ADDONS = addons;
 
-    const moduleRef = await Test.createTestingModule({ imports: [ AppModule, ...extraImports ] }).compile();
-    const app = moduleRef.createNestApplication<INestApplication<App>>();
-    await app.init();
-    return app;
+    return createTestApp( extraImports );
 }
 
 describe('애드온 ON/OFF', () => {

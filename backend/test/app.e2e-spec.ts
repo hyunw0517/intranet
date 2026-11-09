@@ -1,10 +1,9 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { AppModule } from 'src/app.module';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { createTestApp } from './utils/app';
 import { resetDatabase } from './utils/reset-database';
 
 //* e2e 환경 확인용 (테스트 DB 연결·초기화·앱 기동)
@@ -14,12 +13,7 @@ describe('e2e 환경', () => {
     let prisma: PrismaService;
 
     beforeAll( async () => {
-        const moduleFixture: TestingModule = await Test.createTestingModule({
-            imports: [ AppModule ],
-        }).compile();
-
-        app = moduleFixture.createNestApplication();
-        await app.init();
+        app = await createTestApp();
 
         prisma = app.get( PrismaService );
         await resetDatabase( prisma );

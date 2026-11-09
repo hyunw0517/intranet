@@ -9,7 +9,8 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { AccessTokenGuard } from './auth/guard/bearer-token.guard';
-import { APP_GUARD } from '@nestjs/core/constants';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core/constants';
+import { AllExceptionsFilter } from './common/filter/all-exceptions.filter';
 import { RolesGuard } from './auth/guard/roles.guard';
 import { OrganizationModule } from './organization/organization.module';
 import { BoardsModule } from './boards/boards.module';
@@ -38,6 +39,10 @@ import { BoardsModule } from './boards/boards.module';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_FILTER, // 전역 예외 필터: 5xx를 요청 정보(메서드·경로·작업자)와 스택과 함께 기록
+      useClass: AllExceptionsFilter,
     },
   ],
 })

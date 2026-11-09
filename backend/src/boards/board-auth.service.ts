@@ -8,8 +8,8 @@ import { CreateBoardAuthDto } from "./dto/create-board-auth.dto";
 import { UpdateBoardAuthDto } from "./dto/update-board-auth.dto";
 import { BoardAction, BoardPermission, BoardAccess } from "./interface/board-permission.interface";
 import { UserAccessInfo, UserMembership } from "./interface/user-access-info.interface";
-import { BoardRule } from "./interface/board-rule.interface";
-import { ALL_PERMISSION, boardRuleSelect, NO_PERMISSION } from "./const/board-permission.const";
+import { ALL_PERMISSION, boardRuleSelect } from "./const/board-permission.const";
+import { evaluateBoardPermission } from "./util/board-permission.util";
 
 //* 게시판 권한 CRUD + 접근 체크 로직
 @Injectable()
@@ -350,7 +350,7 @@ export class BoardAuthService {
         const visibleIds = new Set(
             boards
                 .filter( ( board ) => board.type !== BoardType.CATEGORY )
-                .filter( ( board ) => userInfo === null || this.evaluate( board.auths, userInfo ).read )
+                .filter( ( board ) => userInfo === null || evaluateBoardPermission( board.auths, userInfo ).read )
                 .map( ( board ) => board.id ),
         );
 
@@ -413,7 +413,7 @@ export class BoardAuthService {
                 this.loadUserContext( user ),
             ]);
 
-            perm = this.evaluate( boardRules, userInfo );
+            perm = evaluateBoardPermission( boardRules, userInfo );
         }
 
         // 읽기 권한이 없으면 404
@@ -489,7 +489,7 @@ export class BoardAuthService {
 
     //* 게시판을 읽을 수 있는 회원 id 목록 (공지 알림 대상)
     // - 대상: 승인된(USER·ADMIN) 재직 중 회원. 시스템 관리자는 규칙과 무관하게 포함
-    // - 규칙·회원·부서 트리를 한 번씩만 조회하고, 회원별 판정은 메모리에서 evaluate로 한다. (회원 수만큼 쿼리하지 않음)
+    // - 규칙·회원·부서 트리를 한 번씩만 조회하고, 회원별 판정은 메모리에서 evaluateBoardPermission으로 한다. (회원 수만큼 쿼리하지 않음)
     // - 트랜잭션 안에서 부르면 같은 tx로 조회한다.
     async findReadableUserIds(
         boardId: number,
@@ -533,7 +533,7 @@ export class BoardAuthService {
         const parentOf = new Map( departments.map( ( d ) => [ d.id, d.parentDepartmentId ] ) );
 
         return users
-            .filter( ( u ) => u.role === UserRole.ADMIN || this.evaluate( boardRules, this.toUserAccessInfo( u, parentOf ) ).read )
+            .filter( ( u ) => u.role === UserRole.ADMIN || evaluateBoardPermission( boardRules, this.toUserAccessInfo( u, parentOf ) ).read )
             .map( ( u ) => u.id );
     }
 
@@ -553,59 +553,4 @@ export class BoardAuthService {
 
         return ids;
     }
-
-    //* 규칙과 회원 정보를 비교해 권한 계산 (DB 조회 없음)
-    // - 규칙 안의 조건은 AND, 해당하는 규칙이 여러 개면 권한별 OR(합집합)
-    // - 해당하는 규칙이 없으면 모두 false (기본 거부)
-    private evaluate(
-        boardRules: BoardRule[],
-        userInfo: UserAccessInfo,
-    ): BoardPermission {
-        const matched = boardRules.filter( ( rule ) => this.matchesRule( rule, userInfo ) );
-
-        if( matched.length === 0 ){
-            return { ...NO_PERMISSION };
-        }
-
-        return {
-            read: matched.some( ( rule ) => rule.authRead ),
-            write: matched.some( ( rule ) => rule.authWrite ),
-            comment: matched.some( ( rule ) => rule.authComment ),
-            admin: matched.some( ( rule ) => rule.authAdmin ),
-        };
-    }
-
-    //* 회원이 규칙의 조건을 모두 만족하는지 (비어 있는 조건은 통과)
-    private matchesRule(
-        rule: BoardRule,
-        userInfo: UserAccessInfo,
-    ){
-        // 1. 최소 직급: 직급 순서는 위쪽(sortOrder가 작을수록)이 높으므로, 회원 sortOrder가 기준 이하면 통과
-        if( rule.position !== null ){
-            if( userInfo.positionSortOrder === null || userInfo.positionSortOrder > rule.position.sortOrder ){
-                return false;
-            }
-        }
-
-        // 2. 부서·직책: 둘 다 조건이 없으면 통과
-        const jobTitleIds = rule.jobTitles.map( ( j ) => j.jobTitleId );
-
-        if( rule.departmentId === null && jobTitleIds.length === 0 ){
-            return true;
-        }
-
-        // 겸직이면 소속마다 확인하고, 같은 소속 안에서 부서와 직책을 함께 만족해야 한다.
-        return userInfo.memberships.some( ( m ) => {
-            const departmentOk = rule.departmentId === null
-                || ( rule.includeSubDepartment
-                    ? m.departmentWithAncestorIds.includes( rule.departmentId )
-                    : m.departmentId === rule.departmentId );
-
-            const jobTitleOk = jobTitleIds.length === 0
-                || ( m.jobTitleId !== null && jobTitleIds.includes( m.jobTitleId ) );
-
-            return departmentOk && jobTitleOk;
-        });
-    }
-
 }

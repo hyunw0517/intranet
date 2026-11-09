@@ -7,8 +7,9 @@ import { navByVariant, type ShellVariant } from "./nav-items";
 import { isActivePath } from "./is-active-path";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
+import { NotificationBell } from "@/features/notification/components/notification-bell";
 
-// 알림은 해당 기능 구현 시 추가한다. (미구현 기능을 동작하는 것처럼 표시하지 않음)
+// 오른쪽: 테마 선택 · 알림(승인 전 GUEST는 숨김) · 사용자 메뉴 (직원·관리자 화면 공용)
 export function AppHeader({ variant }: { variant: ShellVariant }) {
   const pathname = usePathname();
   const current = navByVariant[variant].flatMap((group) => group.items).find((item) => isActivePath(pathname, item.href));
@@ -22,6 +23,7 @@ export function AppHeader({ variant }: { variant: ShellVariant }) {
       <span className="truncate font-medium">{title}</span>
       <div className="ml-auto flex items-center gap-1">
         <ThemeToggle />
+        <NotificationBell />
         <UserMenu />
       </div>
     </header>

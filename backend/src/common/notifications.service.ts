@@ -141,6 +141,15 @@ export class NotificationsService {
         }
     }
 
+    //* 읽은 알림 삭제 (본인 알림만, 물리 삭제) - 안 읽은 알림은 실수로 지워지지 않게 남긴다.
+    async removeRead( userId: number ) {
+        const { count } = await this.prisma.notification.deleteMany({
+            where: { userId, isRead: true },
+        });
+
+        return { count };
+    }
+
     //* 보관 기간이 지난 알림 정리 (매일 04:00 KST)
     // - 서버가 여러 대면 각각 실행되지만, 같은 조건의 DELETE라 중복 실행돼도 결과는 같다.
     // - 규모가 커지면 월별 파티션 + 오래된 파티션 DROP으로 바꾼다. (대량 DELETE의 시간·VACUUM 부담)

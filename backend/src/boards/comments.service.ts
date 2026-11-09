@@ -164,7 +164,7 @@ export class CommentsService {
             throw new BadRequestException('댓글 내용을 입력해 주세요.');
         }
 
-        return await this.prisma.$transaction( async (tx) => {
+        const newComment = await this.prisma.$transaction( async (tx) => {
             const newComment = await tx.comment.create({
                 data: {
                     postId,
@@ -181,20 +181,21 @@ export class CommentsService {
 
             await this.audit.created( tx, newComment.id, '댓글 작성', { boardId, postId, parentCommentId: newComment.parentCommentId } );
 
-            // 글 작성자·부모 댓글 작성자에게 알림 (규칙은 BoardNotifier)
-            await this.boardNotifier.newComment( tx, {
-                boardId,
-                post,
-                isAnonymous: board.isAnonymous,
-                parentAuthorId: parentComment?.authorId ?? null,
-                commentId: newComment.id,
-                comment: body.comment,
-                writerId: user.id,
-            });
-
             return newComment;
         });
 
+        // 커밋 후: 글 작성자·부모 댓글 작성자에게 알림 (규칙은 BoardNotifier, 실패해도 댓글 작성은 성공)
+        await this.boardNotifier.newComment({
+            boardId,
+            post,
+            isAnonymous: board.isAnonymous,
+            parentAuthorId: parentComment?.authorId ?? null,
+            commentId: newComment.id,
+            comment: body.comment,
+            writerId: user.id,
+        });
+
+        return newComment;
     }
 
     //* 댓글 수정
@@ -264,9 +265,10 @@ export class CommentsService {
             await this.audit.deleted( tx, commentId, `댓글 삭제${ comment.authorId !== user.id ? '(관리자)' : '' }`,
                 { boardId, postId, authorId: comment.authorId, comment: comment.comment } );
 
-            // 남의 댓글이면 작성자에게 알림 (본인 삭제는 BoardNotifier가 거른다)
-            await this.boardNotifier.commentDeletedByAdmin( tx, { boardId, post, comment, deleterId: user.id } );
         });
+
+        // 커밋 후: 남의 댓글이면 작성자에게 알림 (본인 삭제는 BoardNotifier가 거른다)
+        await this.boardNotifier.commentDeletedByAdmin({ boardId, post, comment, deleterId: user.id });
 
         return true;
     }

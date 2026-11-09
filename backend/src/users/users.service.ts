@@ -388,9 +388,10 @@ export class UsersService {
         changes: batchChanges( targetUsers, 'role', body.role ),
       }, tx);
 
-      // 가입 승인 알림 (승인된 회원 본인에게)
-      await this.userNotifier.signupApproved( tx, approvedUsers.map( (u) => u.id ) );
     });
+
+    // 커밋 후: 가입 승인 알림 (승인된 회원 본인에게, 실패해도 권한 변경은 성공)
+    await this.userNotifier.signupApproved( approvedUsers.map( (u) => u.id ) );
 
     return true;
   }
@@ -603,8 +604,8 @@ export class UsersService {
         throw new BadRequestException('이미 사용 중인 사원번호입니다.');
     }
 
-    // 가입 + 감사 로그 + 관리자 알림을 한 트랜잭션으로 (가입은 로그인 전이라 작업자·발신자를 가입한 회원으로 명시)
-    return await this.prisma.$transaction( async (tx) => {
+    // 가입 + 감사 로그를 한 트랜잭션으로 (가입은 로그인 전이라 작업자를 가입한 회원으로 명시), 관리자 알림은 커밋 후
+    const newUser = await this.prisma.$transaction( async (tx) => {
       const newUser = await tx.users.create({
         data: {
           empNo: user.empNo,
@@ -621,11 +622,13 @@ export class UsersService {
       // 가입은 로그인 전 요청이라 작업자를 가입한 회원으로 명시
       await this.audit.log({ targetId: newUser.id, actionType: AuditActionType.CREATE, content: `회원가입: ${ userLabel(newUser) }`, actorId: newUser.id }, tx);
 
-      // 승인 대기 알림 (재직 중인 관리자 전원에게)
-      await this.userNotifier.signupRequested( tx, newUser );
-
       return newUser;
     });
+
+    // 커밋 후: 승인 대기 알림 (재직 중인 관리자 전원에게, 실패해도 가입은 성공)
+    await this.userNotifier.signupRequested( newUser );
+
+    return newUser;
   }
 
   //* 비밀번호 확인

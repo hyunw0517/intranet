@@ -387,7 +387,7 @@ export class PostsService {
         }
 
         // 글 저장과 파일 연결을 한 트랜잭션으로 (파일 연결이 실패하면 글도 저장하지 않는다)
-        return await this.prisma.$transaction( async ( tx ) => {
+        const post = await this.prisma.$transaction( async ( tx ) => {
             const post = await tx.post.create({
                 data: {
                     boardId,
@@ -416,14 +416,15 @@ export class PostsService {
                 attachmentIds: body.attachmentIds ?? [],
             });
 
-            // 공지 게시판 새 글 → 읽을 수 있는 회원에게 알림 (작성 시에만, 규칙은 BoardNotifier)
-            if( board.type === BoardType.NOTICE ){
-                await this.boardNotifier.noticeCreated( tx, { board, post, writerId: user.id } );
-            }
-
             return post;
         });
 
+        // 커밋 후: 공지 게시판 새 글 → 읽을 수 있는 회원에게 알림 (작성 시에만, 규칙은 BoardNotifier, 실패해도 글 작성은 성공)
+        if( board.type === BoardType.NOTICE ){
+            await this.boardNotifier.noticeCreated({ board, post, writerId: user.id });
+        }
+
+        return post;
     }
 
     //* 게시글 단일 조회
@@ -562,9 +563,10 @@ export class PostsService {
             await this.audit.deleted( tx, postId, `게시글 삭제${ post.authorId !== user.id ? '(관리자)' : '' }: ${post.title}`,
                 { boardId, authorId: post.authorId } );
 
-            // 남의 글이면 작성자에게 알림 (본인 삭제는 BoardNotifier가 거른다)
-            await this.boardNotifier.postDeletedByAdmin( tx, { board, post, deleterId: user.id } );
         });
+
+        // 커밋 후: 남의 글이면 작성자에게 알림 (본인 삭제는 BoardNotifier가 거른다)
+        await this.boardNotifier.postDeletedByAdmin({ board, post, deleterId: user.id });
 
         return true;
     }

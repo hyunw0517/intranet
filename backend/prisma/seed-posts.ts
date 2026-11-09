@@ -22,6 +22,7 @@ import { BoardPermission } from '../src/boards/interface/board-permission.interf
 import { OrganizationService } from '../src/organization/organization.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { sanitizeEditorHtml } from '../src/common/util/sanitize-html.util';
+import { AuditService } from '../src/common/audit.service';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const RESET = process.argv.includes('--reset');
@@ -31,8 +32,10 @@ const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 // 서비스는 PrismaService(PrismaClient 상속)를 받는다. 스크립트에서는 같은 메서드를 가진 PrismaClient를 넘긴다.
-const boardAuthService = new BoardAuthService( prisma as unknown as PrismaService );
-const organizationService = new OrganizationService( prisma as unknown as PrismaService );
+// 감사 로그 서비스는 조회 메서드만 쓰는 이 스크립트에서는 호출되지 않지만 생성자 인자로 필요하다.
+const auditService = new AuditService( prisma as unknown as PrismaService );
+const boardAuthService = new BoardAuthService( prisma as unknown as PrismaService, auditService );
+const organizationService = new OrganizationService( prisma as unknown as PrismaService, auditService );
 
 // ── 난수 (고정 시드: 내용 배정은 실행할 때마다 같고, 날짜만 실행 시점 기준) ─────────────
 let randomState = 20261104;

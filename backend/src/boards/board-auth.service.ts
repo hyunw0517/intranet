@@ -1,6 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { BoardType, UserRole, Users } from "src/generated/prisma/client";
+import { AuditTargetType, BoardType, Prisma, UserRole, Users, UserStatus } from "src/generated/prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
+import { AuditService, TargetAudit } from "src/common/audit.service";
+import { diffChanges } from "src/common/util/audit-detail.util";
 import { toTreeList } from "src/common/util/tree.util";
 import { CreateBoardAuthDto } from "./dto/create-board-auth.dto";
 import { UpdateBoardAuthDto } from "./dto/update-board-auth.dto";
@@ -13,7 +15,14 @@ import { ALL_PERMISSION, boardRuleSelect, NO_PERMISSION } from "./const/board-pe
 @Injectable()
 export class BoardAuthService {
 
-    constructor( private readonly prisma: PrismaService ){}
+    private readonly audit: TargetAudit;
+
+    constructor(
+        private readonly prisma: PrismaService,
+        auditService: AuditService,
+    ){
+        this.audit = auditService.target( AuditTargetType.BOARD_AUTH );
+    }
 
     //! =====================================================================
     //! 규칙 관리 (관리자)
@@ -78,23 +87,27 @@ export class BoardAuthService {
 
         const { jobTitleIds, ...rule } = target;
 
-        // INSERT (중첩 쓰기: 규칙 + 허용 직책이 하나의 쿼리 묶음으로 함께 저장된다)
-        const newAuth = await this.prisma.boardAuth.create({
-            data: {
-                ...rule,
-                boardId,
-                createdId: user.id,
-                updatedId: user.id,
-                jobTitles: {
-                    createMany: {
-                        data: jobTitleIds.map( ( jobTitleId ) => ({ jobTitleId }) ),
+        // INSERT (중첩 쓰기: 규칙 + 허용 직책이 하나의 쿼리 묶음으로 함께 저장된다) + 감사 로그
+        return await this.prisma.$transaction( async (tx) => {
+            const newAuth = await tx.boardAuth.create({
+                data: {
+                    ...rule,
+                    boardId,
+                    createdId: user.id,
+                    updatedId: user.id,
+                    jobTitles: {
+                        createMany: {
+                            data: jobTitleIds.map( ( jobTitleId ) => ({ jobTitleId }) ),
+                        },
                     },
                 },
-            },
-            select: { id: true },
-        });
+                select: { id: true },
+            });
 
-        return newAuth;
+            await this.audit.created( tx, newAuth.id, '게시판 권한 규칙 생성', { boardId, rule: target } );
+
+            return newAuth;
+        });
     }
 
     //* 게시판 권한 규칙 수정
@@ -137,22 +150,30 @@ export class BoardAuthService {
         const { jobTitleIds, ...rule } = target;
 
         // UPDATE (중첩 쓰기: 규칙 수정 + 직책 "전부 지우고 다시 넣기"가 하나의 트랜잭션으로 실행된다)
-        // 중간 테이블은 이력이 필요 없으므로 변경분 비교 대신 전체 교체한다.
-        await this.prisma.boardAuth.update({
-            where: {
-                id: thisAuth.id,
-                deleted: false,
-            },
-            data: {
-                ...rule,
-                updatedId: user.id,
-                jobTitles: body.jobTitleIds === undefined ? undefined : {
-                    deleteMany: {},
-                    createMany: {
-                        data: jobTitleIds.map( ( jobTitleId ) => ({ jobTitleId }) ),
+        // 중간 테이블은 이력이 필요 없으므로 변경분 비교 대신 전체 교체한다. (감사 로그에는 직책 id 목록의 전후를 남김)
+        await this.prisma.$transaction( async (tx) => {
+            await tx.boardAuth.update({
+                where: {
+                    id: thisAuth.id,
+                    deleted: false,
+                },
+                data: {
+                    ...rule,
+                    updatedId: user.id,
+                    jobTitles: body.jobTitleIds === undefined ? undefined : {
+                        deleteMany: {},
+                        createMany: {
+                            data: jobTitleIds.map( ( jobTitleId ) => ({ jobTitleId }) ),
+                        },
                     },
                 },
-            },
+            });
+
+            const sortIds = ( ids: number[] ) => [ ...ids ].sort( ( a, b ) => a - b );
+            const before = { ...thisAuth, jobTitleIds: sortIds( thisAuth.jobTitles.map( ( j ) => j.jobTitleId ) ) };
+
+            await this.audit.updated( tx, thisAuth.id, '게시판 권한 규칙 수정',
+                diffChanges( before, { ...rule, jobTitleIds: sortIds( jobTitleIds ) } ), { boardId } );
         });
 
         return true;
@@ -166,22 +187,26 @@ export class BoardAuthService {
         authId: number,
     ){
         // 존재 확인 + 삭제 (where에 boardId를 함께 걸어 다른 게시판의 규칙을 지우지 못하게 한다)
-        const { count } = await this.prisma.boardAuth.updateMany({
-            where: {
-                id: authId,
-                boardId,
-                deleted: false,
-            },
-            data: {
-                deleted: true,
-                deletedAt: new Date(),
-                deletedId: user.id,
-            },
-        });
+        await this.prisma.$transaction( async (tx) => {
+            const { count } = await tx.boardAuth.updateMany({
+                where: {
+                    id: authId,
+                    boardId,
+                    deleted: false,
+                },
+                data: {
+                    deleted: true,
+                    deletedAt: new Date(),
+                    deletedId: user.id,
+                },
+            });
 
-        if( count === 0 ){
-            throw new BadRequestException('존재하지 않는 게시판 권한입니다.');
-        }
+            if( count === 0 ){
+                throw new BadRequestException('존재하지 않는 게시판 권한입니다.');
+            }
+
+            await this.audit.deleted( tx, authId, '게시판 권한 규칙 삭제', { boardId } );
+        });
 
         return true;
     }
@@ -439,16 +464,77 @@ export class BoardAuthService {
         // 부서 id → 상위 부서 id
         const parentOf = new Map( departments.map( ( d ) => [ d.id, d.parentDepartmentId ] ) );
 
-        const memberships: UserMembership[] = thisUser.departments.map( ( m ) => ({
+        return this.toUserAccessInfo( thisUser, parentOf );
+    }
+
+    //* 조회한 회원(직급 + 소속) → 규칙과 비교할 형태 (한 명·여러 명 판정 공용)
+    private toUserAccessInfo(
+        user: {
+            position: { sortOrder: number } | null;
+            departments: { departmentId: number; jobTitleId: number | null }[];
+        },
+        parentOf: Map<number, number | null>,
+    ): UserAccessInfo {
+        const memberships: UserMembership[] = user.departments.map( ( m ) => ({
             departmentId: m.departmentId,
             departmentWithAncestorIds: this.getSelfAndAncestorIds( m.departmentId, parentOf ),
             jobTitleId: m.jobTitleId,
         }));
 
         return {
-            positionSortOrder: thisUser.position?.sortOrder ?? null,
+            positionSortOrder: user.position?.sortOrder ?? null,
             memberships,
         };
+    }
+
+    //* 게시판을 읽을 수 있는 회원 id 목록 (공지 알림 대상)
+    // - 대상: 승인된(USER·ADMIN) 재직 중 회원. 시스템 관리자는 규칙과 무관하게 포함
+    // - 규칙·회원·부서 트리를 한 번씩만 조회하고, 회원별 판정은 메모리에서 evaluate로 한다. (회원 수만큼 쿼리하지 않음)
+    // - 트랜잭션 안에서 부르면 같은 tx로 조회한다.
+    async findReadableUserIds(
+        boardId: number,
+        tx?: Prisma.TransactionClient,
+    ): Promise<number[]> {
+        const db = tx ?? this.prisma;
+
+        const [boardRules, users, departments] = await Promise.all([
+            db.boardAuth.findMany({
+                select: boardRuleSelect,
+                where: {
+                    boardId,
+                    deleted: false,
+                },
+            }),
+            db.users.findMany({
+                select: {
+                    id: true,
+                    role: true,
+                    position: { select: { sortOrder: true } },
+                    departments: {
+                        select: { departmentId: true, jobTitleId: true },
+                        where: {
+                            deleted: false,
+                            department: { deleted: false },
+                        },
+                    },
+                },
+                where: {
+                    role: { not: UserRole.GUEST },
+                    status: UserStatus.ACTIVE,
+                    deleted: false,
+                },
+            }),
+            db.department.findMany({
+                select: { id: true, parentDepartmentId: true },
+                where: { deleted: false },
+            }),
+        ]);
+
+        const parentOf = new Map( departments.map( ( d ) => [ d.id, d.parentDepartmentId ] ) );
+
+        return users
+            .filter( ( u ) => u.role === UserRole.ADMIN || this.evaluate( boardRules, this.toUserAccessInfo( u, parentOf ) ).read )
+            .map( ( u ) => u.id );
     }
 
     //* 자기 부서부터 최상위 부서까지의 id

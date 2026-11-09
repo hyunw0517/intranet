@@ -5,21 +5,33 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, UserRole, Users } from 'src/generated/prisma/client';
+import { AuditActionType, AuditTargetType, Prisma, UserRole, Users } from 'src/generated/prisma/client';
 import { PaginateUserQueryDto, UserSortBy } from './dto/paginate-user-query.dto';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { PaginatePage } from 'src/common/util/pagination.util';
 import { SortOrder } from 'src/common/dto/base-pagination.dto';
+import { AuditService, TargetAudit } from 'src/common/audit.service';
+import { batchChanges, diffChanges } from 'src/common/util/audit-detail.util';
+import { UserNotifier } from './user-notifier';
+
+//* 감사 로그 요약에 쓰는 회원 표시 (이름(사번))
+const userLabel = ( user: Pick<Users, 'name' | 'empNo'> ) => `${user.name}(${user.empNo})`;
 
 @Injectable()
 export class UsersService {
-  
+
+  private readonly audit: TargetAudit;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-  ){}
+    auditService: AuditService,
+    private readonly userNotifier: UserNotifier,
+  ){
+    this.audit = auditService.target( AuditTargetType.USER );
+  }
   
   //* 전체 회원 조회
   async paginateUser(
@@ -251,7 +263,20 @@ export class UsersService {
       throw new BadRequestException('존재하지 않는 회원입니다.');
     }
 
-    return user;
+    // 로그인 잠금 상태 (관리자 화면의 "잠금 해제" 표시용, 기록이 없으면 null)
+    // - LoginHistory는 인증 쪽 테이블이지만, AuthModule이 UsersModule을 import하므로 반대로 import하지 않고 직접 읽는다.
+    const loginHistory = await this.prisma.loginHistory.findUnique({
+      select: { failCount: true, lockLevel: true, lockedUntil: true },
+      where: { empNo: user.empNo },
+    });
+
+    return {
+      ...user,
+      loginLock: loginHistory && {
+        ...loginHistory,
+        isLocked: !!loginHistory.lockedUntil && loginHistory.lockedUntil > new Date(),
+      },
+    };
   }
 
   //* (관리자) 회원 정보 수정
@@ -293,21 +318,27 @@ export class UsersService {
       throw new BadRequestException('이미 사용 중인 사원번호입니다.');
     }
 
-    await this.prisma.users.update({
-      where: {
-        id: userId,
-      },
-      data: {
-        empNo: body.empNo,
-        email: body.email,
-        name: body.name,
-        nickname: body.nickname,
-        hp: body.hp,
-        tel: body.tel,
-        // null: 값 지우기, undefined: 변경 안 함
-        birthday: ( body.birthday ) ? new Date(body.birthday) : body.birthday,
-        joinAt: ( body.joinAt ) ? new Date(body.joinAt) : body.joinAt,
-      },
+    const data = {
+      empNo: body.empNo,
+      email: body.email,
+      name: body.name,
+      nickname: body.nickname,
+      hp: body.hp,
+      tel: body.tel,
+      // null: 값 지우기, undefined: 변경 안 함
+      birthday: ( body.birthday ) ? new Date(body.birthday) : body.birthday,
+      joinAt: ( body.joinAt ) ? new Date(body.joinAt) : body.joinAt,
+    };
+
+    await this.prisma.$transaction( async (tx) => {
+      await tx.users.update({
+        where: {
+          id: userId,
+        },
+        data,
+      });
+
+      await this.audit.updated( tx, userId, `(관리자) 회원 정보 수정: ${ userLabel(targetUser) }`, diffChanges( targetUser, data ) );
     });
 
     return this.getUserDetail(userId);
@@ -326,16 +357,19 @@ export class UsersService {
       throw new BadRequestException('GUEST 권한으로는 변경할 수 없습니다.');
     }
 
-    const ids = await this.validateTargetUsers(user, userIds, { requireJoinAt: true });
+    const { ids, targetUsers } = await this.validateTargetUsers(user, userIds, { requireJoinAt: true });
+
+    // 승인 대기(GUEST)였던 회원 = 이번에 가입 승인되는 회원
+    const approvedUsers = targetUsers.filter( (u) => u.role === UserRole.GUEST );
 
     await this.prisma.$transaction( async (tx) => {
       const { count } = await tx.users.updateMany({
         where: {
           id: { in: ids },
-          deleted: false, 
+          deleted: false,
           // 입사일 없는 승인 대기 회원은 수정 대상에서 제외
-          NOT: { role: UserRole.GUEST, joinAt: null },   
-        }, 
+          NOT: { role: UserRole.GUEST, joinAt: null },
+        },
         data: {
           role: body.role,
         }
@@ -345,6 +379,17 @@ export class UsersService {
         throw new BadRequestException("작업 실패. 새로고침 후 다시 시도하세요.");
       }
 
+      await this.audit.logBatch({
+        targetIds: ids,
+        actionType: AuditActionType.ROLE_CHANGE,
+        content: ( approvedUsers.length > 0 )
+          ? `권한 변경 → ${body.role} (가입 승인 ${approvedUsers.length}명): ${ targetUsers.map(userLabel).join(', ') }`
+          : `권한 변경 → ${body.role}: ${ targetUsers.map(userLabel).join(', ') }`,
+        changes: batchChanges( targetUsers, 'role', body.role ),
+      }, tx);
+
+      // 가입 승인 알림 (승인된 회원 본인에게)
+      await this.userNotifier.signupApproved( tx, approvedUsers.map( (u) => u.id ) );
     });
 
     return true;
@@ -358,14 +403,14 @@ export class UsersService {
     body: UpdateUserStatusDto,
   ) {
     
-    const ids = await this.validateTargetUsers(user, userIds);
+    const { ids, targetUsers } = await this.validateTargetUsers(user, userIds);
 
     await this.prisma.$transaction( async (tx) => {
       const { count } = await tx.users.updateMany({
         where: {
           id: { in: ids },
-          deleted: false, 
-        }, 
+          deleted: false,
+        },
         data: {
           status: body.status,
         }
@@ -374,6 +419,13 @@ export class UsersService {
       if( count !== ids.length ){
         throw new BadRequestException("작업 실패. 새로고침 후 다시 시도하세요.");
       }
+
+      await this.audit.logBatch({
+        targetIds: ids,
+        actionType: AuditActionType.STATUS_CHANGE,
+        content: `상태 변경 → ${body.status}: ${ targetUsers.map(userLabel).join(', ') }`,
+        changes: batchChanges( targetUsers, 'status', body.status ),
+      }, tx);
     });
 
     return true;
@@ -386,13 +438,13 @@ export class UsersService {
     userIds: number[],
   ) {
     //대상 회원 검증 (본인 제외, 존재하고 삭제되지 않은 회원만)
-    const ids = await this.validateTargetUsers(user, userIds);
+    const { ids, targetUsers } = await this.validateTargetUsers(user, userIds);
 
     await this.prisma.$transaction( async (tx) => {
       const { count } = await tx.users.updateMany({
         where: {
           id: { in: ids },
-          deleted: false, 
+          deleted: false,
         },
         data: {
           tokenVersion: { increment: 1 },
@@ -406,6 +458,12 @@ export class UsersService {
       if( count !== ids.length ){
         throw new BadRequestException("작업 실패. 새로고침 후 다시 시도하세요.");
       }
+
+      await this.audit.logBatch({
+        targetIds: ids,
+        actionType: AuditActionType.DELETE,
+        content: `(관리자) 회원 삭제: ${ targetUsers.map(userLabel).join(', ') }`,
+      }, tx);
     });
 
     return true;
@@ -414,7 +472,7 @@ export class UsersService {
   //* (관리자) 권한·상태 변경, 삭제 대상 회원 검증 (단건·일괄 공용)
   // - 중복 id 제거 → 본인 포함 여부 → 모두 존재하고 삭제되지 않은 회원인지 확인
   // - requireJoinAt: 입사일이 없는 승인 대기(GUEST) 회원이 있으면 거부한다. (가입 승인 시 사용, 메시지에 이름 표시)
-  // - 검증을 통과한 id 목록(중복 제거)을 돌려준다.
+  // - 검증을 통과한 id 목록(중복 제거)과 대상 회원(변경 전 값 - 감사 로그·가입 승인 알림에 사용)을 돌려준다.
   private async validateTargetUsers(
     user: Pick<Users, 'id'>,
     userIds: number[],
@@ -425,7 +483,7 @@ export class UsersService {
     this.checkNotSelf(user, ids);
 
     const targetUsers = await this.prisma.users.findMany({
-      select: { id: true, name: true, role: true, joinAt: true },
+      select: { id: true, empNo: true, name: true, role: true, status: true, joinAt: true },
       where: {
         id: { in: ids },
         deleted: false,
@@ -448,7 +506,7 @@ export class UsersService {
       }
     }
 
-    return ids;
+    return { ids, targetUsers };
   }
 
   //* (관리자) 삭제 회원 복구
@@ -488,16 +546,20 @@ export class UsersService {
       throw new BadRequestException('같은 사원번호를 사용 중인 회원이 있어 복구할 수 없습니다.');
     }
 
-    await this.prisma.users.update({
-      where: {
-        id: userId,
-      },
-      data: {
-        deleted: false,
-        deletedAt: null,
-        deletedId: null,
-        tokenVersion: { increment: 1 },
-      },
+    await this.prisma.$transaction( async (tx) => {
+      await tx.users.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          deleted: false,
+          deletedAt: null,
+          deletedId: null,
+          tokenVersion: { increment: 1 },
+        },
+      });
+
+      await this.audit.log({ targetId: userId, actionType: AuditActionType.RESTORE, content: `회원 복구: ${ userLabel(deletedUser) }` }, tx);
     });
 
     return this.getUserDetail(userId);
@@ -541,36 +603,40 @@ export class UsersService {
         throw new BadRequestException('이미 사용 중인 사원번호입니다.');
     }
 
-    const newUser = await this.prisma.users.create({
-      data: {
-        empNo: user.empNo,
-        name: user.name,
-        nickname: user.nickname,
-        email: user.email,
-        password: user.password,
-        birthday: ( user.birthday ) ? new Date(user.birthday) : null,
-        hp: user.hp,
-        tel: user.tel,
-      },
-    });
+    // 가입 + 감사 로그 + 관리자 알림을 한 트랜잭션으로 (가입은 로그인 전이라 작업자·발신자를 가입한 회원으로 명시)
+    return await this.prisma.$transaction( async (tx) => {
+      const newUser = await tx.users.create({
+        data: {
+          empNo: user.empNo,
+          name: user.name,
+          nickname: user.nickname,
+          email: user.email,
+          password: user.password,
+          birthday: ( user.birthday ) ? new Date(user.birthday) : null,
+          hp: user.hp,
+          tel: user.tel,
+        },
+      });
 
-    return newUser;
+      // 가입은 로그인 전 요청이라 작업자를 가입한 회원으로 명시
+      await this.audit.log({ targetId: newUser.id, actionType: AuditActionType.CREATE, content: `회원가입: ${ userLabel(newUser) }`, actorId: newUser.id }, tx);
+
+      // 승인 대기 알림 (재직 중인 관리자 전원에게)
+      await this.userNotifier.signupRequested( tx, newUser );
+
+      return newUser;
+    });
   }
 
   //* 비밀번호 확인
   //  - 입력된 비밀번호와 사용자 정보에 저장되어 있는 hash를 비교한다.
-  async verifyPassword(user: Pick<Users, 'password'>, password: string, purpose: 'login' | 'confirm' = 'confirm') {
+  //  - 로그인된 본인의 비밀번호 재확인(정보 수정·탈퇴·비밀번호 변경)용 → 400
+  //  - 로그인 검증은 AuthService가 따로 한다. (원인을 구분하지 않는 메시지 + 실패 잠금)
+  async verifyPassword(user: Pick<Users, 'password'>, password: string) {
     const passOk = await bcrypt.compare( password, user.password );
 
     if( !passOk ){
-      // 예외처리 분리
-      if( purpose === 'login' ){
-        // 로그인 -> 401
-        throw new UnauthorizedException('비밀번호가 일치하지 않습니다.');
-      }else{
-        // 비밀번호 체크 -> 400
-        throw new BadRequestException('비밀번호가 일치하지 않습니다.');
-      }
+      throw new BadRequestException('비밀번호가 일치하지 않습니다.');
     }
   }
 
@@ -582,7 +648,7 @@ export class UsersService {
     body: UpdateUserDto,
   ) {
     const hash = await this.getPasswordHashById(user.id);
-    await this.verifyPassword({ password: hash }, body.currentPassword, 'confirm');
+    await this.verifyPassword({ password: hash }, body.currentPassword);
 
     // 본인을 제외한 다른 회원이 이미 사용 중인 이메일인지 확인한다.
     const emailExists = await this.prisma.users.findFirst({
@@ -597,23 +663,37 @@ export class UsersService {
       throw new BadRequestException('이미 가입된 이메일입니다.');
     }
 
-    return await this.prisma.users.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        email: body.email,
-        name: body.name,
-        nickname: body.nickname,
-        hp: body.hp,
-        tel: body.tel,
-        // null: 값 지우기, undefined: 변경 안 함
-        birthday: ( body.birthday ) ? new Date(body.birthday) : body.birthday,
-        updatedAt: new Date(),
-      },
-      omit: {
-        password: true,
-      },
+    const data = {
+      email: body.email,
+      name: body.name,
+      nickname: body.nickname,
+      hp: body.hp,
+      tel: body.tel,
+      // null: 값 지우기, undefined: 변경 안 함
+      birthday: ( body.birthday ) ? new Date(body.birthday) : body.birthday,
+    };
+
+    return await this.prisma.$transaction( async (tx) => {
+      const before = await tx.users.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+
+      const updatedUser = await tx.users.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          ...data,
+          updatedAt: new Date(),
+        },
+        omit: {
+          password: true,
+        },
+      });
+
+      await this.audit.updated( tx, user.id, `내 정보 수정: ${ userLabel(before) }`, diffChanges( before, data ) );
+
+      return updatedUser;
     });
   }
 
@@ -738,17 +818,21 @@ export class UsersService {
     body: DeleteUserDto,
   ) {
     const hash = await this.getPasswordHashById(user.id);
-    await this.verifyPassword({ password: hash }, body.password, 'confirm');
+    await this.verifyPassword({ password: hash }, body.password);
 
-    await this.prisma.users.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        deleted: true,
-        deletedAt: new Date(),
-        deletedId: user.id,
-      },
+    await this.prisma.$transaction( async (tx) => {
+      const deletedUser = await tx.users.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          deleted: true,
+          deletedAt: new Date(),
+          deletedId: user.id,
+        },
+      });
+
+      await this.audit.deleted( tx, user.id, `회원 탈퇴: ${ userLabel(deletedUser) }` );
     });
 
     return true;

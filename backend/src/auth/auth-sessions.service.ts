@@ -1,9 +1,11 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { AuthSession, Users } from 'src/generated/prisma/client';
+import { AuditActionType, AuditTargetType, AuthSession, Users } from 'src/generated/prisma/client';
+import { AuthNotifier } from './auth-notifier';
 import { JwtPayload } from './types/jwt-payload.type';
 import { REFRESH_REUSE_GRACE, REFRESH_TOKEN_EXPIRES_IN, SESSION_MAX_AGE } from './const/token-const';
+import { AuditService, TargetAudit } from 'src/common/audit.service';
 
 //* 토큰 발급에 필요한 세션 정보
 export type SessionForToken = Pick<AuthSession, 'id' | 'currentJti' | 'expiresAt'>;
@@ -28,7 +30,15 @@ type SessionUser = Pick<Users, 'id' | 'tokenVersion'>;
  */
 @Injectable()
 export class AuthSessionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly audit: TargetAudit;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    auditService: AuditService,
+    private readonly authNotifier: AuthNotifier,
+  ) {
+    this.audit = auditService.target(AuditTargetType.USER);
+  }
 
   //* 세션 생성 (로그인, 가입)
   //  - 만들기 전에 그 사용자의 끝난 세션을 지운다. (스케줄러 없이 테이블이 계속 쌓이지 않게)
@@ -102,6 +112,18 @@ export class AuthSessionsService {
 
       // ③ 재사용 감지 - 정상 사용자와 탈취자 중 누가 옛 토큰을 냈는지 서버는 구분할 수 없으므로 세션 전체를 끊는다.
       await this.revokeSession(session.id, user.id);
+
+      // 보안 이벤트 기록: 옛 토큰을 낸 사람은 알 수 없으므로 작업자는 NULL, 대상은 세션 주인
+      await this.audit.log({
+        targetId: user.id,
+        actionType: AuditActionType.TOKEN_REUSE,
+        content: 'refresh token 재사용 감지 - 세션 폐기',
+        detail: { sessionId: session.id },
+        actorId: null,
+      });
+
+      // 본인에게 보안 알림
+      await this.authNotifier.sessionRevoked( user.id );
 
       throw new UnauthorizedException('보안을 위해 로그아웃되었습니다. 다시 로그인해 주세요.');
     }

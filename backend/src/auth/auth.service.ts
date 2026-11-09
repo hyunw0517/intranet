@@ -2,28 +2,47 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException,
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from 'src/users/users.service';
 import * as bcrypt from 'bcrypt';
-import { randomInt } from 'crypto';
+import { randomInt, randomUUID } from 'crypto';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ConfigService } from '@nestjs/config';
 import { ENV_HASH_ROUNDS_KEY, ENV_JWT_SECRET } from 'src/common/const/env-keys.const';
-import { Users, UserStatus } from 'src/generated/prisma/client';
+import { AuditActionType, AuditTargetType, Users, UserStatus } from 'src/generated/prisma/client';
 import { ACCESS_TOKEN_EXPIRES_IN, REFRESH_TOKEN_EXPIRES_IN } from './const/token-const';
 import { JwtPayload } from './types/jwt-payload.type';
 import { AuthSessionsService, SessionForToken } from './auth-sessions.service';
+import { AuditService, TargetAudit } from 'src/common/audit.service';
+import { LoginHistoryService } from './login-history.service';
+import { LOGIN_FAILED_MESSAGE } from './const/login-lock.const';
 
 type TokenUser = Pick<Users, 'id' | 'empNo' | 'role' | 'tokenVersion'>;
 type SessionUser = Pick<Users, 'id' | 'tokenVersion'>;
 
+//* 로그인 실패 사유 (감사 로그 detail.reason)
+type LoginFailReason = 'NOT_FOUND' | 'WRONG_PASSWORD' | 'NOT_ACTIVE';
+
+/**
+ * *[감사 로그]
+ * - 로그인·로그아웃·비밀번호는 세션(AuthSessionsService)과 회원(UsersService) 쓰기가 나뉘어 있어 하나의 트랜잭션이 없다.
+ *   그래서 마지막 쓰기가 성공한 뒤 기록한다. (회원 생성처럼 한 서비스 안에서 끝나는 쓰기는 그 서비스가 같은 트랜잭션에 기록)
+ * - 로그인 전 요청(로그인·가입·로그아웃 쿠키)은 req.user가 없거나 다를 수 있으므로 작업자를 명시한다.
+ * - 토큰 재발급(rotation)은 10분마다 일어나는 정상 동작이라 기록하지 않는다. (재사용 감지만 기록)
+ */
 @Injectable()
 export class AuthService {
+
+  private readonly audit: TargetAudit;
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly usersService: UsersService,
     private readonly authSessionsService: AuthSessionsService,
-  ){}
+    auditService: AuditService,
+    private readonly loginHistoryService: LoginHistoryService,
+  ){
+    this.audit = auditService.target( AuditTargetType.USER );
+  }
 
     /**
      * *[토큰 사용 방식]
@@ -155,6 +174,17 @@ export class AuthService {
   async loginUser( user: TokenUser, userAgent?: string ) {
     const session = await this.authSessionsService.createSession(user, userAgent);
 
+    // 로그인 성공 → 실패 횟수·잠금 단계 초기화 (가입 직후 로그인은 행이 없어 아무것도 하지 않음)
+    await this.loginHistoryService.reset(user.empNo);
+
+    await this.audit.log({
+      targetId: user.id,
+      actionType: AuditActionType.LOGIN,
+      content: `로그인: ${user.empNo}`,
+      detail: { sessionId: session.id },
+      actorId: user.id,
+    });
+
     return this.issueTokens(user, session);
   }
 
@@ -191,7 +221,17 @@ export class AuthService {
       return;
     }
 
-    await this.authSessionsService.revokeSession(payload.sid, payload.sub);
+    const revoked = await this.authSessionsService.revokeSession(payload.sid, payload.sub);
+
+    if( revoked ){
+      await this.audit.log({
+        targetId: payload.sub,
+        actionType: AuditActionType.LOGOUT,
+        content: `로그아웃: ${payload.empNo}`,
+        detail: { sessionId: payload.sid },
+        actorId: payload.sub, // 로그아웃은 access token 없이 refresh 쿠키로 오므로 req.user가 없다
+      });
+    }
   }
 
   //* 모든 기기에서 로그아웃 - 지금 기기만 유지
@@ -201,6 +241,13 @@ export class AuthService {
     const updatedUser = await this.usersService.increaseTokenVersion(user.id);
 
     const session = await this.authSessionsService.renewSession(currentSessionId, updatedUser, userAgent);
+
+    await this.audit.log({
+      targetId: user.id,
+      actionType: AuditActionType.LOGOUT,
+      content: `모든 기기에서 로그아웃 (현재 기기 유지): ${updatedUser.empNo}`,
+      detail: { allDevices: true, keptSessionId: session.id },
+    });
 
     return this.issueTokens(updatedUser, session);
   }
@@ -217,25 +264,103 @@ export class AuthService {
     if( !revoked ){
       throw new NotFoundException('로그인 기기를 찾을 수 없습니다.');
     }
+
+    await this.audit.log({
+      targetId: user.id,
+      actionType: AuditActionType.LOGOUT,
+      content: '다른 기기 로그아웃',
+      detail: { sessionId },
+    });
   }
 
   //* 로그인 시 사번/패스워드 검증
+  //  1. 잠긴 사번이면 비밀번호를 확인하지 않고 429
+  //  2. 회원 조회 + 비밀번호 확인 (없는 사번도 같은 시간이 걸리도록 가짜 해시와 비교)
+  //  3. 실패: 감사 로그 + 실패 횟수 (5회째면 잠금 → 429), 응답 메시지는 원인과 무관하게 같다 (등록된 사번 노출 방지)
+  //  4. 성공: 찾은 회원 반환 (실패 횟수 초기화는 로그인이 끝난 loginUser에서)
   async authenticateWithEmpNoAndPassword(
     user: Pick<Users, 'empNo' | 'password'>
   ){
-      // 1. 사용자가 존재하는지 확인 (empNo)
-      // 2. 비밀번호가 맞는지 확인 
-      // 3. 모두 통과되면 찾은 사용자 정보 반환
-      
+      await this.loginHistoryService.assertNotLocked( user.empNo );
+
       const existingUser = await this.usersService.getUserWithPasswordByEmpNo(user.empNo);
 
-      if( !existingUser ) {
-          throw new UnauthorizedException('존재하지 않는 사용자입니다.'); 
+      // 없는 사번이면 bcrypt 비교를 건너뛰어 응답이 빨라지므로, 응답 시간으로 등록 여부를 알 수 없도록 가짜 해시와 비교한다.
+      const passwordOk = await bcrypt.compare( user.password, existingUser?.password ?? await this.getDummyHash() );
+
+      if( !existingUser || !passwordOk ){
+        const userId = existingUser?.id ?? null;
+
+        await this.logLoginFailure( user.empNo, userId, existingUser ? 'WRONG_PASSWORD' : 'NOT_FOUND' );
+
+        const lock = await this.loginHistoryService.recordFailure( user.empNo, userId );
+
+        if( lock ){
+          await this.audit.log({
+            targetId: userId,
+            actionType: AuditActionType.LOGIN_LOCKED,
+            content: `로그인 잠금 ${lock.lockLevel}단계: ${user.empNo}`,
+            detail: { empNo: user.empNo, lockLevel: lock.lockLevel, lockedUntil: lock.lockedUntil },
+            actorId: null,
+          });
+
+          throw this.loginHistoryService.lockedException( lock.lockedUntil );
+        }
+
+        throw new UnauthorizedException( LOGIN_FAILED_MESSAGE );
       }
 
-      await this.usersService.verifyPassword( existingUser, user.password, 'login' );
-
       return existingUser;
+  }
+
+  //* 없는 사번 비교용 가짜 해시 (처음 한 번만 만든다. 실제 해시와 같은 cost라 비교 시간이 같다)
+  private dummyHash?: Promise<string>;
+  private getDummyHash(){
+    this.dummyHash ??= this.hashPassword( randomUUID() );
+    return this.dummyHash;
+  }
+
+  //* (관리자) 로그인 잠금 해제 - 실패 횟수·단계도 함께 초기화
+  async unlockLogin( userId: number ){
+    const targetUser = await this.usersService.getUserDetail(userId);
+
+    const unlocked = await this.loginHistoryService.reset( targetUser.empNo );
+
+    if( unlocked ){
+      await this.audit.log({
+        targetId: userId,
+        actionType: AuditActionType.LOGIN_UNLOCKED,
+        content: `(관리자) 로그인 잠금 해제: ${targetUser.name}(${targetUser.empNo})`,
+      });
+    }
+
+    return { unlocked };
+  }
+
+  //* 로그인 시 재직 상태 확인 (BasicTokenGuard) - 실패하면 감사 로그를 남기고 예외를 그대로 던진다.
+  //  - checkUserStatus는 재발급 가드에서도 쓰므로 로그인 전용으로 감싼다.
+  async checkLoginStatus(
+    user: Pick<Users, 'id' | 'empNo' | 'status'>
+  ){
+    try{
+      this.checkUserStatus(user);
+    }catch( e ){
+      await this.logLoginFailure( user.empNo, user.id, 'NOT_ACTIVE', user.status );
+      throw e;
+    }
+  }
+
+  //* 로그인 실패 감사 로그
+  //  - 시도한 사람은 알 수 없으므로 작업자는 NULL, 대상은 그 사번의 회원(없으면 NULL)
+  //  - 시도한 사번은 detail에 남긴다. (비밀번호는 남기지 않음)
+  private logLoginFailure( empNo: string, userId: number | null, reason: LoginFailReason, status?: UserStatus ){
+    return this.audit.log({
+      targetId: userId,
+      actionType: AuditActionType.LOGIN_FAILED,
+      content: `로그인 실패: ${empNo}`,
+      detail: { empNo, reason, ...( status && { status } ) },
+      actorId: null,
+    });
   }
 
   //* 사용자 상태 체크 -> 재직(ACTIVE) 상태만 로그인 허용
@@ -301,7 +426,7 @@ export class AuthService {
     userAgent?: string,
   ){
     const hash = await this.usersService.getPasswordHashById(user.id);
-    await this.usersService.verifyPassword({ password: hash }, body.currentPassword, 'confirm');
+    await this.usersService.verifyPassword({ password: hash }, body.currentPassword);
 
     if( body.currentPassword === body.newPassword ){
       throw new BadRequestException('새 비밀번호가 현재 비밀번호와 같습니다.');
@@ -313,6 +438,12 @@ export class AuthService {
 
     const session = await this.authSessionsService.renewSession(currentSessionId, updatedUser, userAgent);
 
+    await this.audit.log({
+      targetId: user.id,
+      actionType: AuditActionType.PASSWORD_CHANGE,
+      content: `비밀번호 변경: ${updatedUser.empNo}`,
+    });
+
     return this.issueTokens(updatedUser, session);
   }
 
@@ -323,13 +454,24 @@ export class AuthService {
   async resetPassword( 
     userId: number 
   ){
-    await this.usersService.getUserDetail(userId);
+    const targetUser = await this.usersService.getUserDetail(userId);
 
     const temporaryPassword = this.generateTemporaryPassword();
 
     const newHash = await this.hashPassword(temporaryPassword);
 
     await this.usersService.updatePassword(userId, newHash);
+
+    // 비밀번호를 잊어 잠긴 회원이 임시 비밀번호로 바로 로그인할 수 있도록 잠금도 해제한다.
+    const unlocked = await this.loginHistoryService.reset(targetUser.empNo);
+
+    // 임시 비밀번호는 남기지 않는다.
+    await this.audit.log({
+      targetId: userId,
+      actionType: AuditActionType.PASSWORD_RESET,
+      content: `(관리자) 비밀번호 초기화: ${targetUser.name}(${targetUser.empNo})`,
+      detail: { loginUnlocked: unlocked },
+    });
 
     return { temporaryPassword };
   }

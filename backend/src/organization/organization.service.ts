@@ -1,17 +1,26 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Users } from 'src/generated/prisma/client';
+import { AuditTargetType, Users } from 'src/generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUserDepartmentDto } from './dto/create-user-department.dto';
 import { UpdateUserDepartmentDto } from './dto/update-user-department.dto';
 import { UpdateUserPositionDto } from './dto/update-user-position.dto';
+import { AuditService, TargetAudit } from 'src/common/audit.service';
+import { diffChanges } from 'src/common/util/audit-detail.util';
 
 // 회원 소속 서비스 -> 회원의 직급(Users.positionId) + 소속(UserDepartment: 부서·직책·대표 소속)
 @Injectable()
 export class OrganizationService {
 
+    private readonly userAudit: TargetAudit;        // 회원 직급 지정
+    private readonly membershipAudit: TargetAudit;  // 회원 소속
+
     constructor(
         private readonly prisma: PrismaService,
-    ){}
+        auditService: AuditService,
+    ){
+        this.userAudit = auditService.target( AuditTargetType.USER );
+        this.membershipAudit = auditService.target( AuditTargetType.USER_DEPARTMENT );
+    }
 
     //* 회원 소속 조회 (직급 + 소속 목록)
     async getUserOrganization(
@@ -106,13 +115,22 @@ export class OrganizationService {
             }
         }
 
-        await this.prisma.users.update({
-            where: { 
-                id: userId, 
-            },
-            data: { 
-                positionId: body.positionId, 
-            },
+        await this.prisma.$transaction( async (tx) => {
+            const before = await tx.users.findUniqueOrThrow({
+                select: { positionId: true, name: true, empNo: true },
+                where: { id: userId },
+            });
+
+            await tx.users.update({
+                where: {
+                    id: userId,
+                },
+                data: {
+                    positionId: body.positionId,
+                },
+            });
+
+            await this.userAudit.updated( tx, userId, `직급 지정: ${before.name}(${before.empNo})`, diffChanges( before, { positionId: body.positionId } ) );
         });
 
         return this.getUserOrganization(userId);
@@ -138,18 +156,27 @@ export class OrganizationService {
         });
 
         // INSERT
-        const newUserDepartment = await this.prisma.userDepartment.create({
-            data: {
-                userId,
-                departmentId: body.departmentId,
-                jobTitleId: body.jobTitleId ?? null,
-                isPrimary: ( departmentCount > 0 ) ? false : true, // 첫 소속이면 대표 소속
-                createdId: user.id,
-                updatedId: user.id,
-            },
-        });
+        return await this.prisma.$transaction( async (tx) => {
+            const newUserDepartment = await tx.userDepartment.create({
+                data: {
+                    userId,
+                    departmentId: body.departmentId,
+                    jobTitleId: body.jobTitleId ?? null,
+                    isPrimary: ( departmentCount > 0 ) ? false : true, // 첫 소속이면 대표 소속
+                    createdId: user.id,
+                    updatedId: user.id,
+                },
+            });
 
-        return newUserDepartment;
+            await this.membershipAudit.created( tx, newUserDepartment.id, '회원 소속 추가', {
+                userId,
+                departmentId: newUserDepartment.departmentId,
+                jobTitleId: newUserDepartment.jobTitleId,
+                isPrimary: newUserDepartment.isPrimary,
+            });
+
+            return newUserDepartment;
+        });
     }
 
     //* 회원 소속 수정 (부서·직책)
@@ -170,19 +197,27 @@ export class OrganizationService {
         await this.checkJobTitle(body.jobTitleId);
 
         // UPDATE (undefined인 필드는 Prisma가 수정에서 제외, jobTitleId: null은 직책 해제)
-        const updateUserDepartment = await this.prisma.userDepartment.update({
-            where: {
-                id: thisUserDepartment.id,
-                deleted: false,
-            },
-            data: {
-                departmentId: body.departmentId,
-                jobTitleId: body.jobTitleId,
-                updatedId: user.id,
-            },
-        });
+        const data = {
+            departmentId: body.departmentId,
+            jobTitleId: body.jobTitleId,
+        };
 
-        return updateUserDepartment;
+        return await this.prisma.$transaction( async (tx) => {
+            const updateUserDepartment = await tx.userDepartment.update({
+                where: {
+                    id: thisUserDepartment.id,
+                    deleted: false,
+                },
+                data: {
+                    ...data,
+                    updatedId: user.id,
+                },
+            });
+
+            await this.membershipAudit.updated( tx, thisUserDepartment.id, '회원 소속 수정', diffChanges( thisUserDepartment, data ), { userId } );
+
+            return updateUserDepartment;
+        });
     }
 
     //* 회원 소속 삭제
@@ -192,18 +227,6 @@ export class OrganizationService {
         userDepartmentId: number,
     ){
         const thisUserDepartment = await this.findUserDepartment(userId, userDepartmentId);
-
-        const deleteQuery = this.prisma.userDepartment.update({
-            where: {
-                id: thisUserDepartment.id,
-                deleted: false,
-            },
-            data: {
-                deleted: true,
-                deletedAt: new Date(),
-                deletedId: user.id,
-            },
-        });
 
         // 대표 소속이면 남은 소속 중 가장 오래된 소속을 대표로 승격
         const nextPrimary = thisUserDepartment.isPrimary
@@ -220,27 +243,43 @@ export class OrganizationService {
             })
             : null;
 
-        // 승격 대상이 없으면 (대표 소속이 아니거나, 남은 소속이 없으면) 삭제만
-        if( !nextPrimary ){
-            await deleteQuery;
-            return true;
-        }
-
-        // DELETE (트랜잭션: 삭제+승격)
+        // DELETE (트랜잭션: 삭제 + 승격(대상이 있을 때) + 감사 로그)
         // 대표 소속 unique(userId, isPrimary, deleted: false)는 삭제된 행을 제외하므로, 삭제를 먼저 실행해야 승격이 가능
-        await this.prisma.$transaction([
-            deleteQuery,
-            this.prisma.userDepartment.update({
+        await this.prisma.$transaction( async (tx) => {
+            await tx.userDepartment.update({
                 where: {
-                    id: nextPrimary.id,
+                    id: thisUserDepartment.id,
                     deleted: false,
                 },
                 data: {
-                    isPrimary: true,
-                    updatedId: user.id,
+                    deleted: true,
+                    deletedAt: new Date(),
+                    deletedId: user.id,
                 },
-            }),
-        ]);
+            });
+
+            // 승격 대상이 없으면 (대표 소속이 아니거나, 남은 소속이 없으면) 삭제만
+            if( nextPrimary ){
+                await tx.userDepartment.update({
+                    where: {
+                        id: nextPrimary.id,
+                        deleted: false,
+                    },
+                    data: {
+                        isPrimary: true,
+                        updatedId: user.id,
+                    },
+                });
+            }
+
+            await this.membershipAudit.deleted( tx, thisUserDepartment.id, '회원 소속 삭제', {
+                userId,
+                departmentId: thisUserDepartment.departmentId,
+                jobTitleId: thisUserDepartment.jobTitleId,
+                wasPrimary: thisUserDepartment.isPrimary,
+                promotedPrimaryId: nextPrimary?.id ?? null, // 대표로 승격된 소속
+            });
+        });
 
         return true;
     }
@@ -258,10 +297,19 @@ export class OrganizationService {
             return thisUserDepartment;
         }
 
-        // UPDATE (트랜잭션: 기존 대표 해제 + 새 대표 지정)
-        // 대표 소속 unique 때문에 기존 대표를 먼저 해제. 
-        const [, updateUserDepartment] = await this.prisma.$transaction([
-            this.prisma.userDepartment.updateMany({
+        // UPDATE (트랜잭션: 기존 대표 해제 + 새 대표 지정 + 감사 로그)
+        // 대표 소속 unique 때문에 기존 대표를 먼저 해제.
+        return await this.prisma.$transaction( async (tx) => {
+            const previousPrimary = await tx.userDepartment.findFirst({
+                select: { id: true },
+                where: {
+                    userId,
+                    isPrimary: true,
+                    deleted: false,
+                },
+            });
+
+            await tx.userDepartment.updateMany({
                 where: {
                     userId,
                     isPrimary: true,
@@ -271,8 +319,9 @@ export class OrganizationService {
                     isPrimary: false,
                     updatedId: user.id,
                 },
-            }),
-            this.prisma.userDepartment.update({
+            });
+
+            const updateUserDepartment = await tx.userDepartment.update({
                 where: {
                     id: thisUserDepartment.id,
                     deleted: false,
@@ -281,10 +330,13 @@ export class OrganizationService {
                     isPrimary: true,
                     updatedId: user.id,
                 },
-            }),
-        ]);
+            });
 
-        return updateUserDepartment;
+            await this.membershipAudit.updated( tx, thisUserDepartment.id, '대표 소속 변경',
+                { isPrimary: { before: false, after: true } }, { userId, previousPrimaryId: previousPrimary?.id ?? null } );
+
+            return updateUserDepartment;
+        });
     }
 
     // 회원 존재 확인 (퇴사자는 관리자 재량이므로 막지 않음)

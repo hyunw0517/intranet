@@ -11,6 +11,7 @@ import { CommentsController } from './comments.controller';
 import { CommentsService } from './comments.service';
 import { CommonModule } from 'src/common/common.module';
 import { CalendarController } from './calendar.controller';
+import { BoardNotifier } from './board-notifier';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { CalendarController } from './calendar.controller';
     BoardsService,
     PostsService,
     CommentsService,
+    BoardNotifier, // 게시판 알림 규칙 (댓글·공지·관리자 삭제)
   ],
 })
 export class BoardsModule {}

@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Users, UserStatus } from 'src/generated/prisma/client';
+import { AuditActionType, AuditTargetType, Users, UserStatus } from 'src/generated/prisma/client';
+import { AuditService, TargetAudit } from 'src/common/audit.service';
+import { diffChanges } from 'src/common/util/audit-detail.util';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateSortOrderDto } from './dto/update-sort-order.dto';
 import { isSameIdSet } from 'src/common/util/id-set.util';
@@ -11,9 +13,14 @@ import { PaginatePage } from 'src/common/util/pagination.util';
 @Injectable()
 export class PositionsService {
   
+    private readonly audit: TargetAudit;
+
     constructor(
         private readonly prisma: PrismaService,
-    ){}
+        auditService: AuditService,
+    ){
+        this.audit = auditService.target( AuditTargetType.POSITION );
+    }
     
     //* 전체 직급 조회
     async paginatePosition(query: PaginatePositionQueryDto) {
@@ -62,16 +69,20 @@ export class PositionsService {
         });
         
         // INSERT
-        const newPosition = await this.prisma.position.create({
-            data: {
-                name: body.name,
-                sortOrder: positionCount,
-                createdId: user.id,
-                updatedId: user.id,
-            },
+        return await this.prisma.$transaction( async (tx) => {
+            const newPosition = await tx.position.create({
+                data: {
+                    name: body.name,
+                    sortOrder: positionCount,
+                    createdId: user.id,
+                    updatedId: user.id,
+                },
+            });
+
+            await this.audit.created( tx, newPosition.id, `직급 생성: ${newPosition.name}` );
+
+            return newPosition;
         });
-        
-        return newPosition;
     }
 
     //* 직급 수정
@@ -106,18 +117,22 @@ export class PositionsService {
         }
 
         // UPDATE
-        const updatePosition = await this.prisma.position.update({
-            where: {
-                id: thisPosition.id,
-                deleted: false,
-            },
-            data: {
-                name: body.name,
-                updatedId: user.id,
-            },
+        return await this.prisma.$transaction( async (tx) => {
+            const updatePosition = await tx.position.update({
+                where: {
+                    id: thisPosition.id,
+                    deleted: false,
+                },
+                data: {
+                    name: body.name,
+                    updatedId: user.id,
+                },
+            });
+
+            await this.audit.updated( tx, thisPosition.id, `직급 수정: ${updatePosition.name}`, diffChanges( thisPosition, { name: body.name } ) );
+
+            return updatePosition;
         });
-        
-        return updatePosition;
     }
 
     //* 직급 순서 변경 (드래그 정렬)
@@ -131,6 +146,7 @@ export class PositionsService {
             const positions = await tx.position.findMany({
                 select: { id: true },
                 where: { deleted: false },
+                orderBy: { sortOrder: 'asc' },
             });
 
             if( !isSameIdSet( positions.map( (p) => p.id ), body.ids ) ){
@@ -147,6 +163,14 @@ export class PositionsService {
                     },
                 });
             }
+
+            // 변경 전·후 순서를 id 배열로 남김 (직급 순서는 게시판 권한 "이 직급 이상" 판단에도 쓰이므로 중요)
+            await this.audit.logBatch({
+                targetIds: body.ids,
+                actionType: AuditActionType.UPDATE,
+                content: '직급 순서 변경',
+                extra: { orderBefore: positions.map( (p) => p.id ), orderAfter: body.ids },
+            }, tx);
         });
 
         return true;
@@ -194,10 +218,10 @@ export class PositionsService {
             throw new BadRequestException('게시판 권한에서 사용 중인 직급은 삭제할 수 없습니다.');
         }
 
-        // DELETE (트랜잭션: 삭제+재정렬)
-        await this.prisma.$transaction([
+        // DELETE (트랜잭션: 삭제+재정렬+감사 로그)
+        await this.prisma.$transaction( async (tx) => {
             // 대상 직급 삭제
-            this.prisma.position.update({
+            await tx.position.update({
                 where: {
                     id: thisPosition.id,
                     deleted: false,
@@ -207,10 +231,10 @@ export class PositionsService {
                     deletedAt: new Date(),
                     deletedId: user.id,
                 },
-            }),
+            });
 
             // 삭제된 직급을 제외하고 재정렬
-            this.prisma.position.updateMany({
+            await tx.position.updateMany({
                 where: {
                     sortOrder: { gt: thisPosition.sortOrder }, // 기준 sortOrder를 초과한 정렬 데이터만
                     deleted: false,
@@ -218,8 +242,10 @@ export class PositionsService {
                 data: {
                     sortOrder: { decrement: 1 }, // -1씩
                 },
-            }),
-        ]);
+            });
+
+            await this.audit.deleted( tx, thisPosition.id, `직급 삭제: ${thisPosition.name}` );
+        });
         
         return true; 
 

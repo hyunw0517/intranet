@@ -79,6 +79,16 @@ export interface AdminUserDetail {
   createdAt: string;
   position: NamedRef | null;
   departments: UserDepartmentItem[];
+  loginLock: LoginLockStatus | null; // 로그인 실패 기록이 없으면 null
+}
+
+// 로그인 실패 잠금 상태 (서버 LoginHistory - 5회 연속 실패마다 10분 → 30분 → 1시간 잠금)
+// isLocked는 서버가 응답한 시점 기준이다. (잠금 해제 시각이 지나면 다시 불러올 때 false)
+export interface LoginLockStatus {
+  failCount: number; // 현재 단계에서 연속 실패 횟수
+  lockLevel: number; // 잠금 단계 (0: 잠긴 적 없음)
+  lockedUntil: string | null;
+  isLocked: boolean;
 }
 
 // PATCH /users/:id (AdminUpdateUserDto) - 선택 항목은 빈 문자열이면 서버에서 null로 저장

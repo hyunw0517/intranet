@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import { extname } from "path";
-import { FileTargetType, Prisma } from "src/generated/prisma/client";
+import { AuditTargetType, FileTargetType, Prisma } from "src/generated/prisma/client";
+import { AuditService, TargetAudit } from "./audit.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { FileKind, IMAGE_MIME_BY_EXT, MAX_ATTACHMENTS_PER_TARGET, PUBLIC_IMAGE_URL_PREFIX, PUBLIC_THUMBNAIL_URL_PREFIX, STORED_IMAGE_NAME_REGEX } from "./const/file.const";
 import { FileStorage } from "./storage/file-storage";
@@ -38,10 +39,15 @@ export interface FileInfo {
 @Injectable()
 export class FilesService {
 
+    private readonly audit: TargetAudit;
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly storage: FileStorage,
-    ){}
+        auditService: AuditService,
+    ){
+        this.audit = auditService.target( AuditTargetType.FILE );
+    }
 
     //* 업로드 저장 + 기록
     // 대상(targetType/targetId)은 비워 두고, 글 저장 시 syncTargetFiles로 연결한다.
@@ -94,17 +100,24 @@ export class FilesService {
         }
 
         try {
-            const row = await this.prisma.files.create({
-                select: FILE_INFO_SELECT,
-                data: {
-                    originalName: file.originalname,
-                    storedName,
-                    path: key,
-                    size: file.size,
-                    mimeType,
-                    createdId: userId,
-                    updatedId: userId,
-                },
+            // 파일 행 + 감사 로그를 한 트랜잭션으로 (연결·해제는 게시글 감사 로그의 imageIds·attachmentIds에 남는다)
+            const row = await this.prisma.$transaction( async ( tx ) => {
+                const created = await tx.files.create({
+                    select: FILE_INFO_SELECT,
+                    data: {
+                        originalName: file.originalname,
+                        storedName,
+                        path: key,
+                        size: file.size,
+                        mimeType,
+                        createdId: userId,
+                        updatedId: userId,
+                    },
+                });
+
+                await this.audit.created( tx, created.id, `파일 업로드(${kind}): ${file.originalname}`, { path: key, size: file.size, mimeType } );
+
+                return created;
             });
 
             return this.toFileInfo( row );

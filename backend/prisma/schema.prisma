@@ -50,6 +50,7 @@ enum FileTargetType {
 
 //? 알림 대상 구분 -> 모델: Notification (받는 사람이 확인할 대상)
 enum NotificationTargetType {
+  USER                // 회원 (가입 승인 대기·승인)
   POST                // 게시글
   COMMENT             // 댓글
   APPROVAL            // 전자결재 문서
@@ -60,9 +61,14 @@ enum NotificationTargetType {
 //? 알림 이벤트 구분 -> 모델: Notification (받는 사람 입장에서 무슨 일이 생겼는지)
 enum NotificationActionType {
   SYSTEM                // 시스템 안내
+  SIGNUP_REQUESTED      // 신규 회원가입 - 승인 대기 (관리자에게)
+  SIGNUP_APPROVED       // 가입 승인 완료 (가입한 회원에게)
   NOTICE_CREATED        // 공지사항 등록
   POST_COMMENTED        // 내 글에 댓글
   COMMENT_REPLIED       // 내 댓글에 답글
+  POST_DELETED_BY_ADMIN    // 관리 권한으로 내 글이 삭제됨
+  COMMENT_DELETED_BY_ADMIN // 관리 권한으로 내 댓글이 삭제됨
+  SESSION_REVOKED          // 보안: refresh token 재사용 감지로 한 기기의 로그인 해제
   APPROVAL_REQUESTED    // 결재 요청 (내 차례 도착)
   APPROVAL_APPROVED     // 결재 완료 (최종 승인)
   APPROVAL_REJECTED     // 결재 반려
@@ -104,6 +110,8 @@ enum AuditActionType {
   PASSWORD_CHANGE // 본인 비밀번호 변경
   PASSWORD_RESET  // 관리자 비밀번호 초기화
   TOKEN_REUSE     // refresh token 재사용 감지 (세션 폐기)
+  LOGIN_LOCKED    // 로그인 실패 누적으로 잠금 (잠긴 동안의 시도는 기록하지 않음)
+  LOGIN_UNLOCKED  // 관리자 로그인 잠금 해제
 }
 
 //? 회의실 예약 상태 -> 모델: MeetingRoomReservation
@@ -234,6 +242,28 @@ model Users {
 //  - access token은 stateless로 두고, refresh token만 이 테이블로 폐기·교체(rotation)를 관리한다.
 //  - 재발급할 때마다 currentJti를 새 값으로 바꾸고, 직전 값은 previousJti에 남긴다.
 //    이미 교체된 jti가 다시 들어오면 탈취로 보고 세션을 폐기한다. (단, 교체 직후 1분은 다른 탭의 동시 요청으로 허용)
+//* 로그인 실패 횟수·잠금 상태 -> 모듈: Auth
+//  - 이력(로그)이 아니라 사번별 "현재 상태" 1행이다. 시도 기록은 감사 로그(LOGIN_FAILED / LOGIN_LOCKED)에 남는다.
+//  - 없는 사번도 같은 방식으로 센다. (잠금 여부로 등록된 사번을 알아낼 수 없도록)
+//  - 5회 연속 실패마다 잠금 단계가 올라간다: 1단계 10분 → 2단계 30분 → 3단계 이상 1시간 (최대)
+//  - 로그인에 성공하거나 관리자가 해제하면 행을 지운다. (단계 초기화)
+//  - userId: 시도 당시 그 사번의 회원 (없는 사번은 NULL → 하루 지나면 배치로 정리). 다형 참조는 아니지만 상태 테이블이라 FK는 두지 않는다.
+model LoginHistory {
+  id           Int       @id @default(autoincrement())
+  empNo        String    @unique @db.VarChar(50) @map("emp_no") // 시도한 사번
+  userId       Int?      @map("user_id")
+  failCount    Int       @default(0) @map("fail_count")  // 현재 단계에서 연속 실패 횟수 (잠기면 0으로)
+  lockLevel    Int       @default(0) @map("lock_level")  // 잠금 단계 (0: 아직 잠긴 적 없음)
+  lockedUntil  DateTime? @map("locked_until")            // 이 시각까지 로그인 시도 거부
+  lastFailedAt DateTime  @map("last_failed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([lastFailedAt]) // 없는 사번 행 정리 배치
+  @@map("login_history_model")
+}
+
 model AuthSession {
   id           String    @id @default(uuid()) @db.Uuid
   userId       Int       @map("user_id")

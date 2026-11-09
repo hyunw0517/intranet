@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { BoardType, Users } from 'src/generated/prisma/client';
+import { AuditActionType, AuditTargetType, BoardType, Users } from 'src/generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { AuditService, TargetAudit } from 'src/common/audit.service';
+import { diffChanges } from 'src/common/util/audit-detail.util';
 import { isSameIdSet } from 'src/common/util/id-set.util';
 import { toTreeList } from 'src/common/util/tree.util';
 import { CreateBoardDto } from './dto/create-board.dto';
@@ -13,7 +15,14 @@ import { UpdateBoardOrderDto } from './dto/update-board-order.dto';
 @Injectable()
 export class BoardsService {
 
-    constructor( private readonly prisma: PrismaService ){}
+    private readonly audit: TargetAudit;
+
+    constructor(
+        private readonly prisma: PrismaService,
+        auditService: AuditService,
+    ){
+        this.audit = auditService.target( AuditTargetType.BOARD );
+    }
 
     //* 관리자 전체 게시판 조회
     // 트리 순서(카테고리 → 하위 게시판들 → 다음 카테고리) 리스트 전체로 반환
@@ -83,21 +92,30 @@ export class BoardsService {
         });
 
         // INSERT
-        const newBoard = await this.prisma.board.create({
-            data: {
-                parentBoardId: targetParentId,
-                type: targetType,
-                name: body.name,
-                description: body.description ?? null,
-                isAnonymous: body.isAnonymous,
-                allowSecret: body.allowSecret,
-                sortOrder: boardCount,
-                createdId: user.id,
-                updatedId: user.id,
-            },
-        });
+        return await this.prisma.$transaction( async (tx) => {
+            const newBoard = await tx.board.create({
+                data: {
+                    parentBoardId: targetParentId,
+                    type: targetType,
+                    name: body.name,
+                    description: body.description ?? null,
+                    isAnonymous: body.isAnonymous,
+                    allowSecret: body.allowSecret,
+                    sortOrder: boardCount,
+                    createdId: user.id,
+                    updatedId: user.id,
+                },
+            });
 
-        return newBoard;
+            await this.audit.created( tx, newBoard.id, `게시판 생성: ${newBoard.name}`, {
+                parentBoardId: newBoard.parentBoardId,
+                type: newBoard.type,
+                isAnonymous: newBoard.isAnonymous,
+                allowSecret: newBoard.allowSecret,
+            });
+
+            return newBoard;
+        });
     }
 
     //* 게시판 수정
@@ -155,8 +173,8 @@ export class BoardsService {
                 },
             });
 
-            const [updateBoard] = await this.prisma.$transaction([
-                this.prisma.board.update({
+            return await this.prisma.$transaction( async (tx) => {
+                const updateBoard = await tx.board.update({
                     where: {
                         id: thisBoard.id,
                         deleted: false,
@@ -166,9 +184,10 @@ export class BoardsService {
                         parentBoardId: targetParentId,
                         sortOrder: moveBoardGroupCount,
                     },
-                }),
+                });
+
                 // 이전 상위 게시판에 남은 게시판들을 재정렬
-                this.prisma.board.updateMany({
+                await tx.board.updateMany({
                     where: {
                         parentBoardId: thisBoard.parentBoardId,
                         sortOrder: { gt: thisBoard.sortOrder },
@@ -177,22 +196,29 @@ export class BoardsService {
                     data: {
                         sortOrder: { decrement: 1 },
                     },
-                }),
-            ]);
+                });
 
-            return updateBoard;
+                await this.audit.updated( tx, thisBoard.id, `게시판 수정(상위 게시판 이동): ${updateBoard.name}`,
+                    diffChanges( thisBoard, { ...data, updatedId: undefined, parentBoardId: targetParentId } ) );
+
+                return updateBoard;
+            });
         }
 
-        // UPDATE (상위 게시판 변동이 없는 경우 -> 트랜잭션 없이 수정)
-        const updateBoard = await this.prisma.board.update({
-            where: {
-                id: thisBoard.id,
-                deleted: false,
-            },
-            data,
-        });
+        // UPDATE (상위 게시판 변동이 없는 경우)
+        return await this.prisma.$transaction( async (tx) => {
+            const updateBoard = await tx.board.update({
+                where: {
+                    id: thisBoard.id,
+                    deleted: false,
+                },
+                data,
+            });
 
-        return updateBoard;
+            await this.audit.updated( tx, thisBoard.id, `게시판 수정: ${updateBoard.name}`, diffChanges( thisBoard, { ...data, updatedId: undefined } ) );
+
+            return updateBoard;
+        });
     }
 
     //* 게시판 순서 변경 (드래그 정렬)
@@ -211,6 +237,7 @@ export class BoardsService {
                     parentBoardId,
                     deleted: false,
                 },
+                orderBy: { sortOrder: 'asc' },
             });
 
             if( !isSameIdSet( siblings.map( (b) => b.id ), body.ids ) ){
@@ -226,6 +253,13 @@ export class BoardsService {
                     },
                 });
             }
+
+            await this.audit.logBatch({
+                targetIds: body.ids,
+                actionType: AuditActionType.UPDATE,
+                content: '게시판 순서 변경',
+                extra: { parentBoardId, orderBefore: siblings.map( (b) => b.id ), orderAfter: body.ids },
+            }, tx);
         });
 
         return true;
@@ -258,10 +292,10 @@ export class BoardsService {
             throw new BadRequestException('게시글이 있는 게시판은 삭제할 수 없습니다.');
         }
 
-        // DELETE (트랜잭션: 삭제+권한 규칙 삭제+재정렬)
-        await this.prisma.$transaction([
+        // DELETE (트랜잭션: 삭제+권한 규칙 삭제+재정렬+감사 로그)
+        await this.prisma.$transaction( async (tx) => {
             // 대상 게시판 삭제
-            this.prisma.board.update({
+            await tx.board.update({
                 where: {
                     id: thisBoard.id,
                     deleted: false,
@@ -271,11 +305,11 @@ export class BoardsService {
                     deletedAt: new Date(),
                     deletedId: user.id,
                 },
-            }),
+            });
 
             // 게시판의 권한 규칙도 함께 삭제
             // (남겨 두면 그 규칙이 참조하는 부서·직급·직책을 영영 삭제할 수 없게 된다)
-            this.prisma.boardAuth.updateMany({
+            const { count: deletedAuthCount } = await tx.boardAuth.updateMany({
                 where: {
                     boardId: thisBoard.id,
                     deleted: false,
@@ -285,10 +319,10 @@ export class BoardsService {
                     deletedAt: new Date(),
                     deletedId: user.id,
                 },
-            }),
+            });
 
             // 삭제된 게시판을 제외한 동일한 상위 게시판을 가진 게시판들을 재정렬
-            this.prisma.board.updateMany({
+            await tx.board.updateMany({
                 where: {
                     parentBoardId: thisBoard.parentBoardId,
                     sortOrder: { gt: thisBoard.sortOrder }, // 기준 sortOrder를 초과한 정렬 데이터만
@@ -297,8 +331,11 @@ export class BoardsService {
                 data: {
                     sortOrder: { decrement: 1 }, // -1씩
                 },
-            }),
-        ]);
+            });
+
+            // deletedAuthCount: 함께 삭제된 권한 규칙 수
+            await this.audit.deleted( tx, thisBoard.id, `게시판 삭제: ${thisBoard.name}`, { deletedAuthCount } );
+        });
 
         return true;
     }

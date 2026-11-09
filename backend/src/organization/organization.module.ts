@@ -8,9 +8,13 @@ import { PositionsController } from './positions.controller';
 import { JobTitlesService } from './job-titles.service';
 import { JobTitlesController } from './job-titles.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
+import { CommonModule } from 'src/common/common.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [
+    PrismaModule,
+    CommonModule, // 감사 로그 (AuditService)
+  ],
   exports: [OrganizationService],
   controllers: [
     OrganizationController,

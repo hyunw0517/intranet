@@ -28,7 +28,7 @@ export class BasicTokenGuard implements CanActivate {
             password, 
         });
 
-        this.authService.checkUserStatus(user);
+        await this.authService.checkLoginStatus(user); // 재직 상태 확인 (실패 시 로그인 실패 감사 로그)
 
         req.user = user;
 

@@ -50,7 +50,7 @@ export function UserDetailView({ userId }: { userId: number }) {
           <UserInfoForm key={JSON.stringify(toFormValues(user))} user={user} />
         </Section>
 
-        <Section title="계정 관리" description="비밀번호 초기화와 회원 삭제는 되돌리기 어려우니 확인 후 진행하세요.">
+        <Section title="계정 관리" description="로그인 잠금 해제, 비밀번호 초기화, 회원 삭제. 초기화와 삭제는 되돌리기 어려우니 확인 후 진행하세요.">
           <UserDangerZone user={user} isSelf={isSelf} />
         </Section>
       </div>

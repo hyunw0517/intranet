@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Users, UserStatus } from 'src/generated/prisma/client';
+import { AuditActionType, AuditTargetType, Users, UserStatus } from 'src/generated/prisma/client';
+import { AuditService, TargetAudit } from 'src/common/audit.service';
+import { diffChanges } from 'src/common/util/audit-detail.util';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateDepartmentOrderDto } from './dto/update-department-order.dto';
 import { isSameIdSet } from 'src/common/util/id-set.util';
@@ -11,9 +13,14 @@ import { toTreeList } from 'src/common/util/tree.util';
 @Injectable()
 export class DepartmentsService {
   
+    private readonly audit: TargetAudit;
+
     constructor(
         private readonly prisma: PrismaService,
-    ){}
+        auditService: AuditService,
+    ){
+        this.audit = auditService.target( AuditTargetType.DEPARTMENT );
+    }
     
     //* 전체 부서 조회
     // 트리 순서(상위 부서 → 하위 부서들 → 다음 상위 부서)의 평평한 목록으로 반환
@@ -86,17 +93,21 @@ export class DepartmentsService {
         });
         
         // INSERT
-        const newDepartment = await this.prisma.department.create({
-            data: {
-                parentDepartmentId: body.parentDepartmentId ?? null,
-                name: body.name,
-                sortOrder: departmentCount,
-                createdId: user.id,
-                updatedId: user.id,
-            },
+        return await this.prisma.$transaction( async (tx) => {
+            const newDepartment = await tx.department.create({
+                data: {
+                    parentDepartmentId: body.parentDepartmentId ?? null,
+                    name: body.name,
+                    sortOrder: departmentCount,
+                    createdId: user.id,
+                    updatedId: user.id,
+                },
+            });
+
+            await this.audit.created( tx, newDepartment.id, `부서 생성: ${newDepartment.name}`, { parentDepartmentId: newDepartment.parentDepartmentId } );
+
+            return newDepartment;
         });
-        
-        return newDepartment;
     }
 
     //* 부서 수정
@@ -168,49 +179,56 @@ export class DepartmentsService {
                 },
             });
             
-            const [updateDepartment] = await this.prisma.$transaction([
-                this.prisma.department.update({
-                    where: { 
-                        id: thisDepartment.id, 
-                        deleted: false 
+            return await this.prisma.$transaction( async (tx) => {
+                const updateDepartment = await tx.department.update({
+                    where: {
+                        id: thisDepartment.id,
+                        deleted: false
                     },
-                    data: { 
-                        parentDepartmentId: targetParentId, 
-                        name: body.name, 
-                        sortOrder: moveDepartmentGroupCount, 
-                        updatedId: user.id 
+                    data: {
+                        parentDepartmentId: targetParentId,
+                        name: body.name,
+                        sortOrder: moveDepartmentGroupCount,
+                        updatedId: user.id
                     },
-                }),
+                });
+
                 // 이전 상위 부서를 가진 부서들을 재정렬
-                this.prisma.department.updateMany({
+                await tx.department.updateMany({
                     where: {
                         parentDepartmentId: thisDepartment.parentDepartmentId,
                         sortOrder: { gt: thisDepartment.sortOrder },
                         deleted: false,
                     },
-                    data: { 
-                        sortOrder: { decrement: 1 } 
+                    data: {
+                        sortOrder: { decrement: 1 }
                     },
-                }),
-            ]);
+                });
 
-            return updateDepartment;
+                await this.audit.updated( tx, thisDepartment.id, `부서 수정(상위 부서 이동): ${updateDepartment.name}`, diffChanges( thisDepartment, { parentDepartmentId: targetParentId, name: body.name } ) );
+
+                return updateDepartment;
+            });
         }
 
-        // UPDATE (상위 부서 변동이 없는 경우 -> 트랜잭션 없이 수정)
-        const updateDepartment = await this.prisma.department.update({
-            where: {
-                id: thisDepartment.id,
-                deleted: false,
-            },
-            data: {
-                //parentDepartmentId: targetParentId,
-                name: body.name,
-                updatedId: user.id,
-            },
+        // UPDATE (상위 부서 변동이 없는 경우)
+        return await this.prisma.$transaction( async (tx) => {
+            const updateDepartment = await tx.department.update({
+                where: {
+                    id: thisDepartment.id,
+                    deleted: false,
+                },
+                data: {
+                    //parentDepartmentId: targetParentId,
+                    name: body.name,
+                    updatedId: user.id,
+                },
+            });
+
+            await this.audit.updated( tx, thisDepartment.id, `부서 수정: ${updateDepartment.name}`, diffChanges( thisDepartment, { name: body.name } ) );
+
+            return updateDepartment;
         });
-        
-        return updateDepartment;
     }
 
     //* 부서 순서 변경 (드래그 정렬)
@@ -229,6 +247,7 @@ export class DepartmentsService {
                     parentDepartmentId,
                     deleted: false,
                 },
+                orderBy: { sortOrder: 'asc' },
             });
 
             if( !isSameIdSet( siblings.map( (d) => d.id ), body.ids ) ){
@@ -244,6 +263,14 @@ export class DepartmentsService {
                     },
                 });
             }
+
+            // 순서 변경은 대상 전체의 순서가 바뀌는 일괄 처리 (변경 전·후 순서를 id 배열로 남김)
+            await this.audit.logBatch({
+                targetIds: body.ids,
+                actionType: AuditActionType.UPDATE,
+                content: '부서 순서 변경',
+                extra: { parentDepartmentId, orderBefore: siblings.map( (d) => d.id ), orderAfter: body.ids },
+            }, tx);
         });
 
         return true;
@@ -308,10 +335,10 @@ export class DepartmentsService {
             throw new BadRequestException('게시판 권한에서 사용 중인 부서는 삭제할 수 없습니다.');
         }
 
-        // DELETE (트랜잭션: 삭제+재정렬)
-        await this.prisma.$transaction([
+        // DELETE (트랜잭션: 삭제+재정렬+감사 로그)
+        await this.prisma.$transaction( async (tx) => {
             // 대상 부서 삭제
-            this.prisma.department.update({
+            await tx.department.update({
                 where: {
                     id: thisDepartment.id,
                     deleted: false,
@@ -321,10 +348,10 @@ export class DepartmentsService {
                     deletedAt: new Date(),
                     deletedId: user.id,
                 },
-            }),
+            });
 
             // 삭제된 부서를 제외한 동일한 상위 부서를 가진 부서들을 재정렬
-            this.prisma.department.updateMany({
+            await tx.department.updateMany({
                 where: {
                     parentDepartmentId: thisDepartment.parentDepartmentId,
                     sortOrder: { gt: thisDepartment.sortOrder }, // 기준 sortOrder를 초과한 정렬 데이터만
@@ -333,8 +360,10 @@ export class DepartmentsService {
                 data: {
                     sortOrder: { decrement: 1 }, // -1씩
                 },
-            }),
-        ]);
+            });
+
+            await this.audit.deleted( tx, thisDepartment.id, `부서 삭제: ${thisDepartment.name}` );
+        });
         
         return true; 
 

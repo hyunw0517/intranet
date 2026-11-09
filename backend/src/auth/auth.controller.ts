@@ -11,6 +11,7 @@ import { RefreshTokenGuard } from './guard/bearer-token.guard';
 import { BasicTokenGuard } from './guard/basic-token.guard';
 import type { Response } from 'express';
 import { clearRefreshTokenCookie, setRefreshTokenCookie } from './const/refresh-cookie-const';
+import { ThrottlerGuard } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
@@ -50,9 +51,10 @@ export class AuthController {
   }
 
   //* (개인) 회원 로그인 요청 - 세션(기기) 1개 생성
+  //      - ThrottlerGuard(IP당 요청 수 제한)를 BasicTokenGuard(비밀번호 확인)보다 먼저 실행한다. (넘친 요청은 확인·기록 없이 429)
   @Post('login/emp')
   @IsPublic()
-  @UseGuards(BasicTokenGuard)
+  @UseGuards(ThrottlerGuard, BasicTokenGuard)
   async postLoginEmpNo(
     @Request() req: any,
     @Headers('user-agent') userAgent: string | undefined, // 기기 목록 표시용
@@ -131,6 +133,7 @@ export class AuthController {
   //* (개인) 회원가입 - 가입 즉시 로그인 (세션 생성)
   @Post('register/emp')
   @IsPublic()
+  @UseGuards(ThrottlerGuard) // 로그인 없이 쓰는 API라 IP당 요청 수 제한
   async postRegisterEmpNo(
     @Body() body: RegisterUserDto,
     @Headers('user-agent') userAgent: string | undefined,
@@ -170,6 +173,16 @@ export class AuthController {
     @Param('userId', ParseIntPipe) userId: number,
   ){
     return this.authService.resetPassword(userId);
+  }
+
+  //* (관리자) 회원 로그인 잠금 해제 - 실패 횟수·잠금 단계 초기화
+  //      - 잠긴 적이 없으면 { unlocked: false } (오류 아님)
+  @Patch('unlock/:userId')
+  @Roles(UserRole.ADMIN)
+  patchUnlockLogin(
+    @Param('userId', ParseIntPipe) userId: number,
+  ){
+    return this.authService.unlockLogin(userId);
   }
 
 }

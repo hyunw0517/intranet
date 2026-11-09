@@ -1,5 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { BoardType, FileTargetType, Prisma, Users } from "src/generated/prisma/client";
+import { AuditTargetType, BoardType, FileTargetType, Prisma, Users } from "src/generated/prisma/client";
+import { AuditService, TargetAudit } from "src/common/audit.service";
+import { BoardNotifier } from "./board-notifier";
+import { diffChanges } from "src/common/util/audit-detail.util";
 import { PrismaService } from "src/prisma/prisma.service";
 import { BoardAuthService } from "./board-auth.service";
 import { PaginatePostQueryDto, PostSortBy } from "./dto/paginate-post-query.dto";
@@ -19,13 +22,19 @@ type AuthorField = 'author' | 'authorDepartmentName' | 'authorPositionName' | 'a
 
 @Injectable()
 export class PostsService {
-    
-    constructor( 
-        private readonly prisma: PrismaService, 
-        private readonly boardAuthService: BoardAuthService, 
+
+    private readonly audit: TargetAudit;
+
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly boardAuthService: BoardAuthService,
         private readonly organizationService: OrganizationService,
         private readonly filesService: FilesService,
-    ){}
+        auditService: AuditService,
+        private readonly boardNotifier: BoardNotifier,
+    ){
+        this.audit = auditService.target( AuditTargetType.POST );
+    }
 
     async paginatePost( 
         user: Pick<Users, 'id' | 'role'>, 
@@ -399,6 +408,19 @@ export class PostsService {
 
             await this.syncPostFiles( tx, post.id, user.id, imageIds, body.attachmentIds ?? [] );
 
+            await this.audit.created( tx, post.id, `게시글 작성: ${post.title}`, {
+                boardId,
+                isPinned: post.isPinned,
+                isSecret: post.isSecret,
+                imageIds,
+                attachmentIds: body.attachmentIds ?? [],
+            });
+
+            // 공지 게시판 새 글 → 읽을 수 있는 회원에게 알림 (작성 시에만, 규칙은 BoardNotifier)
+            if( board.type === BoardType.NOTICE ){
+                await this.boardNotifier.noticeCreated( tx, { board, post, writerId: user.id } );
+            }
+
             return post;
         });
 
@@ -465,8 +487,8 @@ export class PostsService {
         postId: number,
         body: UpdatePostDto
     ) {
-        const { board } = await this.checkPost(boardId, postId, user, 'update');
-        
+        const { board, post: before } = await this.checkPost(boardId, postId, user, 'update');
+
         // 작성자 대표 소속/직급
         const author = await this.organizationService.getPrimaryOrganizationNames( user.id );
 
@@ -474,6 +496,15 @@ export class PostsService {
         const { imageIds, ...contentFields } = await this.toContentFields( body.content, user.id, postId );
 
         return await this.prisma.$transaction( async ( tx ) => {
+            // 감사 로그 비교 대상 (본문 HTML은 크므로 바뀌었는지만 남긴다)
+            const changedFields = {
+                title: body.title,
+                // 고정 여부는 별도 API(pinPost)에서만 바꾼다. (작성자 수정으로 관리자가 고정한 글이 풀리지 않게)
+                // 비밀글을 허용하지 않는 게시판이면 기존 값 유지 (허용 → 비허용으로 바뀐 게시판의 기존 비밀글이 공개되지 않게)
+                isSecret: board.allowSecret ? ( body.isSecret ?? false ) : undefined,
+                ...this.resolveEventFields( board.type, body ),
+            };
+
             const post = await tx.post.update({
                 where: {
                     id: postId,
@@ -483,12 +514,8 @@ export class PostsService {
                     authorPositionName: author.positionName,
                     authorDepartmentName: author.departmentName,
                     authorJobTitleName: author.jobTitleName,
-                    title: body.title,
                     ...contentFields,
-                    // 고정 여부는 별도 API(pinPost)에서만 바꾼다. (작성자 수정으로 관리자가 고정한 글이 풀리지 않게)
-                    // 비밀글을 허용하지 않는 게시판이면 기존 값 유지 (허용 → 비허용으로 바뀐 게시판의 기존 비밀글이 공개되지 않게)
-                    isSecret: board.allowSecret ? ( body.isSecret ?? false ) : undefined,
-                    ...this.resolveEventFields( board.type, body ),
+                    ...changedFields,
                     updatedId: user.id,
                     editedAt: new Date(),
                 },
@@ -496,6 +523,13 @@ export class PostsService {
 
             // 첨부는 attachmentIds를 보냈을 때만 맞춘다. (안 보내면 기존 첨부 유지)
             await this.syncPostFiles( tx, postId, user.id, imageIds, body.attachmentIds );
+
+            await this.audit.updated( tx, postId, `게시글 수정: ${post.title}`, diffChanges( before, changedFields ), {
+                boardId,
+                contentChanged: before.content !== contentFields.content,
+                imageIds,
+                ...( body.attachmentIds !== undefined && { attachmentIds: body.attachmentIds } ),
+            });
 
             return post;
         });
@@ -507,7 +541,7 @@ export class PostsService {
         boardId: number,
         postId: number,
     ) {
-        await this.checkPost(boardId, postId, user, 'delete');
+        const { post, board } = await this.checkPost(boardId, postId, user, 'delete');
 
         // 글과 연결 파일(첨부·본문 이미지)을 함께 soft delete (실제 파일은 남겨 둔다)
         await this.prisma.$transaction( async ( tx ) => {
@@ -523,6 +557,13 @@ export class PostsService {
             });
 
             await this.filesService.softDeleteByTarget( tx, [ FileTargetType.POST, FileTargetType.POST_IMAGE ], postId, user.id );
+
+            // 관리 권한으로 남의 글을 지운 경우를 구분
+            await this.audit.deleted( tx, postId, `게시글 삭제${ post.authorId !== user.id ? '(관리자)' : '' }: ${post.title}`,
+                { boardId, authorId: post.authorId } );
+
+            // 남의 글이면 작성자에게 알림 (본인 삭제는 BoardNotifier가 거른다)
+            await this.boardNotifier.postDeletedByAdmin( tx, { board, post, deleterId: user.id } );
         });
 
         return true;
@@ -644,12 +685,17 @@ export class PostsService {
             await this.assertPinLimit( boardId );
         }
 
-        await this.prisma.post.update({
-            where: { id: postId },
-            data: {
-                isPinned,
-                updatedId: user.id,
-            },
+        await this.prisma.$transaction( async ( tx ) => {
+            await tx.post.update({
+                where: { id: postId },
+                data: {
+                    isPinned,
+                    updatedId: user.id,
+                },
+            });
+
+            await this.audit.updated( tx, postId, `게시글 ${ isPinned ? '고정' : '고정 해제' }: ${post.title}`,
+                { isPinned: { before: post.isPinned, after: isPinned } }, { boardId } );
         });
 
         return true;

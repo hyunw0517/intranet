@@ -64,3 +64,8 @@ export function changePassword(input: ChangePasswordInput) {
 export function resetPassword(userId: number) {
   return apiFetch<{ temporaryPassword: string }>(`/auth/reset/pw/${userId}`, { method: "PATCH" });
 }
+
+// (관리자) 로그인 잠금 해제 → 실패 횟수·잠금 단계 초기화. 잠긴 적이 없으면 unlocked: false (오류 아님)
+export function unlockLogin(userId: number) {
+  return apiFetch<{ unlocked: boolean }>(`/auth/unlock/${userId}`, { method: "PATCH" });
+}

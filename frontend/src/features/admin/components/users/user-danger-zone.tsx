@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Copy } from "lucide-react";
+import { Copy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,25 +17,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getErrorMessage } from "@/lib/error-message";
-import { resetPassword } from "@/services/api/auth";
+import { formatDateTime } from "@/lib/format";
+import { resetPassword, unlockLogin } from "@/services/api/auth";
 import { deleteUser, type AdminUserDetail } from "@/services/api/users";
-import { adminUserKeys } from "../../hooks/use-admin-users";
+import { adminUserKeys, useAdminUserMutation } from "../../hooks/use-admin-users";
 
-// 비밀번호 초기화 + 회원 삭제
+// 로그인 잠금 해제 + 비밀번호 초기화 + 회원 삭제
 export function UserDangerZone({ user, isSelf }: { user: AdminUserDetail; isSelf: boolean }) {
   return (
     <div className="divide-y rounded-lg border">
+      <LoginLockRow user={user} />
       <ResetPasswordRow user={user} />
       <DeleteUserRow user={user} isSelf={isSelf} />
     </div>
   );
 }
 
-function ActionRow({ title, description, action }: { title: string; description: string; action: React.ReactNode }) {
+function ActionRow({ title, description, action }: { title: React.ReactNode; description: React.ReactNode; action: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="font-medium">{title}</p>
+        <div className="flex items-center gap-2 font-medium">{title}</div>
         <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
       </div>
       <div className="shrink-0">{action}</div>
@@ -42,9 +45,54 @@ function ActionRow({ title, description, action }: { title: string; description:
   );
 }
 
+// 로그인 잠금 해제 (서버: 5회 연속 실패마다 10분 → 30분 → 1시간 잠금, 로그인 성공 시 초기화)
+// - 잠겨 있음: [잠금 해제]
+// - 잠겨 있지 않지만 실패 기록이 남아 있음: [실패 기록 초기화] (다음 잠금이 높은 단계부터 시작되지 않도록)
+// - 기록 없음: 버튼 비활성화
+// 해제는 되돌릴 일이 없는 안전한 동작이라 확인 창 없이 바로 처리한다. 성공하면 상세를 다시 불러와 상태를 맞춘다.
+function LoginLockRow({ user }: { user: AdminUserDetail }) {
+  const lock = user.loginLock;
+  const mutation = useAdminUserMutation(() => unlockLogin(user.id));
+
+  const handleUnlock = () =>
+    mutation.mutate(undefined, {
+      onSuccess: (result) =>
+        result.unlocked
+          ? toast.success(lock?.isLocked ? "로그인 잠금을 해제했습니다." : "로그인 실패 기록을 초기화했습니다.")
+          : toast.info("이미 해제된 상태입니다."),
+      onError: (error) => toast.error(getErrorMessage(error)),
+    });
+
+  const description = !lock
+    ? "로그인 실패 기록이 없습니다."
+    : lock.isLocked
+      ? `연속 실패로 ${formatDateTime(lock.lockedUntil)}까지 로그인이 막혀 있습니다. (${lock.lockLevel}단계)`
+      : `잠겨 있지 않습니다. 최근 연속 실패 ${lock.failCount}회${lock.lockLevel > 0 ? ` · 잠금 ${lock.lockLevel}단계까지 진행` : ""}`;
+
+  return (
+    <ActionRow
+      title={
+        <>
+          로그인 잠금
+          {lock?.isLocked && <Badge variant="outline">잠김</Badge>}
+        </>
+      }
+      description={description}
+      action={
+        <Button variant="outline" onClick={handleUnlock} disabled={!lock || mutation.isPending}>
+          {mutation.isPending && <Loader2 className="animate-spin" aria-hidden />}
+          {lock && !lock.isLocked ? "실패 기록 초기화" : "잠금 해제"}
+        </Button>
+      }
+    />
+  );
+}
+
 // 서버가 임시 비밀번호를 만들어 응답으로 한 번만 돌려준다. (DB에는 해시만 저장되어 다시 볼 수 없음)
-// 회원 캐시에 영향이 없고 이 화면에서만 쓰므로 useMutation을 컴포넌트 안에 둔다.
+// 이 화면에서만 쓰므로 useMutation을 컴포넌트 안에 둔다.
+// 서버가 로그인 잠금도 함께 해제하므로, 성공하면 상세를 다시 불러와 잠금 표시를 맞춘다.
 function ResetPasswordRow({ user }: { user: AdminUserDetail }) {
+  const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
   const mutation = useMutation({
@@ -52,6 +100,7 @@ function ResetPasswordRow({ user }: { user: AdminUserDetail }) {
     onSuccess: (result) => {
       setConfirmOpen(false);
       setTemporaryPassword(result.temporaryPassword);
+      queryClient.invalidateQueries({ queryKey: adminUserKeys.detail(user.id) });
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
@@ -70,7 +119,7 @@ function ResetPasswordRow({ user }: { user: AdminUserDetail }) {
     <>
       <ActionRow
         title="비밀번호 초기화"
-        description="임시 비밀번호를 발급합니다. 해당 회원의 기존 로그인은 모두 해제됩니다."
+        description="임시 비밀번호를 발급합니다. 해당 회원의 기존 로그인은 모두 해제되고, 로그인 잠금도 함께 풀립니다."
         action={
           <Button variant="outline" onClick={() => setConfirmOpen(true)}>
             비밀번호 초기화

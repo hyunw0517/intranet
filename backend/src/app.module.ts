@@ -1,5 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AUTH_THROTTLE_LIMIT, AUTH_THROTTLE_TTL_MS } from './auth/const/login-lock.const';
 import { RequestContextMiddleware } from './common/context/request-context';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -21,7 +23,13 @@ import { BoardsModule } from './boards/boards.module';
       envFilePath: '.env', 
       isGlobal: true
     }),
-    ScheduleModule.forRoot(), // @Cron 배치 (알림 보관 기간 정리)
+    ScheduleModule.forRoot(), // @Cron 배치 (알림 보관 기간 정리, 없는 사번 로그인 실패 기록 정리)
+    // IP당 요청 수 제한 - 전역 가드로 걸지 않고 로그인·가입 라우트에만 @UseGuards(ThrottlerGuard)로 적용한다.
+    // 카운터는 서버 메모리에 둔다. (서버 1대 기준. 여러 대로 늘리면 Redis 등 공용 저장소로 바꿔야 한다)
+    ThrottlerModule.forRoot({
+      throttlers: [ { ttl: AUTH_THROTTLE_TTL_MS, limit: AUTH_THROTTLE_LIMIT } ],
+      errorMessage: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+    }),
     PrismaModule, 
     CommonModule, 
     UsersModule, 

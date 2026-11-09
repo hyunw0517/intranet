@@ -18,7 +18,8 @@ const SENSITIVE_KEYS = new Set([ 'password', 'tokenHash', 'currentJti', 'previou
 // - after에 없는(undefined) 필드는 수정하지 않은 것으로 보고 제외한다.
 // - Date는 시각 값으로 비교한다. (객체 비교 X)
 // ex) diffChanges( before, body ) → { name: { before: '홍길동', after: '김철수' } }
-export function diffChanges<T extends object>( before: T, after: Partial<T> ): AuditChanges {
+// - before(DB 행)와 after(수정 데이터)의 타입이 다를 수 있으므로(예: DTO 문자열 날짜 → Date) 객체로만 받는다.
+export function diffChanges( before: object, after: object ): AuditChanges {
     const changes: AuditChanges = {};
 
     for ( const [key, next] of Object.entries( after ) ) {

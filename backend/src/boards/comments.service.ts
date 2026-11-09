@@ -3,20 +3,29 @@ import { PrismaService } from "src/prisma/prisma.service";
 import { BoardAuthService } from "./board-auth.service";
 import { OrganizationService } from "src/organization/organization.service";
 import { PostsService } from "./posts.service";
-import { Users } from "src/generated/prisma/client";
+import { AuditTargetType, Users } from "src/generated/prisma/client";
+import { AuditService, TargetAudit } from "src/common/audit.service";
+import { diffChanges } from "src/common/util/audit-detail.util";
 import { CreateCommentDto } from "./dto/create-comment.dto";
 import { UpdateCommentDto } from "./dto/update-comment.dto";
 import { toTreeList } from "src/common/util/tree.util";
+import { BoardNotifier } from "./board-notifier";
 
 @Injectable()
 export class CommentsService {
+
+    private readonly audit: TargetAudit;
 
     constructor(
         private readonly prisma: PrismaService,
         private readonly boardAuthService: BoardAuthService,
         private readonly postsService: PostsService,
         private readonly organizationService: OrganizationService,
-    ){}
+        auditService: AuditService,
+        private readonly boardNotifier: BoardNotifier,
+    ){
+        this.audit = auditService.target( AuditTargetType.COMMENT );
+    }
 
     //* 댓글 조회
     async paginateComment(
@@ -131,19 +140,20 @@ export class CommentsService {
     ) {
 
         // 게시판 권한 확인 + 게시글 존재 확인 (+ 비밀글 열람 확인)
-        await this.postsService.checkPost(boardId, postId, user, 'comment');
+        const { post, board } = await this.postsService.checkPost(boardId, postId, user, 'comment');
 
-        if( body.parentCommentId ){
-            const parentComment = await this.prisma.comment.findFirst({
-                where: { 
-                    id: body.parentCommentId, 
-                    postId, 
-                    deleted: false, 
+        const parentComment = body.parentCommentId
+            ? await this.prisma.comment.findFirst({
+                where: {
+                    id: body.parentCommentId,
+                    postId,
+                    deleted: false,
                 },
-            });
-            if( !parentComment ){
-                throw new BadRequestException('원본 댓글을 찾을 수 없습니다.');
-            } 
+            })
+            : null;
+
+        if( body.parentCommentId && !parentComment ){
+            throw new BadRequestException('원본 댓글을 찾을 수 없습니다.');
         }
         
         // 작성자 대표 소속/직급
@@ -154,18 +164,35 @@ export class CommentsService {
             throw new BadRequestException('댓글 내용을 입력해 주세요.');
         }
 
-        return await this.prisma.comment.create({
-            data: {
-                postId,
-                parentCommentId: body.parentCommentId ?? null,
-                authorId: user.id,
-                authorDepartmentName: author.departmentName,
-                authorJobTitleName: author.jobTitleName,
-                authorPositionName: author.positionName,
+        return await this.prisma.$transaction( async (tx) => {
+            const newComment = await tx.comment.create({
+                data: {
+                    postId,
+                    parentCommentId: body.parentCommentId ?? null,
+                    authorId: user.id,
+                    authorDepartmentName: author.departmentName,
+                    authorJobTitleName: author.jobTitleName,
+                    authorPositionName: author.positionName,
+                    comment: body.comment,
+                    createdId: user.id,
+                    updatedId: user.id,
+                }
+            });
+
+            await this.audit.created( tx, newComment.id, '댓글 작성', { boardId, postId, parentCommentId: newComment.parentCommentId } );
+
+            // 글 작성자·부모 댓글 작성자에게 알림 (규칙은 BoardNotifier)
+            await this.boardNotifier.newComment( tx, {
+                boardId,
+                post,
+                isAnonymous: board.isAnonymous,
+                parentAuthorId: parentComment?.authorId ?? null,
+                commentId: newComment.id,
                 comment: body.comment,
-                createdId: user.id,
-                updatedId: user.id,
-            }
+                writerId: user.id,
+            });
+
+            return newComment;
         });
 
     }
@@ -179,28 +206,35 @@ export class CommentsService {
         body: UpdateCommentDto
     ) {
         // 게시판 권한 확인 + 게시글 존재 확인 (+ 비밀글 열람 확인)
-        await this.checkComment(boardId, postId, commentId, user, 'update');
-        
+        const { comment: before } = await this.checkComment(boardId, postId, commentId, user, 'update');
+
         // 작성자 대표 소속/직급
         const author = await this.organizationService.getPrimaryOrganizationNames( user.id );
-        
+
         // 댓글 내용 공백만 있는지 확인
         if( body.comment.trim() === "" ){
             throw new BadRequestException('댓글 내용을 입력해 주세요.');
         }
 
-        return await this.prisma.comment.update({
-            where: {
-                id: commentId,
-            },
-            data: {
-                authorId: user.id,
-                authorDepartmentName: author.departmentName,
-                authorJobTitleName: author.jobTitleName,
-                authorPositionName: author.positionName,
-                comment: body.comment,
-                updatedId: user.id,
-            }
+        return await this.prisma.$transaction( async (tx) => {
+            const updatedComment = await tx.comment.update({
+                where: {
+                    id: commentId,
+                },
+                data: {
+                    authorId: user.id,
+                    authorDepartmentName: author.departmentName,
+                    authorJobTitleName: author.jobTitleName,
+                    authorPositionName: author.positionName,
+                    comment: body.comment,
+                    updatedId: user.id,
+                }
+            });
+
+            // 댓글은 짧으므로 내용 전후를 남긴다. (게시글 본문은 크기 때문에 바뀌었는지만 남김)
+            await this.audit.updated( tx, commentId, '댓글 수정', diffChanges( before, { comment: body.comment } ), { boardId, postId } );
+
+            return updatedComment;
         });
     }
 
@@ -212,17 +246,26 @@ export class CommentsService {
         commentId: number
     ) {
         // 게시판 권한 확인 + 게시글 존재 확인 (+ 비밀글 열람 확인)
-        await this.checkComment(boardId, postId, commentId, user, 'delete');
+        const { comment, post } = await this.checkComment(boardId, postId, commentId, user, 'delete');
 
-        await this.prisma.comment.update({
-            where:{ 
-                id: commentId
-            },
-            data: {
-                deleted: true,
-                deletedAt: new Date(),
-                deletedId: user.id,
-            },
+        await this.prisma.$transaction( async (tx) => {
+            await tx.comment.update({
+                where:{
+                    id: commentId
+                },
+                data: {
+                    deleted: true,
+                    deletedAt: new Date(),
+                    deletedId: user.id,
+                },
+            });
+
+            // 관리 권한으로 남의 댓글을 지운 경우를 구분
+            await this.audit.deleted( tx, commentId, `댓글 삭제${ comment.authorId !== user.id ? '(관리자)' : '' }`,
+                { boardId, postId, authorId: comment.authorId, comment: comment.comment } );
+
+            // 남의 댓글이면 작성자에게 알림 (본인 삭제는 BoardNotifier가 거른다)
+            await this.boardNotifier.commentDeletedByAdmin( tx, { boardId, post, comment, deleterId: user.id } );
         });
 
         return true;
@@ -236,7 +279,7 @@ export class CommentsService {
         user: Pick<Users, 'id' | 'role'>,
         action: 'update' | 'delete',
     ){
-        const { perm } = await this.postsService.checkPost( boardId, postId, user, 'comment' );
+        const { perm, post } = await this.postsService.checkPost( boardId, postId, user, 'comment' );
 
         const comment = await this.prisma.comment.findFirst({
             where: { 
@@ -263,6 +306,7 @@ export class CommentsService {
             break;
         }
 
+        return { comment, post };
     }
 
 }

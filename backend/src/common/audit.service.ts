@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { AuditActionType, AuditTargetType, Prisma } from "src/generated/prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
 import { RequestContext } from "./context/request-context";
-import { AuditBatchChanges, toAuditJson } from "./util/audit-detail.util";
+import { AuditBatchChanges, AuditChanges, toAuditJson } from "./util/audit-detail.util";
 
 //* 단건 기록 입력
 export interface AuditLogInput {
@@ -39,6 +39,13 @@ export class AuditService {
     constructor(
         private readonly prisma: PrismaService,
     ){}
+
+    //* 대상 종류를 고정한 기록 도구 (서비스마다 대상이 정해져 있어 호출을 짧게 쓰기 위함)
+    // ex) 생성자에서 this.audit = auditService.target( AuditTargetType.BOARD );
+    //     await this.audit.created( tx, board.id, `게시판 생성: ${board.name}` );
+    target( targetType: AuditTargetType ): TargetAudit {
+        return new TargetAudit( this, targetType );
+    }
 
     //* 단건 기록
     // ex) await this.auditService.log({ targetType: AuditTargetType.BOARD, targetId: board.id, actionType: AuditActionType.CREATE, content: `게시판 생성: ${board.name}` }, tx);
@@ -90,5 +97,42 @@ export class AuditService {
             detail: { ...input.extra, batch: true, targetIds, ...( input.changes && { changes: input.changes } ) },
             actorId: input.actorId,
         }, tx );
+    }
+}
+
+type Tx = Prisma.TransactionClient | undefined;
+
+//* 대상 종류가 고정된 감사 로그 (AuditService.target()으로 만든다)
+// - 생성·수정·삭제는 한 줄로: created / updated / deleted
+// - 그 밖의 동작(권한 변경·로그인·복구 등)과 일괄 처리는 log / logBatch에 actionType을 넘긴다.
+// - tx를 첫 인자로 받는다. (업무와 같은 트랜잭션에 기록하는 것이 기본이므로)
+export class TargetAudit {
+
+    constructor(
+        private readonly auditService: AuditService,
+        private readonly targetType: AuditTargetType,
+    ){}
+
+    log( input: Omit<AuditLogInput, 'targetType'>, tx?: Tx ){
+        return this.auditService.log( { ...input, targetType: this.targetType }, tx );
+    }
+
+    logBatch( input: Omit<AuditBatchLogInput, 'targetType'>, tx?: Tx ){
+        return this.auditService.logBatch( { ...input, targetType: this.targetType }, tx );
+    }
+
+    //* 생성 (detail: 생성 당시 주요 값)
+    created( tx: Tx, targetId: number, content: string, detail?: Record<string, unknown> ){
+        return this.log( { targetId, actionType: AuditActionType.CREATE, content, detail }, tx );
+    }
+
+    //* 수정 (changes: diffChanges 결과, extra: 그 밖의 정보 - detail에 함께 저장)
+    updated( tx: Tx, targetId: number, content: string, changes: AuditChanges, extra?: Record<string, unknown> ){
+        return this.log( { targetId, actionType: AuditActionType.UPDATE, content, detail: { ...extra, changes } }, tx );
+    }
+
+    //* 삭제
+    deleted( tx: Tx, targetId: number, content: string, detail?: Record<string, unknown> ){
+        return this.log( { targetId, actionType: AuditActionType.DELETE, content, detail }, tx );
     }
 }

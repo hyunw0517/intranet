@@ -7,6 +7,7 @@ import { ApprovalHandlerRegistry, GeneralDocumentHandler } from './approval-hand
 import { ApprovalLinesController } from './approval-lines.controller';
 import { ApprovalLinesService } from './approval-lines.service';
 import { ApprovalNotifier } from './approval-notifier';
+import { ApproversController } from './approvers.controller';
 import { ApproversService } from './approvers.service';
 import { LineManagersController } from './line-managers.controller';
 import { LineManagersService } from './line-managers.service';
@@ -17,6 +18,7 @@ import { LineManagersService } from './line-managers.service';
 @Module({
     imports: [ PrismaModule, CommonModule ],
     controllers: [
+        ApproversController,
         LineManagersController,
         ApprovalLinesController,
         ApprovalDocumentsController,

@@ -49,6 +49,7 @@ interface RichTextEditorProps {
   onChange: (html: string, isEmpty: boolean) => void;
   labelledBy: string; // 폼 라벨 id (contenteditable은 <label htmlFor>로 연결되지 않는다)
   onUploadingChange?: (uploading: boolean) => void; // 이미지 업로드 중에는 폼 제출을 막는다.
+  allowImages?: boolean; // false면 본문 이미지(버튼·붙여넣기·끌어놓기)를 쓰지 않는다. (결재 문서 - 서버도 본문 이미지를 제거)
 }
 
 // 서버가 남기는 본문 이미지 주소 (백엔드 PUBLIC_IMAGE_URL_PREFIX)
@@ -88,7 +89,7 @@ function imageFilesOf(list: FileList | null | undefined) {
 // - 이미지: 고르거나 붙여 넣거나 끌어다 놓으면 바로 업로드하고, 응답 url을 <img src>로 넣는다.
 //   글과의 연결은 저장할 때 서버가 본문 <img>를 보고 한다. (첨부와 달리 id를 따로 보내지 않음)
 // - 외부 영상: YouTube·Vimeo 주소를 받아 임베드 주소로 바꿔 넣는다. 파일은 올리지 않고 주소만 본문에 저장된다. (video-embed.ts)
-export function RichTextEditor({ id, initialContent, onChange, labelledBy, onUploadingChange }: RichTextEditorProps) {
+export function RichTextEditor({ id, initialContent, onChange, labelledBy, onUploadingChange, allowImages = true }: RichTextEditorProps) {
   const [uploading, setUploading] = useState(0);
   // editorProps의 붙여넣기 처리기는 에디터 생성 시점에 고정되므로, 최신 업로드 함수를 ref로 넘긴다.
   const insertRef = useRef<(files: File[]) => void>(() => {});
@@ -100,7 +101,7 @@ export function RichTextEditor({ id, initialContent, onChange, labelledBy, onUpl
         heading: { levels: [2, 3] }, // h1은 페이지 제목이 쓰므로 본문은 h2부터
         link: { openOnClick: false, autolink: true, defaultProtocol: "https" },
       }),
-      ServerImage,
+      ...(allowImages ? [ServerImage] : []),
       VideoEmbed,
     ],
     content: initialContent,
@@ -114,12 +115,14 @@ export function RichTextEditor({ id, initialContent, onChange, labelledBy, onUpl
       },
       // 이미지 파일 붙여넣기·끌어놓기 → 업로드 (파일이 없으면 기본 동작)
       handlePaste: (_view, event) => {
+        if (!allowImages) return false;
         const files = imageFilesOf(event.clipboardData?.files);
         if (files.length === 0) return false;
         insertRef.current(files);
         return true;
       },
       handleDrop: (_view, event) => {
+        if (!allowImages) return false;
         const files = imageFilesOf((event as DragEvent).dataTransfer?.files);
         if (files.length === 0) return false;
         event.preventDefault();
@@ -166,7 +169,7 @@ export function RichTextEditor({ id, initialContent, onChange, labelledBy, onUpl
     // 포커스 표시는 Input과 같게 테두리 + ring
     <div className="overflow-hidden rounded-lg border border-input focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
       {editor ? (
-        <Toolbar editor={editor} uploading={isUploading} onPickImages={(files) => void insertImages(files)} />
+        <Toolbar editor={editor} uploading={isUploading} allowImages={allowImages} onPickImages={(files) => void insertImages(files)} />
       ) : (
         <div className="h-10 border-b bg-muted/40" />
       )}
@@ -186,10 +189,12 @@ interface ToolItem {
 function Toolbar({
   editor,
   uploading,
+  allowImages,
   onPickImages,
 }: {
   editor: Editor;
   uploading: boolean;
+  allowImages: boolean;
   onPickImages: (files: File[]) => void;
 }) {
   const [linkOpen, setLinkOpen] = useState(false);
@@ -233,12 +238,16 @@ function Toolbar({
       { icon: Strikethrough, label: "취소선", active: state.strike, run: () => chain().toggleStrike().run() },
       { icon: Code, label: "인라인 코드", active: state.code, run: () => chain().toggleCode().run() },
       { icon: Link2, label: "링크", active: state.link, run: () => setLinkOpen(true) },
-      {
-        icon: uploading ? Loader2 : ImagePlus,
-        label: uploading ? "이미지 올리는 중" : "이미지",
-        disabled: uploading,
-        run: openImagePicker,
-      },
+      ...(allowImages
+        ? [
+            {
+              icon: uploading ? Loader2 : ImagePlus,
+              label: uploading ? "이미지 올리는 중" : "이미지",
+              disabled: uploading,
+              run: openImagePicker,
+            },
+          ]
+        : []),
       { icon: Video, label: "동영상 (YouTube·Vimeo)", run: () => setVideoOpen(true) },
     ],
     [
@@ -281,18 +290,20 @@ function Toolbar({
           </div>
         ))}
       </div>
-      <input
-        id={fileInputId}
-        type="file"
-        accept={IMAGE_EXTENSIONS.join(",")}
-        multiple
-        hidden
-        onChange={(e) => {
-          const files = Array.from(e.target.files ?? []);
-          e.target.value = ""; // 같은 파일을 다시 고를 수 있게
-          if (files.length > 0) onPickImages(files);
-        }}
-      />
+      {allowImages && (
+        <input
+          id={fileInputId}
+          type="file"
+          accept={IMAGE_EXTENSIONS.join(",")}
+          multiple
+          hidden
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = ""; // 같은 파일을 다시 고를 수 있게
+            if (files.length > 0) onPickImages(files);
+          }}
+        />
+      )}
       <LinkDialog editor={editor} open={linkOpen} onOpenChange={setLinkOpen} />
       <VideoDialog editor={editor} open={videoOpen} onOpenChange={setVideoOpen} />
     </>

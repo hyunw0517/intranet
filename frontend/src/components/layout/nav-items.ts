@@ -1,5 +1,17 @@
 import type { LucideIcon } from "lucide-react";
-import { Building, CalendarClock, CalendarRange, LayoutDashboard, LayoutList, Network, Settings, UserRound, Users } from "lucide-react";
+import {
+  Building,
+  CalendarClock,
+  CalendarRange,
+  FileCheck,
+  LayoutDashboard,
+  LayoutList,
+  Network,
+  Settings,
+  UserCog,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { isGuestAllowedPath } from "@/lib/guest-access";
 import type { AddonName } from "@/services/api/addons";
 
@@ -22,6 +34,7 @@ export const mainNav: NavGroup[] = [
     items: [
       { title: "대시보드", href: "/", icon: LayoutDashboard },
       { title: "시설 예약", href: "/reservations", icon: CalendarClock, addon: "reservations" },
+      { title: "전자결재", href: "/approvals", icon: FileCheck, addon: "approvals" },
     ],
   },
   {
@@ -40,6 +53,7 @@ export const adminNav: NavGroup[] = [
       { title: "게시판 관리", href: "/admin/boards", icon: LayoutList },
       { title: "시설 관리", href: "/admin/facilities", icon: Building, addon: "reservations" },
       { title: "예약 관리", href: "/admin/reservations", icon: CalendarRange, addon: "reservations" },
+      { title: "결재라인 관리자", href: "/admin/approval-managers", icon: UserCog, addon: "approvals" },
     ],
   },
 ];

@@ -91,36 +91,58 @@ export class ApprovalDocumentsService {
 
         switch ( query.box ) {
             case ApprovalBox.DRAFTS:
-                where = { requesterId: user.id, status: ApprovalStatus.DRAFT };
+                where = this.boxWhere( user, ApprovalBox.DRAFTS );
                 orderBy = [ { updatedAt: 'desc' }, { id: 'desc' } ];
                 break;
             case ApprovalBox.MINE:
-                where = { requesterId: user.id, status: notDraft };
+                where = { requesterId: user.id, status: notDraft, deleted: false };
                 orderBy = [ { requestedAt: 'desc' }, { id: 'desc' } ];
                 break;
             case ApprovalBox.PENDING:
-                where = { status: { in: IN_PROGRESS_STATUSES }, steps: { some: { approverId: user.id, status: ApprovalStepStatus.PENDING } } };
+                where = this.boxWhere( user, ApprovalBox.PENDING );
                 orderBy = [ { requestedAt: 'asc' }, { id: 'asc' } ]; // 먼저 온 문서부터
                 break;
             case ApprovalBox.UPCOMING:
-                where = { status: { in: IN_PROGRESS_STATUSES }, steps: { some: { approverId: user.id, status: ApprovalStepStatus.WAITING } } };
+                where = this.boxWhere( user, ApprovalBox.UPCOMING );
                 orderBy = [ { requestedAt: 'asc' }, { id: 'asc' } ];
                 break;
             case ApprovalBox.ALL:
                 if ( user.role !== UserRole.ADMIN ) {
                     throw new ForbiddenException( '관리자만 전체 문서를 볼 수 있습니다.' );
                 }
-                where = { status: notDraft }; // 남의 임시저장은 기안자만 본다
+                where = { status: notDraft, deleted: false }; // 남의 임시저장은 기안자만 본다
                 orderBy = [ { requestedAt: 'desc' }, { id: 'desc' } ];
                 break;
         }
-
-        where = { ...where, deleted: false };
 
         return PaginatePage( query,
             ( page ) => this.prisma.approvalDocument.findMany({ where, select: listSelect, orderBy, ...page }),
             () => this.prisma.approvalDocument.count({ where }),
         );
+    }
+
+    //* 결재함 탭 건수 (2026-11-10 사용자 결정) - 확인할 것만 센다
+    // 결재 대기·결재 예정·임시저장 = 목록 전체 개수와 같음 / 기안함 = 결재요청·결재중인 내 문서만 (목록은 완료·반려·회수까지 보임)
+    async counts( user: Actor ){
+        const [ pending, upcoming, mine, drafts ] = await Promise.all([
+            this.prisma.approvalDocument.count({ where: this.boxWhere( user, ApprovalBox.PENDING ) }),
+            this.prisma.approvalDocument.count({ where: this.boxWhere( user, ApprovalBox.UPCOMING ) }),
+            this.prisma.approvalDocument.count({ where: { requesterId: user.id, status: { in: IN_PROGRESS_STATUSES }, deleted: false } }),
+            this.prisma.approvalDocument.count({ where: this.boxWhere( user, ApprovalBox.DRAFTS ) }),
+        ]);
+        return { pending, upcoming, mine, drafts };
+    }
+
+    //* 결재함 조건 (목록·건수 공용 - 같은 조건을 두 곳에 쓰지 않게)
+    private boxWhere( user: Actor, box: typeof ApprovalBox.PENDING | typeof ApprovalBox.UPCOMING | typeof ApprovalBox.DRAFTS ): Prisma.ApprovalDocumentWhereInput {
+        switch ( box ) {
+            case ApprovalBox.PENDING:
+                return { status: { in: IN_PROGRESS_STATUSES }, steps: { some: { approverId: user.id, status: ApprovalStepStatus.PENDING } }, deleted: false };
+            case ApprovalBox.UPCOMING:
+                return { status: { in: IN_PROGRESS_STATUSES }, steps: { some: { approverId: user.id, status: ApprovalStepStatus.WAITING } }, deleted: false };
+            case ApprovalBox.DRAFTS:
+                return { requesterId: user.id, status: ApprovalStatus.DRAFT, deleted: false };
+        }
     }
 
     //* 결재 완료함: 내가 승인·반려한 단계 기준 (내가 처리한 시각 최신 순)

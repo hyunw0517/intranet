@@ -36,6 +36,13 @@ export class ApprovalDocumentsController {
         return this.documentsService.findList( user, query );
     }
 
+    //* 결재함 탭 건수 { pending, upcoming, mine(진행 중만), drafts } - 'documents/:id'보다 먼저 선언
+    @Get('documents/counts')
+    @Roles(UserRole.USER)
+    counts( @User() user: Actor ) {
+        return this.documentsService.counts( user );
+    }
+
     @Get('documents/:id')
     @Roles(UserRole.USER)
     findOne(

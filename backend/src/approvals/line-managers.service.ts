@@ -62,6 +62,19 @@ export class LineManagersService {
         return resolveManageScope( rules, byJobTitle );
     }
 
+    //* 내 관리 범위 + 관리할 수 있는 부서 이름 (화면용, 전체 관리자는 삭제 안 된 모든 부서)
+    async myScope( user: Actor ){
+        const scope = await this.manageScope( user );
+        const departments = scope.all || scope.departmentIds.length > 0
+            ? await this.prisma.department.findMany({
+                where: { deleted: false, ...( !scope.all && { id: { in: scope.departmentIds } } ) },
+                select: { id: true, name: true, parentDepartmentId: true, sortOrder: true },
+                orderBy: [ { sortOrder: 'asc' }, { id: 'asc' } ],
+            })
+            : [];
+        return { ...scope, departments };
+    }
+
     //* 규칙 목록 (ADMIN) - 삭제된 대상·부서는 화면에서 "(삭제됨)"으로 표시하도록 상태를 함께 준다
     async findAll(){
         const rows = await this.prisma.approvalLineManager.findMany({

@@ -15,11 +15,11 @@ export class LineManagersController {
         private readonly lineManagersService: LineManagersService,
     ){}
 
-    //* 내 관리 범위 { all, departmentIds } - 프론트가 관리 메뉴·버튼 표시를 정한다
+    //* 내 관리 범위 { all, departmentIds, departments } - 프론트가 관리 메뉴·버튼 표시와 부서 선택지를 정한다
     @Get('me')
     @Roles(UserRole.USER)
     me( @User() user: Actor ) {
-        return this.lineManagersService.manageScope( user );
+        return this.lineManagersService.myScope( user );
     }
 
     @Get()

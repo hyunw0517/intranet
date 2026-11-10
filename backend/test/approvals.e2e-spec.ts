@@ -3,7 +3,7 @@
 // ⭐ 핵심: 상태 전이(상신 → 순차 승인 / 중간 반려 시 중단), 내 차례만 처리, 동시 처리(같은 결재자 연타, 회수와 승인이 겹침)에도 한 번만 반영된다.
 
 // supertest의 res.body는 any 타입이다. 응답 형태는 각 expect에서 검사하므로 이 파일에서만 any 관련 규칙을 끈다.
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment */
 
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -81,6 +81,20 @@ describe('전자결재', () => {
         expect( res.body ).toEqual([ { type: 'GENERAL', directCreate: true } ]);
     });
 
+    it('결재자 검색: 지정할 수 있는 회원만, 부서명으로도 찾고 이메일은 내보내지 않는다', async () => {
+        const res = await http().get( '/approvals/approvers?search=영업' ).set( auth( token.a ) ).expect( 200 );
+        expect( res.body.map( ( u: { id: number } ) => u.id ).sort() ).toEqual([ ids.b, ids.c ].sort());
+        expect( res.body[0] ).not.toHaveProperty( 'email' );
+
+        await prisma.users.update({ where: { id: ids.d }, data: { status: UserStatus.RESIGNED } });
+        try {
+            const all = await http().get( '/approvals/approvers' ).set( auth( token.a ) ).expect( 200 );
+            expect( all.body.map( ( u: { id: number } ) => u.id ) ).not.toContain( ids.d );
+        } finally {
+            await prisma.users.update({ where: { id: ids.d }, data: { status: UserStatus.ACTIVE } });
+        }
+    });
+
     //! 결재라인 템플릿 + 결재라인 관리자
 
     describe('결재라인', () => {
@@ -132,7 +146,8 @@ describe('전자결재', () => {
                 .send({ jobTitleId: leaderId, scope: 'MY_DEPARTMENT' }).expect( 409 ); // 같은 규칙
 
             const me = await http().get( '/approvals/line-managers/me' ).set( auth( token.b ) ).expect( 200 );
-            expect( me.body ).toEqual({ all: false, departmentIds: [ salesId ] });
+            expect( me.body ).toMatchObject({ all: false, departmentIds: [ salesId ] });
+            expect( me.body.departments.map( ( d: { name: string } ) => d.name ) ).toEqual([ '영업부' ]);
 
             const line = await http().post( '/approvals/lines' ).set( auth( token.b ) )
                 .send({ name: '영업부 기본', scope: 'DEPARTMENT', departmentId: salesId, steps: [ { approverId: ids.d } ] }).expect( 201 );
@@ -219,6 +234,27 @@ describe('전자결재', () => {
             expect( await box( token.c, 'pending' ) ).not.toContain( id );
             expect( await box( token.a, 'mine' ) ).toContain( id );
             expect( await notified( ids.b, NotificationActionType.APPROVAL_REQUESTED, id ) ).toBe( 1 );
+        });
+
+        it('결재함 탭 건수: 목록 개수와 같고, 기안함은 진행 중인 문서만 센다', async () => {
+            const counts = async ( t: string ) => ( await http().get( '/approvals/documents/counts' ).set( auth( t ) ).expect( 200 ) ).body;
+            const total = async ( t: string, name: string ) =>
+                ( await http().get( `/approvals/documents?box=${name}` ).set( auth( t ) ).expect( 200 ) ).body.meta.total as number;
+
+            const b = await counts( token.b );
+            expect( b.pending ).toBe( await total( token.b, 'pending' ) );
+            const c = await counts( token.c );
+            expect( c.upcoming ).toBe( await total( token.c, 'upcoming' ) );
+            const a = await counts( token.a );
+            expect( a.drafts ).toBe( await total( token.a, 'drafts' ) );
+
+            // 진행 중 문서 하나를 회수하면 기안함 목록 개수는 그대로, 건수만 1 줄어든다
+            const id = await submitNew([ ids.b ]);
+            const before = await counts( token.a );
+            const listBefore = await total( token.a, 'mine' );
+            await http().patch( `/approvals/documents/${id}/cancel` ).set( auth( token.a ) ).expect( 200 );
+            expect( ( await counts( token.a ) ).mine ).toBe( before.mine - 1 );
+            expect( await total( token.a, 'mine' ) ).toBe( listBefore );
         });
     });
 

@@ -53,6 +53,33 @@ export class ApproversService {
         }) );
     }
 
+    //* 결재자 후보 검색 (결재자 선택 화면, 2026-11-10 사용자 결정: 결재 애드온 안에 둔다)
+    // 지정할 수 있는 회원(재직 + USER/ADMIN)만, 이름·사번·부서명으로 검색, 최대 20명.
+    // 이메일·연락처 등은 내보내지 않는다. (일반 회원용 회원 목록 API는 핵심에 없음)
+    async search( search: string | undefined ): Promise<ApproverInfo[]> {
+        const keyword = search?.trim();
+        const users = await this.prisma.users.findMany({
+            where: {
+                deleted: false,
+                status: UserStatus.ACTIVE,
+                role: { in: [ UserRole.USER, UserRole.ADMIN ] },
+                ...( keyword && {
+                    OR: [
+                        { name: { contains: keyword, mode: 'insensitive' } },
+                        { empNo: { contains: keyword, mode: 'insensitive' } },
+                        { departments: { some: { deleted: false, department: { deleted: false, name: { contains: keyword, mode: 'insensitive' } } } } },
+                    ],
+                }),
+            },
+            select: { id: true },
+            orderBy: [ { name: 'asc' }, { id: 'asc' } ],
+            take: 20,
+        });
+
+        const map = await this.load( users.map( ( u ) => u.id ) );
+        return users.map( ( u ) => map.get( u.id )! );
+    }
+
     //* 모두 결재자로 지정할 수 있는지 확인 → 결재자 정보 (지정 순서대로)
     async loadUsable( ids: number[], db: Prisma.TransactionClient | PrismaService = this.prisma ): Promise<ApproverInfo[]> {
         const map = await this.load( ids, db );

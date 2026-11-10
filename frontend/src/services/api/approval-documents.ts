@@ -38,12 +38,12 @@ export function fetchApprovalDocument(id: number) {
   return apiFetch<ApprovalDocument>(`/approvals/documents/${id}`);
 }
 
-// 배열 순서 = 결재 순서
+// steps 배열 순서 = 결재 순서, 한 단계에 여러 명이면 병렬(모두 승인해야 다음 단계)
 export interface ApprovalDocumentInput {
   documentType?: ApprovalDocumentType; // 생성 때만
   title: string;
   content: string;
-  steps: { approverId: number }[];
+  steps: { approverIds: number[] }[];
   approvalLineTemplateId?: number | null;
   attachmentIds: number[];
 }
@@ -86,9 +86,9 @@ export function copyApprovalDocument(id: number) {
   return apiFetch<ApprovalDocument>(`/approvals/documents/${id}/copy`, { method: "POST" });
 }
 
-// 관리자 결재자 교체 (진행 중 문서의 남은 단계)
-export function replaceApprover(id: number, stepOrder: number, approverId: number) {
-  return apiFetch<ApprovalDocument>(`/approvals/documents/${id}/steps/${stepOrder}`, { method: "PATCH", body: { approverId } });
+// 관리자 결재자 교체 (진행 중 문서의 남은 결재자 한 명 - 단계 행 id)
+export function replaceApprover(id: number, stepId: number, approverId: number) {
+  return apiFetch<ApprovalDocument>(`/approvals/documents/${id}/steps/${stepId}`, { method: "PATCH", body: { approverId } });
 }
 
 // 첨부 다운로드 (열람 권한)

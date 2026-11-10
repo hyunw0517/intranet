@@ -10,21 +10,24 @@ import { PrismaService } from "src/prisma/prisma.service";
 import { ApprovalHandlerRegistry, HandledDocument } from "./approval-handler.registry";
 import { ApprovalLinesService } from "./approval-lines.service";
 import { ApprovalNotifier, NotifiedDocument } from "./approval-notifier";
-import { ApproversService } from "./approvers.service";
+import { ApproverInfo, ApproversService } from "./approvers.service";
 import { ApprovalBox, STATE_CHANGED_MESSAGE } from "./const/approval.const";
 import {
     ApprovalDocumentListQueryDto, ApproveDocumentDto, CreateApprovalDocumentDto, RejectDocumentDto, ReplaceApproverDto, UpdateApprovalDocumentDto,
 } from "./dto/approval-document.dto";
-import { checkApproverIds, IN_PROGRESS_STATUSES, nextAfterApprove } from "./util/approval-rules.util";
+import { checkApproverIds, checkStepGroups, groupSteps, IN_PROGRESS_STATUSES, nextAfterApprove } from "./util/approval-rules.util";
 
 type Actor = Pick<Users, 'id' | 'role'>;
 type Tx = Prisma.TransactionClient;
+
+// 단계 정렬: 단계 번호 → 같은 단계 안은 입력 순서(id)
+const STEP_ORDER_BY: Prisma.ApprovalDocumentStepOrderByWithRelationInput[] = [ { stepOrder: 'asc' }, { id: 'asc' } ];
 
 // 상태 변경·권한 판정에 필요한 문서 정보
 const documentSelect = {
     id: true, requesterId: true, documentType: true, title: true, status: true, currentStepOrder: true, approvalLineTemplateId: true,
     requester: { select: { name: true } },
-    steps: { select: { id: true, approverId: true, stepOrder: true, status: true, approverName: true }, orderBy: { stepOrder: 'asc' } },
+    steps: { select: { id: true, approverId: true, stepOrder: true, status: true, approverName: true }, orderBy: STEP_ORDER_BY },
 } satisfies Prisma.ApprovalDocumentSelect;
 
 type DocumentRow = Prisma.ApprovalDocumentGetPayload<{ select: typeof documentSelect }>;
@@ -34,7 +37,7 @@ const listSelect = {
     id: true, documentType: true, title: true, status: true, currentStepOrder: true,
     requestedAt: true, completedAt: true, createdAt: true, updatedAt: true,
     requester: { select: { id: true, name: true } },
-    steps: { select: { stepOrder: true, approverId: true, approverName: true, status: true, actedAt: true }, orderBy: { stepOrder: 'asc' } },
+    steps: { select: { stepOrder: true, approverId: true, approverName: true, status: true, actedAt: true }, orderBy: STEP_ORDER_BY },
 } satisfies Prisma.ApprovalDocumentSelect;
 
 const STATUS_LABEL: Record<ApprovalStatus, string> = {
@@ -42,16 +45,19 @@ const STATUS_LABEL: Record<ApprovalStatus, string> = {
 };
 
 //! 전자결재 문서 (features.md 7.3~7.5, 2026-11-10 사용자 결정)
-// 상태 전이:  DRAFT ─상신→ REQUESTED ─첫 승인→ IN_PROGRESS ─마지막 승인→ APPROVED
-//                          ├ 회수(기안자, 첫 승인 전까지) → CANCELLED
-//                          └ 반려(현재 결재자, 의견 필수) ──────────────→ REJECTED
+// 상태 전이:  DRAFT ─상신→ REQUESTED ─첫 승인→ IN_PROGRESS ─마지막 단계 완료→ APPROVED
+//                          ├ 회수(기안자, 아무도 승인하기 전까지) → CANCELLED
+//                          └ 반려(현재 단계 결재자, 의견 필수) ─────────────→ REJECTED
+// - 단계 = 같은 stepOrder의 결재자들. 한 단계에 여러 명이면 병렬: 모두 승인해야 다음 단계, 한 명이라도 반려하면 문서 반려.
+//   currentStepOrder = 지금 단계 번호, 그 단계의 결재자 모두가 PENDING이다.
 // - 결재라인은 상신할 때 검사하고 결재자 정보(이름·주 소속 부서·직급·직책)를 스냅샷으로 저장한다. 이후 인사이동과 무관하다.
 // - 결재자는 자기 차례(PENDING)만 처리한다. 반려·회수된 문서는 고치지 않고 "다시 기안"(복사 → 새 DRAFT)한다.
 // ⭐ 동시 처리: 모든 상태 변경은 같은 순서로 실행한다.
-//   ① 문서 행을 "기대한 상태" 조건으로 UPDATE (행 잠금) → 0행이면 409
+//   ① 문서 행을 "기대한 상태·단계" 조건으로 UPDATE (행 잠금) → 0행이면 409
 //   ② 단계 행을 "기대한 상태·결재자" 조건으로 UPDATE → 0행이면 409 (트랜잭션 전체 롤백)
-//   승인·반려·회수·결재자 교체가 모두 문서 행을 먼저 잠그므로, 서로 겹쳐도 한쪽만 성공하고 교착(deadlock)이 생기지 않는다.
-//   마지막 방어선: DB 부분 unique 인덱스(문서당 PENDING 단계 하나)
+//   승인·반려·회수·결재자 교체가 모두 문서 행을 먼저 잠그므로, 서로 겹쳐도 차례대로 실행되고 교착(deadlock)이 생기지 않는다.
+//   같은 단계의 두 사람이 동시에 승인해도 뒤의 요청은 앞 요청이 커밋된 뒤 남은 인원을 세므로, 마지막 승인자만 다음 단계를 연다.
+//   마지막 방어선: DB exclusion constraint (같은 문서의 PENDING 행은 모두 같은 단계 번호)
 // - 최종 승인·상신 시 문서 유형별 처리기를 같은 tx로 호출한다. (휴가 등 업무 반영이 승인과 함께 커밋·롤백)
 // - 상태가 바뀌는 동작마다 ApprovalDocumentHistory(업무 이력)와 감사 로그를 남기고, 알림은 커밋 후 보낸다.
 @Injectable()
@@ -185,7 +191,7 @@ export class ApprovalDocumentsService {
                         id: true, stepOrder: true, approverId: true, status: true, comment: true, actedAt: true,
                         approverName: true, departmentName: true, positionName: true, jobTitleName: true,
                     },
-                    orderBy: { stepOrder: 'asc' },
+                    orderBy: STEP_ORDER_BY,
                 },
                 histories: {
                     select: { id: true, fromStatus: true, toStatus: true, comment: true, createdAt: true, actor: { select: { id: true, name: true } } },
@@ -243,7 +249,7 @@ export class ApprovalDocumentsService {
             documentType: body.documentType,
             title: body.title,
             content: body.content ?? null,
-            approverIds: ( body.steps ?? [] ).map( ( s ) => s.approverId ),
+            groups: ( body.steps ?? [] ).map( ( s ) => s.approverIds ),
             approvalLineTemplateId: body.approvalLineTemplateId ?? null,
             attachmentIds: body.attachmentIds ?? [],
         }, '결재 문서 임시저장' );
@@ -255,8 +261,8 @@ export class ApprovalDocumentsService {
         const doc = await this.findMyDocument( user, id );
         this.assertStatus( doc, [ ApprovalStatus.DRAFT ], '임시저장 문서만 수정할 수 있습니다.' );
 
-        const approverIds = body.steps?.map( ( s ) => s.approverId );
-        const approvers = approverIds !== undefined ? await this.checkDraftApprovers( user, approverIds ) : undefined;
+        const groups = body.steps?.map( ( s ) => s.approverIds );
+        const rows = groups !== undefined ? await this.checkDraftSteps( user, groups ) : undefined;
         if ( body.approvalLineTemplateId ) {
             await this.lines.assertUsableTemplate( user, body.approvalLineTemplateId );
         }
@@ -273,11 +279,9 @@ export class ApprovalDocumentsService {
             });
             if ( count === 0 ) throw new ConflictException( STATE_CHANGED_MESSAGE );
 
-            if ( approvers !== undefined ) {
+            if ( rows !== undefined ) {
                 await tx.approvalDocumentStep.deleteMany({ where: { approvalDocumentId: id } });
-                await tx.approvalDocumentStep.createMany({
-                    data: approvers.map( ( a, i ) => ({ approvalDocumentId: id, approverId: a.id, stepOrder: i + 1, ...ApproversService.snapshot( a ) }) ),
-                });
+                await tx.approvalDocumentStep.createMany({ data: rows.map( ( r ) => ({ ...r, approvalDocumentId: id }) ) });
             }
 
             if ( body.attachmentIds !== undefined ) {
@@ -285,8 +289,8 @@ export class ApprovalDocumentsService {
             }
 
             await this.audit.updated( tx, id, `결재 문서 수정: ${body.title ?? doc.title}`, diffChanges(
-                { title: doc.title, approverIds: doc.steps.map( ( s ) => s.approverId ) },
-                { title: body.title ?? doc.title, approverIds: approverIds ?? doc.steps.map( ( s ) => s.approverId ) },
+                { title: doc.title, steps: groupSteps( doc.steps ) },
+                { title: body.title ?? doc.title, steps: groups ?? groupSteps( doc.steps ) },
             ), body.attachmentIds !== undefined ? { attachmentIds: body.attachmentIds } : undefined );
         });
 
@@ -310,7 +314,7 @@ export class ApprovalDocumentsService {
     }
 
     //* 다시 기안: 반려·회수된 문서를 새 DRAFT로 복사 (원래 문서는 그대로 남아 반려 사유가 보존된다)
-    // 지금 결재자로 지정할 수 없는 회원(퇴사 등)은 빼고 복사한다. → 새 문서 상세
+    // 지금 결재자로 지정할 수 없는 회원(퇴사 등)은 빼고 복사한다. (그래서 비게 된 단계는 없앤다) → 새 문서 상세
     async copy( user: Actor, id: number ){
         const doc = await this.findMyDocument( user, id );
         this.assertStatus( doc, [ ApprovalStatus.REJECTED, ApprovalStatus.CANCELLED ], '반려되거나 회수한 문서만 다시 기안할 수 있습니다.' );
@@ -322,7 +326,9 @@ export class ApprovalDocumentsService {
 
         const source = await this.prisma.approvalDocument.findUniqueOrThrow({ where: { id }, select: { content: true } });
         const current = await this.approvers.load( doc.steps.map( ( s ) => s.approverId ) );
-        const approverIds = doc.steps.map( ( s ) => s.approverId ).filter( ( a ) => current.get( a )?.usable );
+        const groups = groupSteps( doc.steps )
+            .map( ( g ) => g.filter( ( a ) => current.get( a )?.usable ) )
+            .filter( ( g ) => g.length > 0 );
         // 지금은 불러올 수 없는 템플릿(삭제·부서 이동 등)이면 기록만 비운다
         const templateId = doc.approvalLineTemplateId !== null
             && ( await this.lines.findUsable( user ) ).some( ( l ) => l.id === doc.approvalLineTemplateId ) ? doc.approvalLineTemplateId : null;
@@ -332,7 +338,7 @@ export class ApprovalDocumentsService {
             documentType: doc.documentType,
             title: doc.title,
             content: source.content,
-            approverIds,
+            groups,
             approvalLineTemplateId: templateId,
             attachmentIds,
         }, `결재 문서 다시 기안(원본 ${id})` );
@@ -342,13 +348,13 @@ export class ApprovalDocumentsService {
 
     //! 상태 변경
 
-    //* 상신: DRAFT → REQUESTED, 1단계 PENDING
+    //* 상신: DRAFT → REQUESTED, 1단계 결재자 모두 PENDING
     async submit( user: Actor, id: number ){
         const doc = await this.findMyDocument( user, id );
         this.assertStatus( doc, [ ApprovalStatus.DRAFT ], '임시저장 문서만 상신할 수 있습니다.' );
         const handler = this.registry.get( doc.documentType ); // 꺼진 업무의 문서는 상신할 수 없다
 
-        const firstApproverId = await this.prisma.$transaction( async ( tx ) => {
+        const firstApproverIds = await this.prisma.$transaction( async ( tx ) => {
             const { count } = await tx.approvalDocument.updateMany({
                 where: { id, requesterId: user.id, status: ApprovalStatus.DRAFT, deleted: false },
                 data: { status: ApprovalStatus.REQUESTED, currentStepOrder: 1, requestedAt: new Date(), updatedId: user.id },
@@ -356,13 +362,12 @@ export class ApprovalDocumentsService {
             if ( count === 0 ) throw new ConflictException( STATE_CHANGED_MESSAGE );
 
             // 잠근 뒤 단계를 다시 읽어 검사한다 (임시저장 이후 결재자가 퇴사했을 수 있음)
-            const steps = await tx.approvalDocumentStep.findMany({ where: { approvalDocumentId: id }, orderBy: { stepOrder: 'asc' } });
-            const approverIds = steps.map( ( s ) => s.approverId );
-            const error = checkApproverIds( approverIds, { minSteps: 1, requesterId: user.id } );
+            const steps = await tx.approvalDocumentStep.findMany({ where: { approvalDocumentId: id }, orderBy: STEP_ORDER_BY });
+            const error = checkStepGroups( groupSteps( steps ), { minSteps: 1, requesterId: user.id } );
             if ( error ) throw new BadRequestException( error );
-            const approvers = await this.approvers.loadUsable( approverIds, tx );
+            const approvers = await this.approvers.loadUsable( steps.map( ( s ) => s.approverId ), tx );
 
-            // 스냅샷을 상신 시점 정보로 다시 채운다
+            // 스냅샷을 상신 시점 정보로 다시 채운다 (저장 시 단계 번호는 1부터 빈틈없이 매긴다)
             for ( const [ i, step ] of steps.entries() ) {
                 await tx.approvalDocumentStep.update({
                     where: { id: step.id },
@@ -380,14 +385,14 @@ export class ApprovalDocumentsService {
             await this.history( tx, id, user.id, ApprovalStatus.DRAFT, ApprovalStatus.REQUESTED, null );
             await this.statusAudit( tx, doc, ApprovalStatus.DRAFT, ApprovalStatus.REQUESTED, '상신' );
 
-            return steps[0].approverId;
+            return steps.filter( ( s ) => s.stepOrder === 1 ).map( ( s ) => s.approverId );
         });
 
-        await this.notifier.requested( this.notified( doc ), firstApproverId, user.id );
+        await this.notifier.requested( this.notified( doc ), firstApproverIds, user.id );
         return this.findOne( user, id );
     }
 
-    //* 회수: REQUESTED → CANCELLED (기안자, 첫 승인 전까지)
+    //* 회수: REQUESTED → CANCELLED (기안자, 아무도 승인하기 전까지)
     async cancel( user: Actor, id: number ){
         const doc = await this.findMyDocument( user, id );
         if ( doc.status === ApprovalStatus.IN_PROGRESS ) {
@@ -402,7 +407,7 @@ export class ApprovalDocumentsService {
             });
             if ( count === 0 ) throw new ConflictException( STATE_CHANGED_MESSAGE );
 
-            // 차례였던 결재자의 결재 대기함에서 빠지도록 대기 상태로 되돌린다
+            // 차례였던 결재자들의 결재 대기함에서 빠지도록 대기 상태로 되돌린다
             await tx.approvalDocumentStep.updateMany({
                 where: { approvalDocumentId: id, status: ApprovalStepStatus.PENDING },
                 data: { status: ApprovalStepStatus.WAITING },
@@ -415,23 +420,18 @@ export class ApprovalDocumentsService {
         return this.findOne( user, id );
     }
 
-    //* 승인: 내 단계 APPROVED → 다음 단계 PENDING, 마지막이면 처리기 호출 + APPROVED
+    //* 승인: 내 단계 APPROVED → 같은 단계가 모두 승인되면 다음 단계 PENDING, 마지막 단계면 처리기 호출 + APPROVED
     async approve( user: Actor, id: number, body: ApproveDocumentDto ){
         const doc = await this.findVisible( user, id );
         const step = this.myCurrentStep( user, doc );
         const handler = this.registry.get( doc.documentType );
-        const next = nextAfterApprove( doc.steps.map( ( s ) => s.stepOrder ), step.stepOrder );
 
-        await this.prisma.$transaction( async ( tx ) => {
+        const result = await this.prisma.$transaction( async ( tx ) => {
             // ① 문서 행 먼저 (회수·다른 승인·결재자 교체와 같은 순서로 잠근다)
+            //    같은 단계의 다른 결재자가 동시에 승인하면 여기서 기다렸다가, 앞 승인이 커밋된 상태를 보고 이어간다.
             const { count } = await tx.approvalDocument.updateMany({
                 where: { id, status: { in: IN_PROGRESS_STATUSES }, currentStepOrder: step.stepOrder, deleted: false },
-                data: {
-                    status: next.status,
-                    currentStepOrder: next.nextOrder,
-                    ...( next.status === ApprovalStatus.APPROVED && { completedAt: new Date() } ),
-                    updatedId: user.id,
-                },
+                data: { updatedId: user.id },
             });
             if ( count === 0 ) throw new ConflictException( STATE_CHANGED_MESSAGE );
 
@@ -442,31 +442,60 @@ export class ApprovalDocumentsService {
             });
             if ( stepResult.count === 0 ) throw new ConflictException( STATE_CHANGED_MESSAGE );
 
-            if ( next.nextOrder !== null ) {
-                await tx.approvalDocumentStep.updateMany({
-                    where: { approvalDocumentId: id, stepOrder: next.nextOrder, status: ApprovalStepStatus.WAITING },
-                    data: { status: ApprovalStepStatus.PENDING },
-                });
+            // ③ 잠근 뒤의 현재 상태로 판단 (같은 단계의 앞선 승인이 반영된 값)
+            const locked = await tx.approvalDocument.findUniqueOrThrow({ where: { id }, select: { status: true } });
+            const waitingInStep = await tx.approvalDocumentStep.count({
+                where: { approvalDocumentId: id, stepOrder: step.stepOrder, status: { not: ApprovalStepStatus.APPROVED } },
+            });
+
+            let toStatus: ApprovalStatus = ApprovalStatus.IN_PROGRESS;
+            let nextApproverIds: number[] = [];
+
+            if ( waitingInStep > 0 ) {
+                // 같은 단계에 아직 승인하지 않은 사람이 있다 → 단계 유지 (첫 승인이면 결재중으로)
+                await tx.approvalDocument.update({ where: { id }, data: { status: ApprovalStatus.IN_PROGRESS } });
             } else {
-                // 최종 승인 → 업무 반영 (예외가 나면 승인 전체가 롤백된다)
-                await handler.onFinalApproved?.( tx, this.handled( doc ) );
+                const next = nextAfterApprove( doc.steps.map( ( s ) => s.stepOrder ), step.stepOrder );
+                toStatus = next.status;
+
+                if ( next.nextOrder !== null ) {
+                    await tx.approvalDocument.update({ where: { id }, data: { status: ApprovalStatus.IN_PROGRESS, currentStepOrder: next.nextOrder } });
+                    await tx.approvalDocumentStep.updateMany({
+                        where: { approvalDocumentId: id, stepOrder: next.nextOrder, status: ApprovalStepStatus.WAITING },
+                        data: { status: ApprovalStepStatus.PENDING },
+                    });
+                    // 알림 대상은 잠근 뒤 다시 읽는다 (트랜잭션 전에 읽은 값이면 그사이 교체된 결재자에게 알림이 갈 수 있다)
+                    nextApproverIds = ( await tx.approvalDocumentStep.findMany({
+                        where: { approvalDocumentId: id, stepOrder: next.nextOrder },
+                        select: { approverId: true },
+                    }) ).map( ( s ) => s.approverId );
+                } else {
+                    // 최종 승인 → 업무 반영 (예외가 나면 승인 전체가 롤백된다)
+                    await handler.onFinalApproved?.( tx, this.handled( doc ) );
+                    await tx.approvalDocument.update({
+                        where: { id },
+                        data: { status: ApprovalStatus.APPROVED, currentStepOrder: null, completedAt: new Date() },
+                    });
+                }
             }
 
-            await this.history( tx, id, user.id, doc.status, next.status, body.comment ?? null );
-            await this.statusAudit( tx, doc, doc.status, next.status, next.nextOrder === null ? `최종 승인(${step.stepOrder}단계)` : `승인(${step.stepOrder}단계)` );
+            await this.history( tx, id, user.id, locked.status, toStatus, body.comment ?? null );
+            await this.statusAudit( tx, doc, locked.status, toStatus,
+                toStatus === ApprovalStatus.APPROVED ? `최종 승인(${step.stepOrder}단계)` : `승인(${step.stepOrder}단계)` );
+
+            return { toStatus, nextApproverIds };
         });
 
-        if ( next.nextOrder !== null ) {
-            const nextStep = doc.steps.find( ( s ) => s.stepOrder === next.nextOrder )!;
-            await this.notifier.requested( this.notified( doc ), nextStep.approverId, user.id );
-        } else {
+        if ( result.nextApproverIds.length > 0 ) {
+            await this.notifier.requested( this.notified( doc ), result.nextApproverIds, user.id );
+        } else if ( result.toStatus === ApprovalStatus.APPROVED ) {
             await this.notifier.approved( this.notified( doc ), user.id );
         }
 
         return this.findOne( user, id );
     }
 
-    //* 반려: 내 단계 REJECTED + 문서 REJECTED (이후 단계는 진행하지 않는다)
+    //* 반려: 내 단계 REJECTED + 문서 REJECTED (같은 단계의 나머지·이후 단계는 진행하지 않는다)
     async reject( user: Actor, id: number, body: RejectDocumentDto ){
         const doc = await this.findVisible( user, id );
         const step = this.myCurrentStep( user, doc );
@@ -484,6 +513,12 @@ export class ApprovalDocumentsService {
             });
             if ( stepResult.count === 0 ) throw new ConflictException( STATE_CHANGED_MESSAGE );
 
+            // 같은 단계에서 아직 처리하지 않은 사람은 결재 대기함에서 빠지도록 대기 상태로
+            await tx.approvalDocumentStep.updateMany({
+                where: { approvalDocumentId: id, status: ApprovalStepStatus.PENDING },
+                data: { status: ApprovalStepStatus.WAITING },
+            });
+
             await this.history( tx, id, user.id, doc.status, ApprovalStatus.REJECTED, body.comment );
             await this.statusAudit( tx, doc, doc.status, ApprovalStatus.REJECTED, `반려(${step.stepOrder}단계)` );
         });
@@ -492,19 +527,19 @@ export class ApprovalDocumentsService {
         return this.findOne( user, id );
     }
 
-    //* 관리자 결재자 교체: 진행 중 문서의 남은 단계(PENDING·WAITING) (퇴사·휴직·삭제된 결재자 대응)
-    async replaceApprover( user: Actor, id: number, stepOrder: number, body: ReplaceApproverDto ){
+    //* 관리자 결재자 교체: 진행 중 문서의 남은 결재자(PENDING·WAITING) 한 명 (퇴사·휴직·삭제된 결재자 대응)
+    async replaceApprover( user: Actor, id: number, stepId: number, body: ReplaceApproverDto ){
         const doc = await this.findDocument( id );
         if ( !IN_PROGRESS_STATUSES.includes( doc.status ) ) {
             throw new ConflictException( '결재가 진행 중인 문서만 결재자를 바꿀 수 있습니다.' );
         }
 
-        const step = doc.steps.find( ( s ) => s.stepOrder === stepOrder );
+        const step = doc.steps.find( ( s ) => s.id === stepId );
         if ( !step ) {
             throw new NotFoundException( '존재하지 않는 결재 단계입니다.' );
         }
         if ( step.status !== ApprovalStepStatus.PENDING && step.status !== ApprovalStepStatus.WAITING ) {
-            throw new ConflictException( '이미 처리된 단계는 결재자를 바꿀 수 없습니다.' );
+            throw new ConflictException( '이미 처리된 결재자는 바꿀 수 없습니다.' );
         }
         if ( step.approverId === body.approverId ) {
             throw new BadRequestException( '지금과 같은 결재자입니다.' );
@@ -516,7 +551,7 @@ export class ApprovalDocumentsService {
         const [ approver ] = await this.approvers.loadUsable( [ body.approverId ] );
 
         await this.prisma.$transaction( async ( tx ) => {
-            // 문서 행 먼저 잠근다 (같은 단계의 승인과 겹치면 한쪽만 성공)
+            // 문서 행 먼저 잠근다 (같은 결재자의 승인과 겹치면 한쪽만 성공)
             const { count } = await tx.approvalDocument.updateMany({
                 where: { id, status: { in: IN_PROGRESS_STATUSES }, deleted: false },
                 data: { updatedId: user.id },
@@ -529,16 +564,16 @@ export class ApprovalDocumentsService {
             });
             if ( stepResult.count === 0 ) throw new ConflictException( STATE_CHANGED_MESSAGE );
 
-            const comment = `결재자 변경(${stepOrder}단계): ${step.approverName} → ${approver.name}`;
+            const comment = `결재자 변경(${step.stepOrder}단계): ${step.approverName} → ${approver.name}`;
             await this.history( tx, id, user.id, doc.status, doc.status, comment );
             await this.audit.updated( tx, id, `결재자 교체: ${doc.title} - ${comment}`, {
-                [`step${stepOrder}.approverId`]: { before: step.approverId, after: approver.id },
+                [`step${step.id}.approverId`]: { before: step.approverId, after: approver.id },
             });
         });
 
-        // 지금 차례였던 단계면 새 결재자에게 알린다
+        // 지금 차례였던 결재자면 새 결재자에게 알린다
         if ( step.status === ApprovalStepStatus.PENDING ) {
-            await this.notifier.requested( this.notified( doc ), approver.id, user.id );
+            await this.notifier.requested( this.notified( doc ), [ approver.id ], user.id );
         }
 
         return this.findOne( user, id );
@@ -553,13 +588,13 @@ export class ApprovalDocumentsService {
             documentType: HandledDocument['documentType'];
             title: string;
             content: string | null;
-            approverIds: number[];
+            groups: number[][];
             approvalLineTemplateId: number | null;
             attachmentIds: number[];
         },
         auditLabel: string,
     ){
-        const approvers = await this.checkDraftApprovers( user, data.approverIds );
+        const rows = await this.checkDraftSteps( user, data.groups );
 
         return this.prisma.$transaction( async ( tx ) => {
             const doc = await tx.approvalDocument.create({
@@ -571,9 +606,7 @@ export class ApprovalDocumentsService {
                     approvalLineTemplateId: data.approvalLineTemplateId,
                     createdId: user.id,
                     updatedId: user.id,
-                    steps: {
-                        create: approvers.map( ( a, i ) => ({ approverId: a.id, stepOrder: i + 1, ...ApproversService.snapshot( a ) }) ),
-                    },
+                    steps: { create: rows },
                 },
                 select: { id: true },
             });
@@ -581,18 +614,27 @@ export class ApprovalDocumentsService {
             await this.syncAttachments( tx, doc.id, user.id, data.attachmentIds );
             await this.history( tx, doc.id, user.id, null, ApprovalStatus.DRAFT, null );
             await this.audit.created( tx, doc.id, `${auditLabel}: ${data.title}`, {
-                documentType: data.documentType, approverIds: data.approverIds, attachmentIds: data.attachmentIds,
+                documentType: data.documentType, steps: data.groups, attachmentIds: data.attachmentIds,
             });
 
             return doc.id;
         });
     }
 
-    // 임시저장 결재자 검사: 0명 허용, 최대 10명, 중복·본인 불가, 지정 가능한 회원
-    private async checkDraftApprovers( user: Actor, approverIds: number[] ){
-        const error = checkApproverIds( approverIds, { minSteps: 0, requesterId: user.id } );
+    // 임시저장 단계 검사 → 저장할 단계 행 (단계 번호 1부터, 같은 단계 = 같은 번호)
+    // 0명 허용, 빈 단계 불가, 전체 최대 10명, 중복·본인 불가, 지정 가능한 회원
+    private async checkDraftSteps( user: Actor, groups: number[][] ){
+        const error = checkStepGroups( groups, { minSteps: 0, requesterId: user.id } );
         if ( error ) throw new BadRequestException( error );
-        return this.approvers.loadUsable( approverIds );
+
+        const approvers = await this.approvers.loadUsable( groups.flat() );
+        const byId = new Map<number, ApproverInfo>( approvers.map( ( a ) => [ a.id, a ] ) );
+
+        return groups.flatMap( ( g, i ) => g.map( ( approverId ) => ({
+            approverId,
+            stepOrder: i + 1,
+            ...ApproversService.snapshot( byId.get( approverId )! ),
+        }) ) );
     }
 
     // 본문 정제 (게시판과 같은 허용 목록, 본문 이미지는 쓰지 않음 - 공개 uuid 주소라 결재 문서에 맞지 않음)
@@ -641,13 +683,13 @@ export class ApprovalDocumentsService {
         return doc;
     }
 
-    //* 지금 내 차례인 단계 (아니면 409/403)
+    //* 지금 내 차례인 행 (지금 단계에서 내 행이 PENDING) - 아니면 409/403
     private myCurrentStep( user: Actor, doc: DocumentRow ){
         if ( !IN_PROGRESS_STATUSES.includes( doc.status ) ) {
             throw new ConflictException( '결재가 진행 중인 문서가 아닙니다.' );
         }
-        const step = doc.steps.find( ( s ) => s.stepOrder === doc.currentStepOrder );
-        if ( !step || step.approverId !== user.id || step.status !== ApprovalStepStatus.PENDING ) {
+        const step = doc.steps.find( ( s ) => s.approverId === user.id && s.stepOrder === doc.currentStepOrder );
+        if ( !step || step.status !== ApprovalStepStatus.PENDING ) {
             // 이미 처리한 결재를 다시 누른 경우 (두 탭·연타로 늦게 도착한 요청)
             if ( doc.steps.some( ( s ) => s.approverId === user.id && ( s.status === ApprovalStepStatus.APPROVED || s.status === ApprovalStepStatus.REJECTED ) ) ) {
                 throw new ConflictException( '이미 처리한 결재입니다.' );

@@ -25,10 +25,10 @@ export class ApprovalNotifier {
         private readonly notificationsService: NotificationsService,
     ){}
 
-    //* 내 차례 도착
-    requested( doc: NotifiedDocument, approverId: number, senderId: number | null ){
+    //* 내 차례 도착 (병렬 단계면 그 단계의 결재자 모두에게)
+    requested( doc: NotifiedDocument, approverIds: number[], senderId: number | null ){
         return bestEffort( this.logger, `결재 요청 알림(${doc.id})`, () => this.notificationsService.send({
-            userIds: [ approverId ],
+            userIds: approverIds,
             actionType: NotificationActionType.APPROVAL_REQUESTED,
             targetType: NotificationTargetType.APPROVAL,
             targetId: doc.id,

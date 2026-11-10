@@ -6,14 +6,14 @@ import { PrismaService } from "src/prisma/prisma.service";
 import { ApproversService } from "./approvers.service";
 import { ApprovalStepInputDto, CreateApprovalLineDto, ManageApprovalLineQueryDto, UpdateApprovalLineDto } from "./dto/approval-line.dto";
 import { LineManagersService } from "./line-managers.service";
-import { canManageLine, checkApproverIds } from "./util/approval-rules.util";
+import { canManageLine, checkStepGroups, flattenSteps, groupSteps } from "./util/approval-rules.util";
 
 type Actor = Pick<Users, 'id' | 'role'>;
 
 const lineSelect = {
     id: true, name: true, scope: true, departmentId: true, ownerUserId: true, updatedAt: true,
     department: { select: { id: true, name: true, deleted: true } },
-    steps: { select: { approverId: true, stepOrder: true, name: true }, orderBy: { stepOrder: 'asc' } },
+    steps: { select: { approverId: true, stepOrder: true, name: true }, orderBy: [ { stepOrder: 'asc' }, { id: 'asc' } ] }, // 같은 단계 안은 입력 순서
 } satisfies Prisma.ApprovalLineTemplateSelect;
 
 type LineRow = Prisma.ApprovalLineTemplateGetPayload<{ select: typeof lineSelect }>;
@@ -133,7 +133,7 @@ export class ApprovalLinesService {
             });
 
             await this.audit.created( tx, line.id, `결재라인 생성(${scope}): ${line.name}`, {
-                scope, departmentId: target.departmentId, ownerUserId: target.ownerUserId, approverIds: body.steps.map( ( s ) => s.approverId ),
+                scope, departmentId: target.departmentId, ownerUserId: target.ownerUserId, steps: body.steps.map( ( s ) => s.approverIds ),
             });
 
             return ( await this.withApprovers( [ line ] ) )[0];
@@ -162,8 +162,8 @@ export class ApprovalLinesService {
             });
 
             await this.audit.updated( tx, id, `결재라인 수정: ${updated.name}`, diffChanges(
-                { name: line.name, approverIds: line.steps.map( ( s ) => s.approverId ) },
-                { name: updated.name, approverIds: updated.steps.map( ( s ) => s.approverId ) },
+                { name: line.name, steps: groupSteps( line.steps ) },
+                { name: updated.name, steps: groupSteps( updated.steps ) },
             ) );
 
             return ( await this.withApprovers( [ updated ] ) )[0];
@@ -213,16 +213,16 @@ export class ApprovalLinesService {
         }
     }
 
-    // 템플릿 단계 검사: 1~10명, 중복 불가, 지정 가능한 회원 (기안자 본인 제외는 상신할 때만)
+    // 템플릿 단계 검사: 단계마다 1명 이상, 전체 1~10명, 중복 불가, 지정 가능한 회원 (기안자 본인 제외는 상신할 때만)
     private async checkSteps( steps: ApprovalStepInputDto[] ){
-        const ids = steps.map( ( s ) => s.approverId );
-        const error = checkApproverIds( ids, { minSteps: 1 } );
+        const error = checkStepGroups( steps.map( ( s ) => s.approverIds ), { minSteps: 1 } );
         if ( error ) throw new BadRequestException( error );
-        await this.approvers.loadUsable( ids );
+        await this.approvers.loadUsable( steps.flatMap( ( s ) => s.approverIds ) );
     }
 
+    // 결재자 한 명 = 행 하나, 같은 단계는 같은 번호·같은 단계명
     private toStepRows( steps: ApprovalStepInputDto[] ){
-        return steps.map( ( s, i ) => ({ approverId: s.approverId, stepOrder: i + 1, name: s.name ?? null }) );
+        return flattenSteps( steps ).map( ( r ) => ({ approverId: r.approverId, stepOrder: r.stepOrder, name: r.step.name ?? null }) );
     }
 
     //* 단계마다 결재자의 현재 정보 + usable (삭제·퇴사한 결재자는 화면에서 빼고 상신)

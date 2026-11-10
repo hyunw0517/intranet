@@ -79,7 +79,8 @@ export interface ApprovalLine {
 export interface LineManageScope {
   all: boolean;
   departmentIds: number[];
-  departments: { id: number; name: string; parentDepartmentId: number | null; sortOrder: number }[];
+  // 관리할 수 있는 부서 (맡은 부서 + 하위 부서 전체, 트리 순서). path = 최상위부터의 이름 (구분자 /)
+  departments: { id: number; name: string; parentDepartmentId: number | null; sortOrder: number; depth: number; path: string }[];
 }
 
 // 결재라인 관리자 규칙 (ADMIN)

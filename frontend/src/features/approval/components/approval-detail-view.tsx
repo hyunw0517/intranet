@@ -79,7 +79,7 @@ export function ApprovalDetailView({ id }: { id: number }) {
     kind === "submit" ? submitApprovalDocument(id) : kind === "cancel" ? cancelApprovalDocument(id) : deleteApprovalDocument(id),
   );
   const copy = useApprovalMutation(() => copyApprovalDocument(id));
-  const replace = useApprovalMutation((v: { stepOrder: number; approverId: number }) => replaceApprover(id, v.stepOrder, v.approverId));
+  const replace = useApprovalMutation((v: { stepId: number; approverId: number }) => replaceApprover(id, v.stepId, v.approverId));
 
   if (isPending) return <LoadingState />;
   if (isError) return <ErrorState error={error} onRetry={() => refetch()} />;
@@ -209,13 +209,13 @@ export function ApprovalDetailView({ id }: { id: number }) {
       <ApproverPickerDialog
         open={replacing !== null}
         onOpenChange={(open) => !open && setReplacing(null)}
-        title={replacing ? `${replacing.stepOrder}단계 결재자 교체` : "결재자 교체"}
+        title={replacing ? `${replacing.stepOrder}단계 ${replacing.approverName} 교체` : "결재자 교체"}
         description="퇴사·휴직 등으로 결재할 수 없는 결재자를 바꿉니다. 지금 차례인 단계면 새 결재자에게 알림이 갑니다."
         excludeIds={[doc.requester.id, ...doc.steps.map((s) => s.approverId)]}
         onPick={(a) => {
           if (!replacing) return;
           replace.mutate(
-            { stepOrder: replacing.stepOrder, approverId: a.id },
+            { stepId: replacing.id, approverId: a.id },
             { onSuccess: () => toast.success(`${a.name}님으로 교체했습니다.`), onError },
           );
           setReplacing(null);
@@ -232,27 +232,59 @@ function ApprovalSteps({ doc, onReplace }: { doc: ApprovalDocument; onReplace: (
   }
 
   const inProgress = doc.status === "REQUESTED" || doc.status === "IN_PROGRESS";
+  // 같은 단계 번호 = 한 단계 (여러 명이면 병렬: 모두 승인해야 다음 단계)
+  const orders = [...new Set(doc.steps.map((s) => s.stepOrder))].sort((a, b) => a - b);
 
   return (
     <section aria-labelledby="approval-steps-title" className="grid gap-2">
       <h2 id="approval-steps-title" className="text-sm font-medium">
         결재선
       </h2>
-      <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {doc.steps.map((s) => {
-          const remaining = s.status === "PENDING" || s.status === "WAITING";
+      <ol className="grid gap-3">
+        {orders.map((order) => {
+          const inStep = doc.steps.filter((s) => s.stepOrder === order);
+          const current = inProgress && doc.currentStepOrder === order;
           return (
-            <li
-              key={s.id}
-              aria-current={inProgress && s.status === "PENDING" ? "step" : undefined}
-              className={cn("grid gap-1 rounded-lg border p-3", inProgress && s.status === "PENDING" && "border-primary")}
-            >
+            <li key={order} aria-current={current ? "step" : undefined} className="grid gap-1.5">
+              <p className={cn("text-xs tabular-nums", current ? "font-medium text-foreground" : "text-muted-foreground")}>
+                {order}단계{inStep.length > 1 && " · 병렬 (모두 승인해야 다음 단계)"}
+                {current && " · 지금 차례"}
+              </p>
+              <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {inStep.map((s) => (
+                  <StepCard key={s.id} doc={doc} step={s} highlight={current && s.status === "PENDING"} onReplace={onReplace} />
+                ))}
+              </ul>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+// 결재자 한 명 (결재 당시 이름·소속 스냅샷, 상태, 처리 시각, 의견)
+function StepCard({
+  doc,
+  step: s,
+  highlight,
+  onReplace,
+}: {
+  doc: ApprovalDocument;
+  step: ApprovalDocumentStep;
+  highlight: boolean;
+  onReplace: (step: ApprovalDocumentStep) => void;
+}) {
+  const inProgress = doc.status === "REQUESTED" || doc.status === "IN_PROGRESS";
+  const remaining = s.status === "PENDING" || s.status === "WAITING";
+
+  return (
+            <li className={cn("grid gap-1 rounded-lg border p-3", highlight && "border-primary")}>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground tabular-nums">{s.stepOrder}단계</span>
+                <p className="font-medium">{s.approverName}</p>
                 {/* 임시저장 문서의 단계는 아직 상태가 의미 없어 표시하지 않는다 */}
                 {doc.status !== "DRAFT" && <StepStatusText status={s.status} />}
               </div>
-              <p className="font-medium">{s.approverName}</p>
               <p className="text-xs text-muted-foreground">
                 {[s.departmentName, s.positionName, s.jobTitleName].filter(Boolean).join(" · ") || "소속 없음"}
               </p>
@@ -271,10 +303,6 @@ function ApprovalSteps({ doc, onReplace }: { doc: ApprovalDocument; onReplace: (
                 </Button>
               )}
             </li>
-          );
-        })}
-      </ol>
-    </section>
   );
 }
 

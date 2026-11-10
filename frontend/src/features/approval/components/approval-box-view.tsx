@@ -128,7 +128,8 @@ export function ApprovalBoxView() {
 
 // 목록 한 줄: 제목·상태 / 기안자·유형·결재선 진행·날짜 (좁은 화면에서는 두 줄로 내려간다)
 function ApprovalRow({ doc, box }: { doc: ApprovalListItem; box: ApprovalBox }) {
-  const current = doc.steps.find((s) => s.stepOrder === doc.currentStepOrder);
+  // 지금 단계의 아직 처리하지 않은 결재자 (병렬 단계면 여러 명)
+  const current = doc.steps.filter((s) => s.stepOrder === doc.currentStepOrder && s.status === "PENDING");
   const done = doc.steps.filter((s) => s.status === "APPROVED").length;
   // 날짜: 임시저장 = 최근 저장, 결재 완료 = 내가 처리한 시각, 그 외 = 상신 시각
   const date = box === "drafts" ? doc.updatedAt : box === "processed" ? doc.myStep?.actedAt ?? doc.requestedAt : doc.requestedAt;
@@ -151,7 +152,7 @@ function ApprovalRow({ doc, box }: { doc: ApprovalListItem; box: ApprovalBox }) 
           {doc.steps.length > 0 && (
             <span className="tabular-nums">
               결재 {done}/{doc.steps.length}
-              {current && ` · 현재 ${current.approverName}`}
+              {current.length > 0 && ` · 현재 ${current.map((s) => s.approverName).join(", ")}`}
             </span>
           )}
           {box === "processed" && doc.myStep && (

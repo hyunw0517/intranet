@@ -3,7 +3,8 @@ import { ApprovalLineManagerScope, AuditTargetType, UserRole, Users } from "src/
 import { AuditService, TargetAudit } from "src/common/audit.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { CreateLineManagerDto } from "./dto/line-manager.dto";
-import { LineManageScope, resolveManageScope } from "./util/approval-rules.util";
+import { toTreeList } from "src/common/util/tree.util";
+import { LineManageScope, resolveManageScope, withDescendants } from "./util/approval-rules.util";
 
 type Actor = Pick<Users, 'id' | 'role'>;
 
@@ -59,19 +60,29 @@ export class LineManagersService {
             select: { scope: true, jobTitleId: true, departmentId: true },
         });
 
-        return resolveManageScope( rules, byJobTitle );
+        const scope = resolveManageScope( rules, byJobTitle );
+        if ( scope.all || scope.departmentIds.length === 0 ) return scope;
+
+        // 맡은 부서의 하위 부서 전체도 관리한다 (기술본부 관리자 → 개발1팀·인프라팀 …, 2026-11-10 사용자 결정)
+        const departments = await this.prisma.department.findMany({ where: { deleted: false }, select: { id: true, parentDepartmentId: true } });
+        return { all: false, departmentIds: withDescendants( scope.departmentIds, departments ) };
     }
 
-    //* 내 관리 범위 + 관리할 수 있는 부서 이름 (화면용, 전체 관리자는 삭제 안 된 모든 부서)
+    //* 내 관리 범위 + 관리할 수 있는 부서 (화면 선택지, 트리 순서 + 최상위부터의 경로) - 전체 관리자는 삭제 안 된 모든 부서
     async myScope( user: Actor ){
         const scope = await this.manageScope( user );
-        const departments = scope.all || scope.departmentIds.length > 0
-            ? await this.prisma.department.findMany({
-                where: { deleted: false, ...( !scope.all && { id: { in: scope.departmentIds } } ) },
-                select: { id: true, name: true, parentDepartmentId: true, sortOrder: true },
-                orderBy: [ { sortOrder: 'asc' }, { id: 'asc' } ],
-            })
-            : [];
+        if ( !scope.all && scope.departmentIds.length === 0 ) {
+            return { ...scope, departments: [] };
+        }
+
+        const all = await this.prisma.department.findMany({
+            where: { deleted: false },
+            select: { id: true, name: true, parentDepartmentId: true, sortOrder: true },
+        });
+        const departments = toTreeList( all, ( d ) => d.parentDepartmentId )
+            .filter( ( d ) => scope.all || scope.departmentIds.includes( d.id ) )
+            .map( ( d ) => ({ id: d.id, name: d.name, parentDepartmentId: d.parentDepartmentId, sortOrder: d.sortOrder, depth: d.depth, path: d.path }) );
+
         return { ...scope, departments };
     }
 

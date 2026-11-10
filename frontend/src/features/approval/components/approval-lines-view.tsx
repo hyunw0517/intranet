@@ -23,7 +23,7 @@ import { createApprovalLine, deleteApprovalLine, updateApprovalLine } from "@/se
 import { LINE_SCOPE_LABEL, type ApprovalLine, type ApprovalLineScope, type LineManageScope } from "@/types/approval";
 import { LINE_NAME_MAX } from "../approval-rules";
 import { useApprovalMutation, useManageableLines, useMyLineScope, useUsableLines } from "../hooks/use-approvals";
-import { ApprovalLineEditor, type LineApprover } from "./approval-line-editor";
+import { ApprovalLineEditor, groupStepRows, toStepInputs, type LineStepGroup } from "./approval-line-editor";
 
 type DialogState = { mode: "create"; scope: ApprovalLineScope } | { mode: "edit"; line: ApprovalLine } | null;
 
@@ -78,7 +78,7 @@ export function ApprovalLinesView() {
               <p className="text-sm text-muted-foreground">
                 {scope.data!.all
                   ? "공용 결재라인은 모든 직원이, 부서 결재라인은 그 부서 소속 직원이 불러옵니다."
-                  : `맡은 부서(${scope.data!.departments.map((d) => d.name).join(", ")})의 부서 결재라인을 관리합니다.`}
+                  : `맡은 부서와 그 하위 부서(${scope.data!.departments.length}곳)의 부서 결재라인을 관리합니다.`}
               </p>
             </div>
             <div className="flex gap-2">
@@ -162,14 +162,23 @@ function LineList({
                 )}
                 {line.name}
               </p>
+              {/* 단계는 →, 같은 단계(병렬)는 쉼표로 */}
               <p className="text-sm text-muted-foreground">
-                {line.steps.map((s, i) => (
-                  <span key={s.stepOrder} className={s.usable ? undefined : "line-through"}>
-                    {i > 0 && " → "}
-                    {s.approverName ?? "(알 수 없음)"}
-                    {s.name && ` (${s.name})`}
-                  </span>
-                ))}
+                {[...new Set(line.steps.map((s) => s.stepOrder))].map((order, i) => {
+                  const inStep = line.steps.filter((s) => s.stepOrder === order);
+                  return (
+                    <span key={order}>
+                      {i > 0 && " → "}
+                      {inStep.map((s, j) => (
+                        <span key={s.approverId} className={s.usable ? undefined : "line-through"}>
+                          {j > 0 && ", "}
+                          {s.approverName ?? "(알 수 없음)"}
+                        </span>
+                      ))}
+                      {inStep[0].name && ` (${inStep[0].name})`}
+                    </span>
+                  );
+                })}
               </p>
               {unusable > 0 && (
                 <p className="flex items-center gap-1 text-xs text-destructive">
@@ -201,17 +210,17 @@ function LineFormDialog({ state, scope, onClose }: { state: NonNullable<DialogSt
 
   const [name, setName] = useState(editing?.name ?? "");
   const [departmentId, setDepartmentId] = useState<string>(scope.departments.length === 1 ? String(scope.departments[0].id) : "");
-  const [approvers, setApprovers] = useState<LineApprover[]>(
-    editing?.steps
-      .filter((s) => s.usable)
-      .map((s) => ({
-        approverId: s.approverId,
-        name: s.approverName ?? "",
-        departmentName: s.departmentName,
-        positionName: s.positionName,
-        jobTitleName: s.jobTitleName,
-        stepName: s.name,
-      })) ?? [],
+  const [steps, setSteps] = useState<LineStepGroup[]>(
+    editing
+      ? groupStepRows(
+          editing.steps,
+          (s) =>
+            s.usable
+              ? { approverId: s.approverId, name: s.approverName ?? "", departmentName: s.departmentName, positionName: s.positionName, jobTitleName: s.jobTitleName }
+              : null,
+          (s) => s.name,
+        )
+      : [],
   );
   const [errors, setErrors] = useState<{ name?: string; department?: string; approvers?: string }>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -219,7 +228,7 @@ function LineFormDialog({ state, scope, onClose }: { state: NonNullable<DialogSt
   const mutation = useApprovalMutation(() => {
     const input = {
       name: name.trim(),
-      steps: approvers.map((a) => ({ approverId: a.approverId, name: a.stepName?.trim() || null })),
+      steps: toStepInputs(steps),
     };
     return editing
       ? updateApprovalLine(editing.id, input)
@@ -230,7 +239,7 @@ function LineFormDialog({ state, scope, onClose }: { state: NonNullable<DialogSt
     const next: typeof errors = {};
     if (!name.trim()) next.name = "이름을 입력하세요.";
     if (!editing && lineScope === "DEPARTMENT" && !departmentId) next.department = "부서를 고르세요.";
-    if (approvers.length === 0) next.approvers = "결재자를 1명 이상 지정하세요.";
+    if (steps.length === 0) next.approvers = "결재자를 1명 이상 지정하세요.";
     setErrors(next);
     if (next.name || next.department || next.approvers) return;
 
@@ -288,7 +297,7 @@ function LineFormDialog({ state, scope, onClose }: { state: NonNullable<DialogSt
                   <SelectContent>
                     {scope.departments.map((d) => (
                       <SelectItem key={d.id} value={String(d.id)}>
-                        {d.name}
+                        {d.path.split("/").join(" › ")}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -303,7 +312,7 @@ function LineFormDialog({ state, scope, onClose }: { state: NonNullable<DialogSt
                 *
               </span>
             </Label>
-            <ApprovalLineEditor value={approvers} onChange={setApprovers} withStepNames labelledBy="line-steps-label" />
+            <ApprovalLineEditor value={steps} onChange={setSteps} withStepNames labelledBy="line-steps-label" />
             {errors.approvers && <p className="text-xs text-destructive">{errors.approvers}</p>}
           </div>
         </form>

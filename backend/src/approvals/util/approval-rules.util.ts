@@ -25,6 +25,28 @@ export function checkApproverIds(
     return null;
 }
 
+//* 단계 목록 → 결재자 행 (단계 번호 1부터, 같은 단계는 같은 번호)
+export function flattenSteps<T extends { approverIds: number[] }>( steps: T[] ): { approverId: number; stepOrder: number; step: T }[] {
+    return steps.flatMap( ( step, i ) => step.approverIds.map( ( approverId ) => ({ approverId, stepOrder: i + 1, step }) ) );
+}
+
+//* 결재자 행(단계 번호 포함) → 단계별 결재자 id (단계 번호 순서, 빈 단계 없이)
+export function groupSteps( rows: { approverId: number; stepOrder: number }[] ): number[][] {
+    const orders = [ ...new Set( rows.map( ( r ) => r.stepOrder ) ) ].sort( ( a, b ) => a - b );
+    return orders.map( ( order ) => rows.filter( ( r ) => r.stepOrder === order ).map( ( r ) => r.approverId ) );
+}
+
+//* 단계 목록 검사: 빈 단계 불가 + 전체 결재자에 checkApproverIds 규칙
+export function checkStepGroups(
+    groups: number[][],
+    options: { minSteps: number; requesterId?: number },
+): string | null {
+    if ( groups.some( ( g ) => g.length === 0 ) ) {
+        return '결재자가 없는 단계가 있습니다.';
+    }
+    return checkApproverIds( groups.flat(), options );
+}
+
 //* 내 결재라인 관리 범위 (ADMIN = 전체)
 export interface LineManageScope {
     all: boolean;
@@ -53,6 +75,27 @@ export function resolveManageScope(
     }
 
     return { all: false, departmentIds: [ ...ids ].sort( ( a, b ) => a - b ) };
+}
+
+//* 관리 부서 → 하위 부서 전체(모든 단계) 포함 (2026-11-10 사용자 결정: 상위 부서 관리자는 하위 부서의 부서 결재라인도 관리)
+// departments: 삭제되지 않은 전체 부서 (id, 상위 id). 결과는 id 오름차순, 중복 없음.
+export function withDescendants( departmentIds: number[], departments: { id: number; parentDepartmentId: number | null }[] ): number[] {
+    const children = new Map<number, number[]>();
+    for ( const d of departments ) {
+        if ( d.parentDepartmentId === null ) continue;
+        children.set( d.parentDepartmentId, [ ...( children.get( d.parentDepartmentId ) ?? [] ), d.id ] );
+    }
+
+    const result = new Set<number>();
+    const queue = [ ...departmentIds ];
+    while ( queue.length > 0 ) {
+        const id = queue.shift()!;
+        if ( result.has( id ) ) continue; // 이미 넣은 부서 (겹치는 규칙, 순환 방어)
+        result.add( id );
+        queue.push( ...( children.get( id ) ?? [] ) );
+    }
+
+    return [ ...result ].sort( ( a, b ) => a - b );
 }
 
 //* 공용·부서 결재라인을 이 범위로 관리할 수 있는지 (개인 결재라인은 소유자만 - 여기서 다루지 않음)

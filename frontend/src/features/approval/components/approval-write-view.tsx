@@ -20,12 +20,13 @@ import type { ApprovalDocument } from "@/types/approval";
 import { approvalHref } from "../approval-rules";
 import { approvalKeys, useApprovalDocument } from "../hooks/use-approvals";
 import { ApprovalDocumentForm, EMPTY_APPROVAL_FORM, type ApprovalFormValues } from "./approval-document-form";
+import { groupStepRows } from "./approval-line-editor";
 
 function toInput(values: ApprovalFormValues): Omit<ApprovalDocumentInput, "documentType"> {
   return {
     title: values.title,
     content: values.content,
-    steps: values.approvers.map((a) => ({ approverId: a.approverId })),
+    steps: values.steps.map((g) => ({ approverIds: g.approvers.map((a) => a.approverId) })), // 문서에는 단계명이 없다
     approvalLineTemplateId: values.templateId,
     attachmentIds: values.files.map((f) => f.id),
   };
@@ -114,7 +115,7 @@ export function ApprovalEditView({ id }: { id: number }) {
   const initial: ApprovalFormValues = {
     title: data.title,
     content: data.content ?? "",
-    approvers: data.steps.map((s) => ({
+    steps: groupStepRows(data.steps, (s) => ({
       approverId: s.approverId,
       name: s.approverName,
       departmentName: s.departmentName,

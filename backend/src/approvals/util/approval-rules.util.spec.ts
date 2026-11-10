@@ -2,7 +2,9 @@
 // 결재라인 결재자 검사, 결재라인 관리자 범위 계산, 승인 후 다음 상태를 DB 없이 확인한다. (features.md 7.5)
 
 import { ApprovalLineManagerScope, ApprovalLineScope, ApprovalStatus } from 'src/generated/prisma/client';
-import { canManageLine, checkApproverIds, nextAfterApprove, resolveManageScope } from './approval-rules.util';
+import {
+    canManageLine, checkApproverIds, checkStepGroups, flattenSteps, groupSteps, nextAfterApprove, resolveManageScope, withDescendants,
+} from './approval-rules.util';
 
 //* 결재자 목록 검사
 describe('checkApproverIds', () => {
@@ -23,6 +25,25 @@ describe('checkApproverIds', () => {
     it('기안자 본인은 결재자가 될 수 없다 (기안자가 정해진 경우만 검사)', () => {
         expect( checkApproverIds( [ 2, 3 ], { minSteps: 1, requesterId: 3 } ) ).toMatch( /본인/ );
         expect( checkApproverIds( [ 2, 3 ], { minSteps: 1 } ) ).toBeNull(); // 템플릿
+    });
+});
+
+//* 병렬 단계: 단계 목록 ↔ 결재자 행
+describe('flattenSteps / groupSteps / checkStepGroups', () => {
+    it('단계 목록을 행으로 펼치면 같은 단계는 같은 번호 (1부터)', () => {
+        const rows = flattenSteps([ { approverIds: [ 5, 6 ] }, { approverIds: [ 7 ] } ]);
+        expect( rows.map( ( r ) => [ r.approverId, r.stepOrder ] ) ).toEqual([ [ 5, 1 ], [ 6, 1 ], [ 7, 2 ] ]);
+    });
+
+    it('행을 다시 단계로 묶는다 (단계 번호 순서, 같은 단계 안은 행 순서)', () => {
+        expect( groupSteps([ { approverId: 7, stepOrder: 2 }, { approverId: 5, stepOrder: 1 }, { approverId: 6, stepOrder: 1 } ]) )
+            .toEqual([ [ 5, 6 ], [ 7 ] ]);
+    });
+
+    it('빈 단계는 오류, 단계를 넘어선 중복도 오류 (전체 결재자 기준)', () => {
+        expect( checkStepGroups( [ [ 1 ], [] ], { minSteps: 1 } ) ).toMatch( /결재자가 없는 단계/ );
+        expect( checkStepGroups( [ [ 1, 2 ], [ 2 ] ], { minSteps: 1 } ) ).toMatch( /두 번/ );
+        expect( checkStepGroups( [ [ 1, 2 ], [ 3 ] ], { minSteps: 1, requesterId: 9 } ) ).toBeNull();
     });
 });
 
@@ -54,6 +75,29 @@ describe('resolveManageScope', () => {
     });
 });
 
+//* 하위 부서 포함: 기술본부(1) ─ 개발1팀(2) ─ 프론트파트(5) / 인프라팀(3), 경영본부(4)
+describe('withDescendants', () => {
+    const tree = [
+        { id: 1, parentDepartmentId: null },
+        { id: 2, parentDepartmentId: 1 },
+        { id: 3, parentDepartmentId: 1 },
+        { id: 4, parentDepartmentId: null },
+        { id: 5, parentDepartmentId: 2 },
+    ];
+
+    it('상위 부서를 관리하면 하위 부서 전체(손자 포함)를 관리한다', () => {
+        expect( withDescendants( [ 1 ], tree ) ).toEqual([ 1, 2, 3, 5 ]);
+    });
+
+    it('하위 부서만 관리하면 상위·형제 부서는 포함하지 않는다', () => {
+        expect( withDescendants( [ 2 ], tree ) ).toEqual([ 2, 5 ]);
+    });
+
+    it('겹치는 범위는 한 번만', () => {
+        expect( withDescendants( [ 1, 2, 4 ], tree ) ).toEqual([ 1, 2, 3, 4, 5 ]);
+    });
+});
+
 //* 공용·부서 결재라인 관리 가능 여부
 describe('canManageLine', () => {
     const all = { all: true, departmentIds: [] };
@@ -80,6 +124,11 @@ describe('nextAfterApprove', () => {
     it('다음 단계가 있으면 결재중 + 다음 순서', () => {
         expect( nextAfterApprove( [ 1, 2, 3 ], 1 ) ).toEqual({ status: ApprovalStatus.IN_PROGRESS, nextOrder: 2 });
         expect( nextAfterApprove( [ 1, 2, 3 ], 2 ) ).toEqual({ status: ApprovalStatus.IN_PROGRESS, nextOrder: 3 });
+    });
+
+    it('병렬 단계는 같은 번호가 여러 번 있어도 다음 번호로 넘어간다', () => {
+        expect( nextAfterApprove( [ 1, 1, 2 ], 1 ) ).toEqual({ status: ApprovalStatus.IN_PROGRESS, nextOrder: 2 });
+        expect( nextAfterApprove( [ 1, 1, 2, 2 ], 2 ) ).toEqual({ status: ApprovalStatus.APPROVED, nextOrder: null });
     });
 
     it('마지막 단계면 최종 승인', () => {

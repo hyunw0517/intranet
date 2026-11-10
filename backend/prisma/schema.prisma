@@ -810,18 +810,21 @@ model ApprovalLineManager {
 }
 
 //* 결재라인 단계 -> 모듈: Approvals
+// 행 하나 = 결재자 한 명. 같은 stepOrder의 행들이 한 단계(병렬, 모두 승인해야 다음 단계)다. (2026-11-10 사용자 결정)
+// 단계명은 단계의 모든 행에 같은 값으로 저장한다.
 model ApprovalLineTemplateStep {
   id                     Int     @id @default(autoincrement())
   approvalLineTemplateId Int     @map("approval_line_template_id")
   approverId             Int     @map("approver_id") // 결재자
-  stepOrder              Int     @map("step_order") // 결재 순서
+  stepOrder              Int     @map("step_order") // 단계 번호 (1부터, 같은 번호 = 같은 단계)
   name                   String? // 단계명
 
   approvalLineTemplate ApprovalLineTemplate @relation(fields: [approvalLineTemplateId], references: [id])
 
   approver Users @relation("ApprovalLineStepApprover", fields: [approverId], references: [id])
 
-  @@unique([approvalLineTemplateId, stepOrder])
+  @@unique([approvalLineTemplateId, approverId]) // 한 템플릿에 같은 결재자는 한 번
+  @@index([approvalLineTemplateId, stepOrder])
   @@index([approverId])
   @@map("approval_line_template_step_model")
 }
@@ -838,7 +841,7 @@ model ApprovalDocument {
 
   status  ApprovalStatus @default(DRAFT)  // 결재 상태
 
-  currentStepOrder Int? @map("current_step_order") // 현재 결재 순서
+  currentStepOrder Int? @map("current_step_order") // 현재 단계 번호 (병렬 단계면 그 단계의 결재자 모두가 PENDING)
 
   requestedAt DateTime? @map("requested_at") // 결재요청 시간
   completedAt DateTime? @map("completed_at") // 최종 승인/반려 완료 시간
@@ -866,6 +869,9 @@ model ApprovalDocument {
 }
 
 //* 실제 전자결재 단계 -> 모듈: Approvals
+// 행 하나 = 결재자 한 명. 같은 stepOrder의 행들이 한 단계(병렬, 모두 승인해야 다음 단계, 한 명이라도 반려하면 문서 반려)
+// DB 제약(마이그레이션 SQL에 직접 작성): 같은 문서의 PENDING 행은 모두 같은 단계 번호여야 한다
+//   (EXCLUDE USING gist (approval_document_id WITH =, step_order WITH <>) WHERE status = 'PENDING')
 model ApprovalDocumentStep {
   id                 Int                @id @default(autoincrement())
   approvalDocumentId Int                @map("approval_document_id")
@@ -886,8 +892,8 @@ model ApprovalDocumentStep {
 
   approver Users @relation("ApprovalDocumentStepApprover", fields: [approverId], references: [id])
 
-  @@unique([approvalDocumentId, stepOrder])
-  @@unique([approvalDocumentId], where: raw("status = 'PENDING'"), map: "approval_document_step_one_pending") // 문서당 현재 차례(PENDING)는 하나 - 상태 전이가 꼬이는 것을 DB에서도 막는다
+  @@unique([approvalDocumentId, approverId]) // 한 문서에 같은 결재자는 한 번
+  @@index([approvalDocumentId, stepOrder])
   @@index([approverId, status])
   @@index([approvalDocumentId, status])
   @@map("approval_document_step_model")

@@ -110,16 +110,16 @@ export class ApprovalDocumentsController {
         return this.documentsService.reject( user, id, body );
     }
 
-    //* 관리자 결재자 교체 (진행 중 문서의 남은 단계)
-    @Patch('documents/:id/steps/:stepOrder')
+    //* 관리자 결재자 교체 (진행 중 문서의 남은 결재자 한 명) - 병렬 단계는 단계 번호로 한 사람을 정할 수 없어 단계 행 id를 쓴다
+    @Patch('documents/:id/steps/:stepId')
     @Roles(UserRole.ADMIN)
     replaceApprover(
         @User() user: Actor,
         @Param('id', ParseIntPipe) id: number,
-        @Param('stepOrder', ParseIntPipe) stepOrder: number,
+        @Param('stepId', ParseIntPipe) stepId: number,
         @Body() body: ReplaceApproverDto,
     ) {
-        return this.documentsService.replaceApprover( user, id, stepOrder, body );
+        return this.documentsService.replaceApprover( user, id, stepId, body );
     }
 
     //* 임시저장 수정

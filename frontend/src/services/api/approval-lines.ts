@@ -13,10 +13,10 @@ export function fetchManageableLines() {
   return apiFetch<{ scope: Omit<LineManageScope, "departments">; lines: ApprovalLine[] }>("/approvals/lines/manage");
 }
 
-// 배열 순서 = 결재 순서
+// steps 배열 순서 = 결재 순서, 한 단계에 여러 명이면 병렬
 export interface ApprovalLineInput {
   name: string;
-  steps: { approverId: number; name?: string | null }[];
+  steps: { approverIds: number[]; name?: string | null }[];
 }
 
 export function createApprovalLine(input: ApprovalLineInput & { scope: ApprovalLineScope; departmentId?: number }) {

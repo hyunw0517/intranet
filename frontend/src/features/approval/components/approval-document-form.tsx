@@ -15,17 +15,17 @@ import { LINE_SCOPE_LABEL } from "@/types/approval";
 import type { FileInfo } from "@/types/file";
 import { TITLE_MAX } from "../approval-rules";
 import { useUsableLines } from "../hooks/use-approvals";
-import { ApprovalLineEditor, type LineApprover } from "./approval-line-editor";
+import { ApprovalLineEditor, groupStepRows, type LineStepGroup } from "./approval-line-editor";
 
 export interface ApprovalFormValues {
   title: string;
   content: string;
-  approvers: LineApprover[];
+  steps: LineStepGroup[]; // 결재 단계 (여러 명 = 병렬)
   templateId: number | null; // 불러온 결재라인 (기록용)
   files: FileInfo[];
 }
 
-export const EMPTY_APPROVAL_FORM: ApprovalFormValues = { title: "", content: "", approvers: [], templateId: null, files: [] };
+export const EMPTY_APPROVAL_FORM: ApprovalFormValues = { title: "", content: "", steps: [], templateId: null, files: [] };
 
 interface ApprovalDocumentFormProps {
   initial: ApprovalFormValues;
@@ -44,7 +44,7 @@ export function ApprovalDocumentForm({ initial, requesterId, cancelHref, pending
   const [title, setTitle] = useState(initial.title);
   const [content, setContent] = useState(initial.content);
   const [contentEmpty, setContentEmpty] = useState(!initial.content);
-  const [approvers, setApprovers] = useState(initial.approvers);
+  const [steps, setSteps] = useState(initial.steps);
   const [templateId, setTemplateId] = useState(initial.templateId);
   const [files, setFiles] = useState(initial.files);
   const [uploading, setUploading] = useState(false);
@@ -55,20 +55,17 @@ export function ApprovalDocumentForm({ initial, requesterId, cancelHref, pending
   const loadTemplate = (id: number) => {
     const line = lines.data?.find((l) => l.id === id);
     if (!line) return;
-    // 삭제·퇴사한 결재자와 기안자 본인은 빼고 불러온다 (서버 규칙과 같음)
-    const usable = line.steps.filter((s) => s.usable && s.approverId !== requesterId);
-    setApprovers(
-      usable.map((s) => ({
-        approverId: s.approverId,
-        name: s.approverName ?? "",
-        departmentName: s.departmentName,
-        positionName: s.positionName,
-        jobTitleName: s.jobTitleName,
-      })),
+    // 삭제·퇴사한 결재자와 기안자 본인은 빼고 불러온다 (서버 규칙과 같음, 그래서 빈 단계는 없앤다). 단계 묶음은 그대로.
+    const groups = groupStepRows(line.steps, (s) =>
+      s.usable && s.approverId !== requesterId
+        ? { approverId: s.approverId, name: s.approverName ?? "", departmentName: s.departmentName, positionName: s.positionName, jobTitleName: s.jobTitleName }
+        : null,
     );
+    setSteps(groups);
     setTemplateId(id);
-    if (usable.length < line.steps.length) {
-      toast.warning(`결재자로 지정할 수 없는 ${line.steps.length - usable.length}명을 빼고 불러왔습니다.`);
+    const loaded = groups.reduce((n, g) => n + g.approvers.length, 0);
+    if (loaded < line.steps.length) {
+      toast.warning(`결재자로 지정할 수 없는 ${line.steps.length - loaded}명을 빼고 불러왔습니다.`);
     }
     if (errors.approvers) setErrors((prev) => ({ ...prev, approvers: undefined }));
   };
@@ -77,11 +74,11 @@ export function ApprovalDocumentForm({ initial, requesterId, cancelHref, pending
     if (pending || uploading) return;
     const next: typeof errors = {};
     if (!title.trim()) next.title = "제목을 입력하세요.";
-    if (submit && approvers.length === 0) next.approvers = "상신하려면 결재자를 1명 이상 지정하세요.";
+    if (submit && steps.length === 0) next.approvers = "상신하려면 결재자를 1명 이상 지정하세요.";
     setErrors(next);
     if (next.title || next.approvers) return;
 
-    onSave({ title: title.trim(), content: contentEmpty ? "" : content, approvers, templateId, files }, submit);
+    onSave({ title: title.trim(), content: contentEmpty ? "" : content, steps, templateId, files }, submit);
   };
 
   return (
@@ -134,9 +131,9 @@ export function ApprovalDocumentForm({ initial, requesterId, cancelHref, pending
           </Select>
         </div>
         <ApprovalLineEditor
-          value={approvers}
+          value={steps}
           onChange={(next) => {
-            setApprovers(next);
+            setSteps(next);
             if (errors.approvers && next.length > 0) setErrors((prev) => ({ ...prev, approvers: undefined }));
           }}
           excludeIds={[requesterId]}

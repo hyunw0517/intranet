@@ -1,17 +1,21 @@
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsArray, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, ValidateNested } from "class-validator";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, ValidateNested } from "class-validator";
 import { EmptyToNull } from "src/common/decorator/empty-to-null.decorator";
 import { StringToNumber } from "src/common/decorator/string-to-number.decorator";
 import { ApprovalLineScope } from "src/generated/prisma/client";
 import { MAX_APPROVAL_STEPS } from "../const/approval.const";
 
-//* 결재자 한 단계 (템플릿·문서 공통) - 배열 순서 = 결재 순서
+//* 결재 한 단계 (템플릿·문서 공통) - steps 배열 순서 = 결재 순서
+// 한 단계에 여러 명이면 병렬: 모두 승인해야 다음 단계, 한 명이라도 반려하면 문서 반려 (2026-11-10 사용자 결정)
 export class ApprovalStepInputDto {
 
-    @IsInt()
-    approverId: number;
+    @IsArray()
+    @ArrayMinSize(1)
+    @ArrayMaxSize(MAX_APPROVAL_STEPS)
+    @IsInt({ each: true })
+    approverIds: number[];
 
-    // 단계명 (예: 팀장 검토)
+    // 단계명 (예: 팀장 검토) - 템플릿만 저장한다 (문서 단계에는 단계명 컬럼이 없음)
     @IsString()
     @MaxLength(50)
     @IsOptional()

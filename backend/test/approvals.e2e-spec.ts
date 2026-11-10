@@ -31,7 +31,7 @@ describe('전자결재', () => {
     // 임시저장 → 상신 (기안자 A)
     const draft = ( approverIds: number[], extra: Record<string, unknown> = {} ) =>
         http().post( '/approvals/documents' ).set( auth( token.a ) ).send({
-            documentType: 'GENERAL', title: '품의서', content: '<p>내용</p><script>x</script>', steps: approverIds.map( ( approverId ) => ({ approverId }) ), ...extra,
+            documentType: 'GENERAL', title: '품의서', content: '<p>내용</p><script>x</script>', steps: approverIds.map( ( approverId ) => ({ approverIds: [ approverId ] }) ), ...extra, // 한 명씩 순차 단계
         });
     const submitNew = async ( approverIds: number[] ) => {
         const created = await draft( approverIds ).expect( 201 );
@@ -100,7 +100,7 @@ describe('전자결재', () => {
     describe('결재라인', () => {
         it('개인 결재라인은 본인이 만들고, 남은 볼 수도 고칠 수도 없다(404)', async () => {
             const res = await http().post( '/approvals/lines' ).set( auth( token.a ) )
-                .send({ name: '내 라인', scope: 'PERSONAL', steps: [ { approverId: ids.b, name: '검토' }, { approverId: ids.c } ] }).expect( 201 );
+                .send({ name: '내 라인', scope: 'PERSONAL', steps: [ { approverIds: [ ids.b ], name: '검토' }, { approverIds: [ ids.c ] } ] }).expect( 201 );
             expect( res.body.steps.map( ( s: { approverId: number } ) => s.approverId ) ).toEqual([ ids.b, ids.c ]);
 
             const mine = await http().get( '/approvals/lines' ).set( auth( token.a ) ).expect( 200 );
@@ -114,16 +114,16 @@ describe('전자결재', () => {
 
         it('템플릿 단계 검사: 중복·없는 회원 400', async () => {
             await http().post( '/approvals/lines' ).set( auth( token.a ) )
-                .send({ name: '중복', scope: 'PERSONAL', steps: [ { approverId: ids.b }, { approverId: ids.b } ] }).expect( 400 );
+                .send({ name: '중복', scope: 'PERSONAL', steps: [ { approverIds: [ ids.b ] }, { approverIds: [ ids.b ] } ] }).expect( 400 );
             await http().post( '/approvals/lines' ).set( auth( token.a ) )
-                .send({ name: '없음', scope: 'PERSONAL', steps: [ { approverId: 99999 } ] }).expect( 400 );
+                .send({ name: '없음', scope: 'PERSONAL', steps: [ { approverIds: [ 99999 ] } ] }).expect( 400 );
         });
 
         it('공용 결재라인은 결재라인 관리자만 (일반 회원 403, 관리자 201)', async () => {
             await http().post( '/approvals/lines' ).set( auth( token.a ) )
-                .send({ name: '공용', scope: 'ADMIN', steps: [ { approverId: ids.d } ] }).expect( 403 );
+                .send({ name: '공용', scope: 'ADMIN', steps: [ { approverIds: [ ids.d ] } ] }).expect( 403 );
             await http().post( '/approvals/lines' ).set( auth( token.admin ) )
-                .send({ name: '공용', scope: 'ADMIN', steps: [ { approverId: ids.d } ] }).expect( 201 );
+                .send({ name: '공용', scope: 'ADMIN', steps: [ { approverIds: [ ids.d ] } ] }).expect( 201 );
         });
 
         it('규칙 조합 검사: 대상 둘 다 / 본인 부서 + 회원 대상 400', async () => {
@@ -150,11 +150,11 @@ describe('전자결재', () => {
             expect( me.body.departments.map( ( d: { name: string } ) => d.name ) ).toEqual([ '영업부' ]);
 
             const line = await http().post( '/approvals/lines' ).set( auth( token.b ) )
-                .send({ name: '영업부 기본', scope: 'DEPARTMENT', departmentId: salesId, steps: [ { approverId: ids.d } ] }).expect( 201 );
+                .send({ name: '영업부 기본', scope: 'DEPARTMENT', departmentId: salesId, steps: [ { approverIds: [ ids.d ] } ] }).expect( 201 );
             await http().post( '/approvals/lines' ).set( auth( token.b ) )
-                .send({ name: '개발부', scope: 'DEPARTMENT', departmentId: devId, steps: [ { approverId: ids.d } ] }).expect( 403 );
+                .send({ name: '개발부', scope: 'DEPARTMENT', departmentId: devId, steps: [ { approverIds: [ ids.d ] } ] }).expect( 403 );
             await http().post( '/approvals/lines' ).set( auth( token.b ) )
-                .send({ name: '공용', scope: 'ADMIN', steps: [ { approverId: ids.d } ] }).expect( 403 );
+                .send({ name: '공용', scope: 'ADMIN', steps: [ { approverIds: [ ids.d ] } ] }).expect( 403 );
 
             // 부서 결재라인은 그 부서 소속(C)만 불러온다
             const c = await http().get( '/approvals/lines' ).set( auth( token.c ) ).expect( 200 );
@@ -169,6 +169,28 @@ describe('전자결재', () => {
             // 해제하면 바로 관리할 수 없다 (토큰을 다시 받지 않아도)
             await http().delete( `/approvals/line-managers/${rule.body.id}` ).set( auth( token.admin ) ).expect( 200 );
             await http().patch( `/approvals/lines/${line.body.id}` ).set( auth( token.b ) ).send({ name: '변경' }).expect( 403 );
+        });
+
+        it('상위 부서 관리자는 하위 부서(손자 포함)의 부서 결재라인도 관리한다', async () => {
+            // 영업부 ─ 영업1팀 ─ 영업1파트
+            const meta = { createdId: ids.admin, updatedId: ids.admin };
+            const team = await prisma.department.create({ data: { name: '영업1팀', parentDepartmentId: salesId, ...meta } });
+            const part = await prisma.department.create({ data: { name: '영업1파트', parentDepartmentId: team.id, ...meta } });
+
+            const rule = await http().post( '/approvals/line-managers' ).set( auth( token.admin ) )
+                .send({ userId: ids.b, scope: 'DEPARTMENT', departmentId: salesId }).expect( 201 );
+            try {
+                const me = await http().get( '/approvals/line-managers/me' ).set( auth( token.b ) ).expect( 200 );
+                expect( me.body.departmentIds ).toEqual([ salesId, team.id, part.id ].sort( ( x, y ) => x - y ));
+                expect( me.body.departments.map( ( d: { path: string } ) => d.path ) ).toEqual([ '영업부', '영업부/영업1팀', '영업부/영업1팀/영업1파트' ]); // 트리 순서 + 경로
+
+                await http().post( '/approvals/lines' ).set( auth( token.b ) )
+                    .send({ name: '영업1파트 라인', scope: 'DEPARTMENT', departmentId: part.id, steps: [ { approverIds: [ ids.d ] } ] }).expect( 201 );
+                await http().post( '/approvals/lines' ).set( auth( token.b ) )
+                    .send({ name: '개발부', scope: 'DEPARTMENT', departmentId: devId, steps: [ { approverIds: [ ids.d ] } ] }).expect( 403 ); // 다른 부서는 그대로 불가
+            } finally {
+                await http().delete( `/approvals/line-managers/${rule.body.id}` ).set( auth( token.admin ) ).expect( 200 );
+            }
         });
 
         it('DB CHECK 제약: 범위와 대상 id의 짝이 맞지 않는 행은 저장되지 않는다', async () => {
@@ -206,7 +228,7 @@ describe('전자결재', () => {
             const id = res.body.id as number;
 
             const updated = await http().patch( `/approvals/documents/${id}` ).set( auth( token.a ) )
-                .send({ title: '수정됨', steps: [ { approverId: ids.c }, { approverId: ids.b } ] }).expect( 200 );
+                .send({ title: '수정됨', steps: [ { approverIds: [ ids.c ] }, { approverIds: [ ids.b ] } ] }).expect( 200 );
             expect( updated.body.title ).toBe( '수정됨' );
             expect( updated.body.steps.map( ( s: { approverId: number } ) => s.approverId ) ).toEqual([ ids.c, ids.b ]);
 
@@ -359,12 +381,86 @@ describe('전자결재', () => {
             }
         });
 
-        it('DB 부분 unique 인덱스: 한 문서에 PENDING 단계는 둘일 수 없다', async () => {
+        it('DB exclusion constraint: 같은 문서의 PENDING은 서로 다른 단계에 걸칠 수 없다', async () => {
             const id = await submitNew([ ids.b, ids.c ]);
             await expect( prisma.approvalDocumentStep.updateMany({
                 where: { approvalDocumentId: id, stepOrder: 2 },
                 data: { status: ApprovalStepStatus.PENDING },
             }) ).rejects.toThrow();
+        });
+    });
+
+    //! 병렬 단계 (한 단계에 여러 명 - 모두 승인해야 다음 단계, 한 명이라도 반려하면 문서 반려)
+
+    describe('병렬 단계', () => {
+        // 1단계 [B, C] 병렬 → 2단계 [D]
+        const submitParallel = async () => {
+            const created = await http().post( '/approvals/documents' ).set( auth( token.a ) ).send({
+                documentType: 'GENERAL', title: '병렬 품의', steps: [ { approverIds: [ ids.b, ids.c ] }, { approverIds: [ ids.d ] } ],
+            }).expect( 201 );
+            await http().patch( `/approvals/documents/${created.body.id}/submit` ).set( auth( token.a ) ).expect( 200 );
+            return created.body.id as number;
+        };
+        const stepStatuses = async ( id: number ) =>
+            ( await prisma.approvalDocumentStep.findMany({ where: { approvalDocumentId: id }, orderBy: [ { stepOrder: 'asc' }, { id: 'asc' } ] }) )
+                .map( ( s ) => `${s.stepOrder}:${s.status}` );
+
+        it('빈 단계는 400, 같은 사람을 두 단계에 넣어도 400', async () => {
+            await http().post( '/approvals/documents' ).set( auth( token.a ) )
+                .send({ documentType: 'GENERAL', title: 'x', steps: [ { approverIds: [] } ] }).expect( 400 );
+            await http().post( '/approvals/documents' ).set( auth( token.a ) )
+                .send({ documentType: 'GENERAL', title: 'x', steps: [ { approverIds: [ ids.b ] }, { approverIds: [ ids.b, ids.c ] } ] }).expect( 400 );
+        });
+
+        it('상신하면 1단계 두 명 모두 PENDING + 둘 다 알림, 한 명만 승인하면 단계 유지(결재중)', async () => {
+            const id = await submitParallel();
+            expect( await stepStatuses( id ) ).toEqual([ '1:PENDING', '1:PENDING', '2:WAITING' ]);
+            expect( await notified( ids.b, NotificationActionType.APPROVAL_REQUESTED, id ) ).toBe( 1 );
+            expect( await notified( ids.c, NotificationActionType.APPROVAL_REQUESTED, id ) ).toBe( 1 );
+
+            const res = await approve( token.b, id ).expect( 200 );
+            expect( res.body ).toMatchObject({ status: ApprovalStatus.IN_PROGRESS, currentStepOrder: 1 });
+            expect( await stepStatuses( id ) ).toEqual([ '1:APPROVED', '1:PENDING', '2:WAITING' ]);
+            expect( await notified( ids.d, NotificationActionType.APPROVAL_REQUESTED, id ) ).toBe( 0 ); // 아직 D 차례가 아님
+            await http().patch( `/approvals/documents/${id}/cancel` ).set( auth( token.a ) ).expect( 409 ); // 한 명이라도 승인하면 회수 불가
+
+            await approve( token.c, id ).expect( 200 );
+            expect( await stepStatuses( id ) ).toEqual([ '1:APPROVED', '1:APPROVED', '2:PENDING' ]);
+            expect( await notified( ids.d, NotificationActionType.APPROVAL_REQUESTED, id ) ).toBe( 1 );
+
+            const done = await approve( token.d, id ).expect( 200 );
+            expect( done.body.status ).toBe( ApprovalStatus.APPROVED );
+        });
+
+        it('같은 단계 한 명이 반려하면 문서 반려, 나머지 결재자는 결재 대기함에서 빠진다', async () => {
+            const id = await submitParallel();
+            await http().patch( `/approvals/documents/${id}/reject` ).set( auth( token.b ) ).send({ comment: '재검토' }).expect( 200 );
+
+            expect( await stepStatuses( id ) ).toEqual([ '1:REJECTED', '1:WAITING', '2:WAITING' ]);
+            expect( await box( token.c, 'pending' ) ).not.toContain( id );
+            await approve( token.c, id ).expect( 409 );
+        });
+
+        // ⭐ 같은 단계의 두 사람이 동시에 승인 → 둘 다 성공하고, 다음 단계는 정확히 한 번 열린다 (알림도 한 번)
+        it('⭐ 같은 단계 두 명 동시 승인 × 5회 → 둘 다 200, 2단계가 한 번만 열림', async () => {
+            for ( let i = 0; i < 5; i++ ) {
+                const id = await submitParallel();
+                const results = await Promise.all([ approve( token.b, id ), approve( token.c, id ) ]);
+                expect( results.map( ( r ) => r.status ) ).toEqual([ 200, 200 ]);
+
+                expect( await stepStatuses( id ) ).toEqual([ '1:APPROVED', '1:APPROVED', '2:PENDING' ]);
+                const doc = await prisma.approvalDocument.findUniqueOrThrow({ where: { id } });
+                expect( doc ).toMatchObject({ status: ApprovalStatus.IN_PROGRESS, currentStepOrder: 2 });
+                expect( await notified( ids.d, NotificationActionType.APPROVAL_REQUESTED, id ) ).toBe( 1 );
+            }
+        });
+
+        it('결재라인 템플릿도 단계 묶음을 저장하고 그대로 돌려준다', async () => {
+            const res = await http().post( '/approvals/lines' ).set( auth( token.a ) ).send({
+                name: '병렬 라인', scope: 'PERSONAL', steps: [ { approverIds: [ ids.b, ids.c ], name: '합의' }, { approverIds: [ ids.d ] } ],
+            }).expect( 201 );
+            expect( res.body.steps.map( ( s: { stepOrder: number; approverId: number; name: string | null } ) => [ s.stepOrder, s.approverId, s.name ] ) )
+                .toEqual([ [ 1, ids.b, '합의' ], [ 1, ids.c, '합의' ], [ 2, ids.d, null ] ]);
         });
     });
 
@@ -391,12 +487,13 @@ describe('전자결재', () => {
             try {
                 const detail = await http().get( `/approvals/documents/${id}` ).set( auth( token.a ) ).expect( 200 );
                 expect( detail.body.steps[1].approverUsable ).toBe( false );
+                const [ step1, step2 ] = detail.body.steps.map( ( s: { id: number } ) => s.id ); // 교체는 단계 행 id로
 
-                await http().patch( `/approvals/documents/${id}/steps/2` ).set( auth( token.a ) ).send({ approverId: ids.e }).expect( 403 ); // ADMIN만
-                await http().patch( `/approvals/documents/${id}/steps/1` ).set( auth( token.admin ) ).send({ approverId: ids.e }).expect( 409 ); // 처리된 단계
-                await http().patch( `/approvals/documents/${id}/steps/2` ).set( auth( token.admin ) ).send({ approverId: ids.a }).expect( 400 ); // 기안자
+                await http().patch( `/approvals/documents/${id}/steps/${step2}` ).set( auth( token.a ) ).send({ approverId: ids.e }).expect( 403 ); // ADMIN만
+                await http().patch( `/approvals/documents/${id}/steps/${step1}` ).set( auth( token.admin ) ).send({ approverId: ids.e }).expect( 409 ); // 처리된 결재자
+                await http().patch( `/approvals/documents/${id}/steps/${step2}` ).set( auth( token.admin ) ).send({ approverId: ids.a }).expect( 400 ); // 기안자
 
-                const replaced = await http().patch( `/approvals/documents/${id}/steps/2` ).set( auth( token.admin ) ).send({ approverId: ids.e }).expect( 200 );
+                const replaced = await http().patch( `/approvals/documents/${id}/steps/${step2}` ).set( auth( token.admin ) ).send({ approverId: ids.e }).expect( 200 );
                 expect( replaced.body.steps[1] ).toMatchObject({ approverId: ids.e, status: 'PENDING', approverUsable: true });
                 expect( await notified( ids.e, NotificationActionType.APPROVAL_REQUESTED, id ) ).toBe( 1 );
 

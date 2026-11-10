@@ -95,6 +95,7 @@ enum AuditTargetType {
   FACILITY            // 시설
   FACILITY_RESERVATION // 시설 예약
   APPROVAL_LINE       // 결재라인 템플릿
+  APPROVAL_LINE_MANAGER // 결재라인 관리자 규칙
   APPROVAL            // 전자결재 문서
   LEAVE               // 휴가
 }
@@ -152,6 +153,13 @@ enum ApprovalLineScope {
   ADMIN       // 관리자 공용 결재라인
   DEPARTMENT  // 부서 결재라인
   PERSONAL    // 개인 결재라인
+}
+
+//? 결재라인 관리자 범위 -> 모델: ApprovalLineManager
+enum ApprovalLineManagerScope {
+  ALL            // 공용 + 모든 부서 결재라인
+  DEPARTMENT     // 지정한 부서(departmentId)의 부서 결재라인
+  MY_DEPARTMENT  // 직책 대상만: 그 직책으로 소속된 부서의 부서 결재라인
 }
 
 //? 휴가 종류 -> 모델: LeaveRequest
@@ -220,6 +228,7 @@ model Users {
   reservations            FacilityReservation[]       @relation("FacilityReservationUser")      // 예약한 시설 목록
   approvalLineTemplates   ApprovalLineTemplate[]      @relation("ApprovalLineOwner")            // 소유한 개인 결재라인
   approvalLineSteps       ApprovalLineTemplateStep[]  @relation("ApprovalLineStepApprover")     // 결재라인 템플릿의 결재자로 지정된 단계
+  approvalLineManagers    ApprovalLineManager[]       @relation("ApprovalLineManagerUser")      // 결재라인 관리자로 지정된 규칙
   requestedApprovals      ApprovalDocument[]          @relation("ApprovalDocumentRequester")    // 기안한 결재 문서
   approvalSteps           ApprovalDocumentStep[]      @relation("ApprovalDocumentStepApprover") // 결재자로 지정된 문서 단계
   approvalHistories       ApprovalDocumentHistory[]   @relation("ApprovalDocumentHistoryActor") // 결재 상태 변경 이력
@@ -299,6 +308,7 @@ model Department {
   members   UserDepartment[] // 소속 회원 목록
   boardAuths BoardAuth[] // 게시판 권한 목록
   approvalLineTemplates ApprovalLineTemplate[] // 부서 결재라인
+  approvalLineManagers  ApprovalLineManager[]  // 이 부서를 관리 범위로 둔 결재라인 관리자 규칙
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -340,6 +350,7 @@ model JobTitle {
 
   members   UserDepartment[] // 해당 직책 소속 목록
   boardAuths BoardAuthJobTitle[] // 게시판 권한 목록
+  approvalLineManagers ApprovalLineManager[] // 결재라인 관리자 규칙 (직책 대상)
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -739,6 +750,8 @@ model FacilityUnavailable {
 }
 
 //* 결재라인 템플릿 -> 모듈: Approvals
+// 상신 화면에서 결재자 목록을 채우는 불러오기용. 공용·부서는 결재라인 관리자, 개인은 본인이 만든다. (features.md 7.5)
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): ADMIN = 부서·소유자 없음 / DEPARTMENT = 부서만 / PERSONAL = 소유자만
 model ApprovalLineTemplate {
   id           Int               @id @default(autoincrement())
   name         String            // 결재라인명
@@ -764,6 +777,36 @@ model ApprovalLineTemplate {
   @@index([scope, departmentId, deleted])
   @@index([scope, ownerUserId, deleted])
   @@map("approval_line_template_model")
+}
+
+//* 결재라인 관리자 규칙 -> 모듈: Approvals (애드온)
+// 공용·부서 결재라인을 관리할 수 있는 사람을 ADMIN이 지정한다. (Role.ADMIN과 별개 위임 권한, ADMIN은 규칙 없이도 항상 관리)
+// 한 행 = 대상 1개(회원 또는 직책) + 범위. 요청마다 DB로 판정해 지정·해제가 즉시 반영된다. (2026-11-10 사용자 결정, features.md 7.5)
+// 삭제된 부서·직책을 쓰는 규칙은 판정에서 무시한다. (핵심 삭제를 막지 않음)
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): 대상은 user_id / job_title_id 중 정확히 하나,
+//   DEPARTMENT ⇔ department_id 있음, MY_DEPARTMENT ⇒ 직책 대상
+model ApprovalLineManager {
+  id           Int                      @id @default(autoincrement())
+  userId       Int?                     @map("user_id")       // 대상: 회원
+  jobTitleId   Int?                     @map("job_title_id")  // 대상: 직책
+  scope        ApprovalLineManagerScope // 관리 범위
+  departmentId Int?                     @map("department_id") // scope = DEPARTMENT인 경우 관리할 부서
+
+  user       Users?      @relation("ApprovalLineManagerUser", fields: [userId], references: [id])
+  jobTitle   JobTitle?   @relation(fields: [jobTitleId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdId Int      @map("created_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedId Int      @map("updated_id")
+  deleted   Boolean  @default(false)
+  deletedAt DateTime? @map("deleted_at")
+  deletedId Int?     @map("deleted_id")
+
+  @@index([userId, deleted])
+  @@index([jobTitleId, deleted])
+  @@map("approval_line_manager_model")
 }
 
 //* 결재라인 단계 -> 모듈: Approvals
@@ -844,6 +887,7 @@ model ApprovalDocumentStep {
   approver Users @relation("ApprovalDocumentStepApprover", fields: [approverId], references: [id])
 
   @@unique([approvalDocumentId, stepOrder])
+  @@unique([approvalDocumentId], where: raw("status = 'PENDING'"), map: "approval_document_step_one_pending") // 문서당 현재 차례(PENDING)는 하나 - 상태 전이가 꼬이는 것을 DB에서도 막는다
   @@index([approverId, status])
   @@index([approvalDocumentId, status])
   @@map("approval_document_step_model")

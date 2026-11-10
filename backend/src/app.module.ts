@@ -18,6 +18,7 @@ import { OrganizationModule } from './organization/organization.module';
 import { BoardsModule } from './boards/boards.module';
 import { addonModule } from './config/addons.config';
 import { ReservationsModule } from './reservations/reservations.module';
+import { ApprovalsModule } from './approvals/approvals.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { ReservationsModule } from './reservations/reservations.module';
     BoardsModule, 
     // 애드온: backend/.env의 ADDONS에 있는 것만 등록된다. (src/config/addons.config.ts, AGENTS.md 10.1)
     addonModule( 'reservations', ReservationsModule ), // 시설 예약
+    addonModule( 'approvals', ApprovalsModule ),       // 전자결재
   ],
   controllers: [AppController],
   providers: [

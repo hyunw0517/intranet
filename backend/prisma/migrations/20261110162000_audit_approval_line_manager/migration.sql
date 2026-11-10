@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "AuditTargetType" ADD VALUE 'APPROVAL_LINE_MANAGER';
+

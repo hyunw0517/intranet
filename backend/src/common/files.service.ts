@@ -339,6 +339,62 @@ export class FilesService {
         }
     }
 
+    //* 대상의 첨부를 복사해 "내가 올린 미연결 첨부"로 만든다 → 새 파일 id 목록 (원래 순서)
+    // 결재 문서 "다시 기안"처럼 원래 대상을 그대로 두고 새 대상에 같은 첨부를 붙일 때 쓴다.
+    // - 저장 파일명이 unique라 행만 복사할 수 없다 → 저장소에서도 새 uuid 이름으로 복사한다.
+    // - 트랜잭션 밖에서 호출하고, 새 대상 저장 트랜잭션에서 syncTargetFiles로 연결한다.
+    //   (그 트랜잭션이 실패하면 업로드만 하고 글을 저장하지 않은 경우와 같은 미연결 파일로 남는다)
+    // - 첨부만 복사한다. (본문 이미지는 공개 주소라 결재 문서에서 쓰지 않음)
+    async duplicateAttachments(
+        targetType: FileTargetType,
+        targetId: number,
+        userId: number,
+    ): Promise<number[]> {
+        const rows = await this.prisma.files.findMany({
+            select: { ...FILE_INFO_SELECT, originalName: true },
+            where: { targetType, targetId, deleted: false, path: { startsWith: `${FileKind.ATTACHMENT}/` } },
+            orderBy: [ { order: 'asc' }, { id: 'asc' } ],
+        });
+
+        const ids: number[] = [];
+        for ( const row of rows ) {
+            const stream = await this.storage.openStream( row.path );
+            if ( !stream ) continue; // 저장소에서 사라진 파일은 건너뛴다
+
+            const chunks: Buffer[] = [];
+            for await ( const chunk of stream ) chunks.push( Buffer.from( chunk as Buffer ) );
+
+            const storedName = `${randomUUID()}${extname( row.storedName )}`;
+            const key = `${FileKind.ATTACHMENT}/${kstYearMonthPath( new Date() )}/${storedName}`;
+            await this.storage.save( key, Buffer.concat( chunks ), row.mimeType );
+
+            try {
+                const created = await this.prisma.$transaction( async ( tx ) => {
+                    const file = await tx.files.create({
+                        select: { id: true },
+                        data: {
+                            originalName: row.originalName,
+                            storedName,
+                            path: key,
+                            size: row.size,
+                            mimeType: row.mimeType,
+                            createdId: userId,
+                            updatedId: userId,
+                        },
+                    });
+                    await this.audit.created( tx, file.id, `파일 복사: ${row.originalName}`, { from: row.id, path: key } );
+                    return file;
+                });
+                ids.push( created.id );
+            } catch ( e ) {
+                await this.storage.remove( key );
+                throw e;
+            }
+        }
+
+        return ids;
+    }
+
     //* 대상 삭제 시 연결된 파일 soft delete
     async softDeleteByTarget(
         tx: Prisma.TransactionClient,

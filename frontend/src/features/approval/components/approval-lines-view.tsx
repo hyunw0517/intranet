@@ -72,8 +72,9 @@ export function ApprovalLinesView() {
         <section aria-labelledby="manage-lines-title" className="grid gap-3">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
+              {/* 공용 결재라인은 전체 관리자(scope.all)만 관리하므로, 부서 관리자에게는 "공용"을 표시하지 않는다 */}
               <h2 id="manage-lines-title" className="font-semibold">
-                공용·부서 결재라인 관리
+                {scope.data!.all ? "공용·부서 결재라인 관리" : "부서 결재라인 관리"}
               </h2>
               <p className="text-sm text-muted-foreground">
                 {scope.data!.all

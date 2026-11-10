@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { AlertTriangle, ArrowLeft, Download, FileText, Loader2, UserRoundCog } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, ArrowLeft, ChevronDown, Download, FileText, ListChecks, Loader2, UserRoundCog } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { ErrorState, LoadingState } from "@/components/common/data-state";
@@ -235,11 +236,19 @@ function ApprovalSteps({ doc, onReplace }: { doc: ApprovalDocument; onReplace: (
   // 같은 단계 번호 = 한 단계 (여러 명이면 병렬: 모두 승인해야 다음 단계)
   const orders = [...new Set(doc.steps.map((s) => s.stepOrder))].sort((a, b) => a - b);
 
+  // 요약: 승인 인원 / 전체, 지금 차례인 사람 (펼치지 않아도 진행 상황을 알 수 있게)
+  const approved = doc.steps.filter((s) => s.status === "APPROVED").length;
+  const waitingNow = inProgress ? doc.steps.filter((s) => s.stepOrder === doc.currentStepOrder && s.status === "PENDING") : [];
+  const summary = [
+    doc.status === "DRAFT" ? `${orders.length}단계 ${doc.steps.length}명` : `${doc.steps.length}명 중 ${approved}명 승인`,
+    waitingNow.length > 0 && `지금 차례: ${waitingNow.map((s) => s.approverName).join(", ")}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
-    <section aria-labelledby="approval-steps-title" className="grid gap-2">
-      <h2 id="approval-steps-title" className="text-sm font-medium">
-        결재선
-      </h2>
+    <section aria-label="결재선">
+      <StepsDisclosure summary={summary}>
       <ol className="grid gap-3">
         {orders.map((order) => {
           const inStep = doc.steps.filter((s) => s.stepOrder === order);
@@ -259,7 +268,88 @@ function ApprovalSteps({ doc, onReplace }: { doc: ApprovalDocument; onReplace: (
           );
         })}
       </ol>
+      </StepsDisclosure>
     </section>
+  );
+}
+
+// 결재선 접기·펼치기 (2026-11-10 사용자 결정 - 결재선이 화면을 많이 차지해서)
+// - 마우스: 버튼에 올리면 펼침, 버튼·펼친 영역 밖으로 나가면 접힘
+// - 클릭(모바일 터치 포함): 펼친 채로 고정 / 다시 누르거나 바깥을 누르면 접힘
+// Radix Popover는 바깥 클릭·Esc 닫기와 포커스 처리를 맡고, 마우스 올리기는 pointerType이 mouse일 때만 직접 연다.
+// (터치는 pointerenter도 발생시키므로 구분하지 않으면 누르자마자 열렸다 닫힌다)
+function StepsDisclosure({ summary, children }: { summary: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  };
+  // 버튼에서 펼친 영역으로 옮겨 가는 사이에 닫히지 않도록 조금 늦게 닫는다
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setOpen(false), 150);
+  };
+  useEffect(() => cancelClose, []);
+
+  const hoverOpen = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
+    cancelClose();
+    setOpen(true);
+  };
+  const hoverLeave = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse" || pinned) return;
+    scheduleClose();
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        // 바깥 클릭·Esc로 닫힘 (여는 것은 아래 onClick·마우스 올리기가 한다)
+        if (!next) {
+          setOpen(false);
+          setPinned(false);
+        }
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className="h-auto w-full justify-start gap-2 py-2 text-left whitespace-normal sm:w-auto"
+          aria-expanded={open}
+          onPointerEnter={hoverOpen}
+          onPointerLeave={hoverLeave}
+          onClick={(e) => {
+            e.preventDefault(); // Radix 기본 토글 대신: 마우스로 이미 열려 있어도 클릭하면 고정
+            cancelClose();
+            if (pinned) {
+              setPinned(false);
+              setOpen(false);
+            } else {
+              setPinned(true);
+              setOpen(true);
+            }
+          }}
+        >
+          <ListChecks aria-hidden />
+          <span className="font-medium">결재선</span>
+          <span className="min-w-0 text-muted-foreground">{summary}</span>
+          <ChevronDown className={cn("ml-auto transition-transform", open && "rotate-180")} aria-hidden />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="max-h-[70vh] w-[min(calc(100vw-2rem),56rem)] overflow-y-auto"
+        onPointerEnter={hoverOpen}
+        onPointerLeave={hoverLeave}
+        onOpenAutoFocus={(e) => e.preventDefault()} // 마우스로 펼쳤을 때 포커스가 튀지 않게
+      >
+        {children}
+      </PopoverContent>
+    </Popover>
   );
 }
 

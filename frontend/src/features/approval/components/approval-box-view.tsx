@@ -19,13 +19,13 @@ import { approvalHref } from "../approval-rules";
 import { useApprovalCounts, useApprovalList } from "../hooks/use-approvals";
 import { ApprovalStatusBadge, StepStatusText } from "./approval-badges";
 
-// 결재함 구분 (features.md 7.5 결재함 표) - 처리할 일이 먼저 보이도록 결재 대기를 첫 탭으로
+// 결재함 구분 (features.md 7.5 결재함 표) - 결재자 탭(대기·예정·완료) 다음 기안자 탭(기안함·임시저장) 순서 (2026-11-10 사용자 결정)
 const BOXES: { box: ApprovalBox; label: string; empty: string; adminOnly?: boolean }[] = [
   { box: "pending", label: "결재 대기", empty: "지금 결재할 문서가 없습니다." },
   { box: "upcoming", label: "결재 예정", empty: "곧 차례가 올 문서가 없습니다." },
+  { box: "processed", label: "결재 완료", empty: "결재한 문서가 없습니다." },
   { box: "mine", label: "기안함", empty: "상신한 문서가 없습니다." },
   { box: "drafts", label: "임시저장", empty: "임시저장한 문서가 없습니다." },
-  { box: "processed", label: "결재 완료", empty: "결재한 문서가 없습니다." },
   { box: "all", label: "전체 문서", empty: "문서가 없습니다.", adminOnly: true },
 ];
 
@@ -71,7 +71,7 @@ export function ApprovalBoxView() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Tabs value={box} onValueChange={(v) => setParams({ box: v, status: null, page: null })} className="max-w-full overflow-x-auto">
+        <Tabs value={box} onValueChange={(v) => setParams({ box: v, status: null, page: null })} className="max-w-full overflow-x-auto overflow-y-hidden">
           <TabsList>
             {boxes.map((b) => {
               const count = isCountedBox(b.box) ? counts.data?.[b.box] : undefined;

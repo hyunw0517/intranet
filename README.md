@@ -93,7 +93,33 @@ flowchart LR
 
 - 외부에는 Nginx(80/443)만 노출하고, 애플리케이션과 DB는 Docker 내부 네트워크로만 접근합니다. 보안 그룹은 22 / 80 / 443만 엽니다.
 - Frontend와 Backend는 **별도 컨테이너**로 운영해 빌드 · 재배포 · 로그 · 장애 범위를 분리했습니다.
-- 기존 SNS 프로젝트(PostgreSQL 17)와 같은 서버를 쓰되, PostgreSQL은 메이저 버전별로 인스턴스를 나누고 **프로젝트별 DB 계정**으로 격리했습니다.
+- 기존 SNS 프로젝트와 같은 서버를 쓰고, DB는 아래처럼 별도 `infra-db`로 관리합니다.
+
+### DB 인프라 분리
+
+이 저장소는 세 프로젝트 중 하나입니다. DB는 애플리케이션 저장소에 두지 않고 별도 `infra-db`에서 두 프로젝트가 같이 씁니다.
+
+```text
+portfolio/
+├── infra-db/      # SNS · Intranet 공용 PostgreSQL (docker-compose, DB · 계정 생성 스크립트)
+├── NestJS_SNS/    # 기존 SNS 프로젝트 (PostgreSQL 17)
+└── intranet/      # 이 저장소 (PostgreSQL 18)
+```
+
+```text
+infra-db (docker-compose, network: infra-db-net)
+├── postgres17  (127.0.0.1:5432)
+│   └── sns            ← owner: sns_user
+└── postgres18  (127.0.0.1:5433)
+    ├── intranet       ← owner: intranet_user
+    └── intranet_test  ← owner: intranet_test_user (e2e 테스트 전용)
+```
+
+- **메이저 버전별 인스턴스 분리**: 한 PostgreSQL 인스턴스(클러스터)에는 메이저 버전 하나만 올릴 수 있습니다. SNS는 기존 17을 유지하고 Intranet은 18을 쓰기 위해 컨테이너를 버전별로 나누고, docker-compose 하나로 함께 관리합니다.
+- **프로젝트별 계정 격리**: DB마다 전용 계정을 owner로 두고 `REVOKE ALL ... FROM PUBLIC`으로 다른 계정의 접속을 막습니다. 애플리케이션은 슈퍼유저를 쓰지 않습니다.
+- **외부 노출 차단**: 포트를 `127.0.0.1`에만 바인딩하고, 컨테이너끼리는 Docker 네트워크(`infra-postgres18:5432`)로 접근합니다.
+- **애플리케이션과 생명주기 분리**: 앱을 다시 빌드하거나 배포해도 DB 컨테이너와 데이터는 그대로 남습니다. DB · 계정 생성 스크립트는 여러 번 실행해도 결과가 같게(멱등) 만들었습니다.
+- **테스트 DB 분리**: e2e 테스트는 같은 인스턴스의 별도 DB `intranet_test`에서 실행합니다. 동시 요청 테스트는 실제 커밋이 필요해 트랜잭션 롤백 방식을 쓸 수 없어서, 테스트 시작 전에 테이블을 비웁니다.
 
 ### 백엔드 모듈 구조: 핵심 + 애드온
 
@@ -205,7 +231,7 @@ intranet/
 
 ### 준비
 
-- Node.js, PostgreSQL 18 (Docker 권장) <!-- TODO: Node.js 버전 -->
+- Node.js, PostgreSQL 18 (위 `infra-db` 구성 또는 Docker 컨테이너) <!-- TODO: Node.js 버전, infra-db 저장소 링크 -->
 
 
 ### Backend

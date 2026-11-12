@@ -10,7 +10,7 @@ const CLOSE_DELAY_MS = 120; // 항목 → 명단으로 마우스를 옮기는 �
 // 캘린더 날짜 칸의 "휴가 N명" 항목 (캘린더 게시판의 "휴가자 표시" 옵션, 2026-11-12 사용자 결정)
 // - 휴가자가 많아도 칸이 넘치지 않게 하루에 항목 하나만 그리고, 마우스를 올리면 명단을 보여 준다.
 // - 터치 화면에는 마우스 올리기가 없으므로 누르면 열고 닫는다.
-// - 명단: 이름(소속/직급): 휴가(종일) 또는 시각 (2026-11-12 사용자 결정). 휴가 유형(병가 등)은 서버가 보내지 않는다.
+// - 명단: 이름(직급/소속): 휴가(종일) 또는 시각 (2026-11-12 사용자 결정, 순서 변경 11-12). 휴가 유형(병가 등)은 서버가 보내지 않는다.
 export function LeaveDayChip({ day, className }: { day: LeaveCalendarDay; className?: string }) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,8 +80,8 @@ export function LeaveDayChip({ day, className }: { day: LeaveCalendarDay; classN
   );
 }
 
-// 이름(소속/직급) - 없는 값은 뺀다
+// 이름(직급/소속) - 없는 값은 뺀다
 function personLabel(p: LeaveCalendarPerson) {
-  const org = [p.departmentName, p.positionName].filter(Boolean).join("/");
+  const org = [p.positionName, p.departmentName].filter(Boolean).join("/");
   return org ? `${p.name}(${org})` : p.name;
 }

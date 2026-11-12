@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { ErrorState, LoadingState } from "@/components/common/data-state";
 import { FormError } from "@/components/common/form-field";
 import { RichTextContent } from "@/features/board/components/rich-text-content";
+import { LeaveInfoPanel } from "@/features/leave/components/leave-info-panel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -173,9 +174,14 @@ export function ApprovalDetailView({ id }: { id: number }) {
 
       <ApprovalSteps doc={doc} onReplace={setReplacing} />
 
-      <section aria-label="본문" className="border-t pt-6">
-        <RichTextContent html={doc.content} />
-      </section>
+      {/* 휴가 신청은 본문 대신 휴가 정보 (휴가 옵션이 꺼져 있으면 휴가 API가 없어 오류 안내) */}
+      {doc.documentType === "LEAVE" ? (
+        <LeaveInfoPanel documentId={id} />
+      ) : (
+        <section aria-label="본문" className="border-t pt-6">
+          <RichTextContent html={doc.content} />
+        </section>
+      )}
 
       <ApprovalAttachments docId={id} files={doc.files} />
 

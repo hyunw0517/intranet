@@ -1,12 +1,14 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Building,
+  CalendarCheck,
   CalendarClock,
   CalendarRange,
   FileCheck,
   LayoutDashboard,
   LayoutList,
   Network,
+  Plane,
   Settings,
   UserCog,
   UserRound,
@@ -39,7 +41,10 @@ export const mainNav: NavGroup[] = [
   },
   {
     label: "개인",
-    items: [{ title: "마이페이지", href: "/mypage", icon: UserRound }],
+    items: [
+      { title: "마이페이지", href: "/mypage", icon: UserRound },
+      { title: "휴가내역", href: "/leaves", icon: Plane, addon: "leaves" }, // 마이페이지 아래 (2026-11-12 사용자 결정)
+    ],
   },
 ];
 
@@ -54,6 +59,7 @@ export const adminNav: NavGroup[] = [
       { title: "시설 관리", href: "/admin/facilities", icon: Building, addon: "reservations" },
       { title: "예약 관리", href: "/admin/reservations", icon: CalendarRange, addon: "reservations" },
       { title: "결재라인 관리자", href: "/admin/approval-managers", icon: UserCog, addon: "approvals" },
+      { title: "연차 관리", href: "/admin/leaves", icon: CalendarCheck, addon: "leaves" },
     ],
   },
 ];

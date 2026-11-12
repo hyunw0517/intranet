@@ -8,6 +8,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 
 import { INestApplication } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { ApprovalStatus, UserRole } from 'src/generated/prisma/client';
@@ -40,7 +41,7 @@ describe('휴가', () => {
     const approve = ( documentId: number ) => http().patch( `/approvals/documents/${documentId}/approve` ).set( auth( token.b ) ).send({});
     const summary = async ( t: string ) => ( await http().get( '/approvals/leaves/me' ).set( auth( t ) ).expect( 200 ) ).body;
     const adjust = ( userId: number, adjustDays: number ) =>
-        http().patch( `/approvals/leaves/grants/${userId}` ).set( auth( token.admin ) ).send({ adjustDays, adjustReason: '테스트' });
+        http().patch( `/approvals/leaves/grants/${userId}` ).set( auth( token.admin ) ).send({ adjustDays, adjustReason: '테스트', permanentDays: 0 });
 
     // 임시저장 → 상신까지 성공시키고 문서 id
     const submitted = async ( t: string, body: Record<string, unknown> ) => {
@@ -105,23 +106,52 @@ describe('휴가', () => {
             await adjust( ids.a, -10 ).expect( 200 );
         });
 
+        it('영구 조정값: 사유 필수, 25일 한도 없이 더하고 재계산해도 유지, 입사한 해에는 적용하지 않는다', async () => {
+            const admin = auth( token.admin );
+            const save = ( userId: number, body: Record<string, unknown> ) =>
+                http().patch( `/approvals/leaves/grants/${userId}` ).set( admin ).send({ adjustDays: 0, permanentDays: 0, ...body });
+
+            // 관리자 본인(2000년 입사, 계산값 25)에게 영구 +3 → 28 (한도 없음)
+            await save( ids.admin, { permanentDays: 3 } ).expect( 400 ); // 사유 없음
+            await save( ids.admin, { permanentDays: 3, permanentReason: '계열사 근속 인정' } ).expect( 200 );
+            expect( await summary( token.admin ) ).toMatchObject({ baseDays: 25, permanentDays: 3, adjustDays: 0, grantedDays: 28 });
+
+            await http().post( '/approvals/leaves/grants/recalculate' ).set( admin ).expect( 201 );
+            expect( await summary( token.admin ) ).toMatchObject({ permanentDays: 3, grantedDays: 28 });
+
+            // 목록: 회원 설정값(조정 창 기본값)도 함께
+            const list = await http().get( `/approvals/leaves/grants?year=${year}&take=100` ).set( admin ).expect( 200 );
+            const row = list.body.data.find( ( r: { user: { id: number } } ) => r.user.id === ids.admin );
+            expect( row.permanentSetting ).toEqual({ days: 3, reason: '계열사 근속 인정' });
+
+            // 올해 입사자: 영구값을 넣어도 입사한 해 행에는 0 (월 단위는 매년 조정값으로만)
+            const newcomer = await createTestUser( prisma );
+            await prisma.users.update({ where: { id: newcomer.id }, data: { joinAt: new Date( `${year}-01-01T00:00:00Z` ) } });
+            await http().post( '/approvals/leaves/grants/recalculate' ).set( admin ).expect( 201 );
+            await save( newcomer.id, { permanentDays: 2, permanentReason: '경력 인정' } ).expect( 200 );
+            const grant = await prisma.leaveGrant.findUniqueOrThrow({ where: { userId_year: { userId: newcomer.id, year } } });
+            expect( Number( grant.permanentDays ) ).toBe( 0 );
+            const setting = await prisma.leaveUserSetting.findUniqueOrThrow({ where: { userId: newcomer.id } });
+            expect( Number( setting.permanentDays ) ).toBe( 2 );
+        });
+
         it('12월 재계산은 다음 해 행도 만든다 → 다음 해 조정·연차 신청 가능, 지난 연도는 조정 불가', async () => {
             const next = year + 1;
             // 다음 해 행이 없을 때: 조정 404, 다음 해 연차 상신은 부여 0으로 거부
-            await http().patch( `/approvals/leaves/grants/${ids.e}` ).set( auth( token.admin ) ).send({ year: next, adjustDays: 1, adjustReason: '이월' }).expect( 404 );
+            await http().patch( `/approvals/leaves/grants/${ids.e}` ).set( auth( token.admin ) ).send({ year: next, adjustDays: 1, adjustReason: '이월', permanentDays: 0 }).expect( 404 );
 
             // 기준일을 API로 바꿀 수 없어 서비스를 직접 부른다 (12/1 월 배치와 같음)
             const result = await app.get( LeaveGrantsService ).recalculate( null, `${year}-12-01` );
-            expect( result.years ).toEqual([ { year, count: 6 }, { year: next, count: 6 } ]);
+            expect( result.years ).toEqual([ { year, count: 7 }, { year: next, count: 7 } ]); // 위 테스트의 올해 입사자 포함
 
-            await http().patch( `/approvals/leaves/grants/${ids.e}` ).set( auth( token.admin ) ).send({ year: next, adjustDays: 2, adjustReason: '이월' }).expect( 200 );
+            await http().patch( `/approvals/leaves/grants/${ids.e}` ).set( auth( token.admin ) ).send({ year: next, adjustDays: 2, adjustReason: '이월', permanentDays: 0 }).expect( 200 );
             const summaryNext = await http().get( `/approvals/leaves/me?year=${next}` ).set( auth( token.e ) ).expect( 200 );
             expect( summaryNext.body ).toMatchObject({ year: next, baseDays: 25, adjustDays: 2, grantedDays: 27 });
 
             const created = await createLeave( token.e, { type: 'ANNUAL', unit: 'FULL', startDate: `${next}-01-05`, endDate: `${next}-01-06` } ).expect( 201 );
             await submit( token.e, created.body.documentId ).expect( 200 );
 
-            await http().patch( `/approvals/leaves/grants/${ids.e}` ).set( auth( token.admin ) ).send({ year: year - 1, adjustDays: 1, adjustReason: '과거' }).expect( 400 );
+            await http().patch( `/approvals/leaves/grants/${ids.e}` ).set( auth( token.admin ) ).send({ year: year - 1, adjustDays: 1, adjustReason: '과거', permanentDays: 0 }).expect( 400 );
         });
     });
 
@@ -305,4 +335,27 @@ describe('휴가', () => {
             expect( mine.body.map( ( l: { documentId: number } ) => l.documentId ) ).toEqual( expect.arrayContaining([ id, copied.body.id ]) );
         });
     });
+
+    describe('월 배치 (@Cron)', () => {
+        it('스케줄러에 등록되고 다음 실행은 매월 1일 00:00(KST), 실행하면 재계산 감사 로그가 "월 배치"로 남는다', async () => {
+            const job = app.get( SchedulerRegistry ).getCronJob( 'leave-grant-monthly' );
+            const next = job.nextDate().setZone( 'Asia/Seoul' );
+            expect([ next.day, next.hour, next.minute, next.second ]).toEqual([ 1, 0, 0, 0 ]);
+
+            // 지금 한 번 실행시켜 실제로 재계산이 도는지 본다 (작업자 없음 = 월 배치)
+            const before = await prisma.audit.count({ where: { content: { contains: '월 배치' } } });
+            void job.fireOnTick();
+            await waitFor( async () => ( await prisma.audit.count({ where: { content: { contains: '월 배치' } } }) ) > before );
+        });
+    });
 });
+
+// 조건이 참이 될 때까지 잠깐씩 기다린다 (배치는 비동기로 돌아서 끝나는 시점을 직접 받을 수 없다)
+async function waitFor( check: () => Promise<boolean>, timeoutMs = 10_000 ){
+    const until = Date.now() + timeoutMs;
+    while ( Date.now() < until ) {
+        if ( await check() ) return;
+        await new Promise( ( r ) => setTimeout( r, 200 ) );
+    }
+    throw new Error( '시간 안에 조건을 만족하지 않았다' );
+}

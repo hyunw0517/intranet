@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LINE_SCOPE_LABEL } from "@/types/approval";
+import { LeaveFields } from "@/features/leave/components/leave-fields";
+import { validateLeave, type LeaveFormValues } from "@/features/leave/leave-rules";
+import { LINE_SCOPE_LABEL, type ApprovalDocumentType } from "@/types/approval";
 import type { FileInfo } from "@/types/file";
 import { TITLE_MAX } from "../approval-rules";
 import { useUsableLines } from "../hooks/use-approvals";
@@ -23,11 +25,13 @@ export interface ApprovalFormValues {
   steps: LineStepGroup[]; // 결재 단계 (여러 명 = 병렬)
   templateId: number | null; // 불러온 결재라인 (기록용)
   files: FileInfo[];
+  leave: LeaveFormValues | null; // 휴가 신청일 때만 (제목·본문 대신)
 }
 
-export const EMPTY_APPROVAL_FORM: ApprovalFormValues = { title: "", content: "", steps: [], templateId: null, files: [] };
+export const EMPTY_APPROVAL_FORM: ApprovalFormValues = { title: "", content: "", steps: [], templateId: null, files: [], leave: null };
 
 interface ApprovalDocumentFormProps {
+  documentType: ApprovalDocumentType; // LEAVE면 제목·본문 대신 휴가 입력 칸 (제목은 서버가 유형·기간으로 만든다)
   initial: ApprovalFormValues;
   requesterId: number; // 기안자 본인은 결재자로 고를 수 없다
   cancelHref: string;
@@ -40,7 +44,10 @@ interface ApprovalDocumentFormProps {
 // - 임시저장: 제목만 있으면 된다 (결재자 0명 허용)
 // - 상신: 결재자 1명 이상. 저장 후 상신을 연달아 호출한다 (API가 나뉘어 있음, features.md 7.5)
 // - 본문 이미지는 쓰지 않는다 (공개 주소라 결재 문서에 맞지 않음 - 서버도 제거). 파일은 첨부로.
-export function ApprovalDocumentForm({ initial, requesterId, cancelHref, pending, serverError, onSave }: ApprovalDocumentFormProps) {
+// - 휴가 신청: 제목·본문 대신 휴가 입력 칸. 임시저장도 휴가 항목 검사가 필요하다(서버가 저장 때 일수를 계산).
+export function ApprovalDocumentForm({ documentType, initial, requesterId, cancelHref, pending, serverError, onSave }: ApprovalDocumentFormProps) {
+  const isLeave = documentType === "LEAVE";
+  const [leave, setLeave] = useState(initial.leave);
   const [title, setTitle] = useState(initial.title);
   const [content, setContent] = useState(initial.content);
   const [contentEmpty, setContentEmpty] = useState(!initial.content);
@@ -48,7 +55,7 @@ export function ApprovalDocumentForm({ initial, requesterId, cancelHref, pending
   const [templateId, setTemplateId] = useState(initial.templateId);
   const [files, setFiles] = useState(initial.files);
   const [uploading, setUploading] = useState(false);
-  const [errors, setErrors] = useState<{ title?: string; approvers?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string; approvers?: string; leave?: string }>({});
 
   const lines = useUsableLines();
 
@@ -73,12 +80,17 @@ export function ApprovalDocumentForm({ initial, requesterId, cancelHref, pending
   const save = (submit: boolean) => {
     if (pending || uploading) return;
     const next: typeof errors = {};
-    if (!title.trim()) next.title = "제목을 입력하세요.";
+    if (isLeave) {
+      const leaveError = leave ? validateLeave(leave) : "휴가 정보를 입력하세요.";
+      if (leaveError) next.leave = leaveError;
+    } else if (!title.trim()) {
+      next.title = "제목을 입력하세요.";
+    }
     if (submit && steps.length === 0) next.approvers = "상신하려면 결재자를 1명 이상 지정하세요.";
     setErrors(next);
-    if (next.title || next.approvers) return;
+    if (next.title || next.approvers || next.leave) return;
 
-    onSave({ title: title.trim(), content: contentEmpty ? "" : content, steps, templateId, files }, submit);
+    onSave({ title: title.trim(), content: contentEmpty ? "" : content, steps, templateId, files, leave: isLeave ? leave : null }, submit);
   };
 
   return (
@@ -92,18 +104,29 @@ export function ApprovalDocumentForm({ initial, requesterId, cancelHref, pending
     >
       <FormError message={serverError} />
 
-      <FormField id="approval-title" label="제목" required error={errors.title}>
-        <Input
-          id="approval-title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          maxLength={TITLE_MAX}
-          aria-invalid={!!errors.title}
-          aria-describedby={errors.title ? "approval-title-message" : undefined}
-          className="h-9"
-          autoFocus={!initial.title}
+      {isLeave && leave ? (
+        <LeaveFields
+          value={leave}
+          onChange={(nextLeave) => {
+            setLeave(nextLeave);
+            if (errors.leave) setErrors((prev) => ({ ...prev, leave: undefined }));
+          }}
+          error={errors.leave}
         />
-      </FormField>
+      ) : (
+        <FormField id="approval-title" label="제목" required error={errors.title}>
+          <Input
+            id="approval-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={TITLE_MAX}
+            aria-invalid={!!errors.title}
+            aria-describedby={errors.title ? "approval-title-message" : undefined}
+            className="h-9"
+            autoFocus={!initial.title}
+          />
+        </FormField>
+      )}
 
       <section className="grid gap-2" aria-labelledby="approval-line-label">
         <div className="flex flex-wrap items-end justify-between gap-2">
@@ -146,19 +169,22 @@ export function ApprovalDocumentForm({ initial, requesterId, cancelHref, pending
         )}
       </section>
 
-      <div className="grid gap-1.5">
-        <Label id="approval-content-label">내용</Label>
-        <RichTextEditor
-          id="approval-content"
-          labelledBy="approval-content-label"
-          initialContent={initial.content}
-          allowImages={false}
-          onChange={(html, isEmpty) => {
-            setContent(html);
-            setContentEmpty(isEmpty);
-          }}
-        />
-      </div>
+      {/* 휴가 신청은 본문이 없다 (휴가 정보 + 사유로 결재) */}
+      {!isLeave && (
+        <div className="grid gap-1.5">
+          <Label id="approval-content-label">내용</Label>
+          <RichTextEditor
+            id="approval-content"
+            labelledBy="approval-content-label"
+            initialContent={initial.content}
+            allowImages={false}
+            onChange={(html, isEmpty) => {
+              setContent(html);
+              setContentEmpty(isEmpty);
+            }}
+          />
+        </div>
+      )}
 
       <AttachmentField value={files} onChange={setFiles} onUploadingChange={setUploading} />
 

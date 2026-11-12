@@ -162,6 +162,17 @@ enum ApprovalLineManagerScope {
   MY_DEPARTMENT  // 직책 대상만: 그 직책으로 소속된 부서의 부서 결재라인
 }
 
+//? 캘린더 일정 색 -> 모델: Post (캘린더 게시판, NULL = 기본색). 화면이 라이트/다크 색을 정한다.
+// 초록은 캘린더의 "휴가 N명" 항목 색이라 넣지 않는다. (2026-11-12 사용자 결정: 정해진 색 중 일정마다 작성자가 선택)
+enum CalendarEventColor {
+  RED
+  ORANGE
+  YELLOW
+  BLUE
+  PURPLE
+  GRAY
+}
+
 //? 휴가 종류 -> 모델: LeaveRequest
 enum LeaveType {
   ANNUAL    // 연차
@@ -234,6 +245,7 @@ model Users {
   approvalHistories       ApprovalDocumentHistory[]   @relation("ApprovalDocumentHistoryActor") // 결재 상태 변경 이력
   leaveRequests           LeaveRequest[]              @relation("LeaveRequestUser")             // 연차/병가 신청 목록
   leaveGrants             LeaveGrant[]                @relation("LeaveGrantUser")               // 연도별 연차 부여
+  leaveSetting            LeaveUserSetting?           @relation("LeaveUserSettingUser")         // 영구 연차 조정
   chatRooms               ChatRoomMember[]    // 참여 중인 채팅방
   chatMessages            ChatMessage[]               @relation("ChatMessageSender")            // 보낸 채팅 메시지
   authSessions            AuthSession[]       // 로그인 세션 (기기별 refresh token)
@@ -518,6 +530,7 @@ model Post {
   eventStartAt  DateTime? @map("event_start_at")  // 일정 시작 시간 (캘린더 게시판용)
   eventEndAt    DateTime? @map("event_end_at")  // 일정 종료 시간 (캘린더 게시판용)
   isAllDay      Boolean?  @map("is_all_day")  // 시간 미선택 (캘린더 게시판용)
+  eventColor    CalendarEventColor? @map("event_color") // 일정 색 (캘린더 게시판용, NULL = 기본색)
 
   board     Board     @relation(fields: [boardId], references: [id])
   author    Users     @relation("PostAuthor", fields: [authorId], references: [id]) // 작성자
@@ -960,9 +973,10 @@ model LeaveGrant {
   userId Int @map("user_id")
   year   Int // 회계연도 (1/1~12/31, KST)
 
-  baseDays     Decimal @db.Decimal(5, 2) @map("base_days")               // 규칙 계산값 (배치·재계산만 쓴다)
-  adjustDays   Decimal @default(0) @db.Decimal(5, 2) @map("adjust_days") // 관리자 조정값 (±, 0.25 단위, 배치는 건드리지 않음)
-  adjustReason String? @map("adjust_reason")                             // 조정 사유
+  baseDays      Decimal @db.Decimal(5, 2) @map("base_days")                  // 규칙 계산값 (배치·재계산만 쓴다)
+  permanentDays Decimal @default(0) @db.Decimal(5, 2) @map("permanent_days") // 그해에 적용된 영구 조정값 (LeaveUserSetting에서 복사, 입사한 해는 0) - 지난 연도 기록이 바뀌지 않게 연도마다 저장
+  adjustDays    Decimal @default(0) @db.Decimal(5, 2) @map("adjust_days")    // 매년 초기화되는 조정값 (±, 0.25 단위, 배치는 건드리지 않음, 새해 행은 0)
+  adjustReason  String? @map("adjust_reason")                                // 매년 조정 사유
 
   user Users @relation("LeaveGrantUser", fields: [userId], references: [id])
 
@@ -972,6 +986,22 @@ model LeaveGrant {
   @@unique([userId, year])
   @@index([year])
   @@map("leave_grant_model")
+}
+
+//* 회원별 영구 연차 조정 (임원 전입 등 근속 인정, 2026-11-12 사용자 결정) -> 모듈: Leaves (approvals/leaves)
+// 저장하면 올해·(있으면) 내년 LeaveGrant.permanentDays에 반영하고, 이후 재계산이 매년 복사한다. 입사한 해는 적용하지 않는다(월 단위는 매년 조정값으로만).
+model LeaveUserSetting {
+  id              Int     @id @default(autoincrement())
+  userId          Int     @unique @map("user_id")
+  permanentDays   Decimal @default(0) @db.Decimal(5, 2) @map("permanent_days") // 매년 더하는 일수 (±, 0.25 단위, 25일 한도 없음)
+  permanentReason String? @map("permanent_reason")                             // 영구 조정 사유 (예: 계열사 근속 10년 인정)
+
+  user Users @relation("LeaveUserSettingUser", fields: [userId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("leave_user_setting_model")
 }
 
 //* 채팅방 -> 모듈: Chat

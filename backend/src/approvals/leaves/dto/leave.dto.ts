@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsArray, IsDate, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from "class-validator";
+import { ArrayMaxSize, IsArray, IsDate, IsEnum, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from "class-validator";
 import { PagePaginationDto } from "src/common/dto/page-pagination.dto";
 import { MAX_ATTACHMENTS_PER_TARGET } from "src/common/const/file.const";
 import { StringToDate } from "src/common/decorator/string-to-date.decorator";
@@ -155,13 +155,27 @@ export class AdjustLeaveGrantDto {
     @IsOptional()
     year?: number;
 
+    // 매년 초기화되는 조정값 (그 연도 행에만, 새해에는 0) - 이월·포상·차감, 입사한 해의 월 단위 보정
     @IsNumber({ maxDecimalPlaces: 2 })
     @Min(-99)
     @Max(99)
     adjustDays: number;
 
+    // 0이 아니면 사유 필수 (서비스에서 검사)
     @IsString()
-    @IsNotEmpty()
     @MaxLength(200)
-    adjustReason: string;
+    @IsOptional()
+    adjustReason?: string | null;
+
+    // 영구 조정값 (매년 더함, 올해부터 반영) - 임원 전입 등 근속 인정. 입사한 해에는 적용하지 않는다
+    @IsNumber({ maxDecimalPlaces: 2 })
+    @Min(-99)
+    @Max(99)
+    permanentDays: number;
+
+    // 0이 아니면 사유 필수
+    @IsString()
+    @MaxLength(200)
+    @IsOptional()
+    permanentReason?: string | null;
 }

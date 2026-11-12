@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useEnabledAddons } from "@/features/addon/hooks/use-addons";
 import { getErrorMessage } from "@/lib/error-message";
 import type { BoardInput } from "@/services/api/boards";
 import { BOARD_TYPE_LABEL, SELECTABLE_BOARD_TYPES, type AdminBoard, type BoardType } from "@/types/board";
@@ -65,9 +66,16 @@ function BoardForm({
   const [description, setDescription] = useState(editing?.description ?? "");
   const [isAnonymous, setIsAnonymous] = useState(editing?.isAnonymous ?? false);
   const [allowSecret, setAllowSecret] = useState(editing?.allowSecret ?? false);
+  const [showLeaves, setShowLeaves] = useState(editing?.showLeaves ?? false);
   const [errors, setErrors] = useState<{ name?: string; description?: string }>({});
 
+  // "휴가자 표시"는 캘린더 게시판 + 휴가 애드온이 켜져 있을 때만 보여 준다.
+  // 애드온이 꺼져 있으면 값을 보내지 않아 서버가 기존 값을 유지한다(다시 켜면 그대로).
+  const { data: addons } = useEnabledAddons();
+  const leavesEnabled = addons?.enabled.includes("leaves") ?? false;
+
   const isCategory = type === "CATEGORY";
+  const isCalendar = type === "CALENDAR";
 
   // 상위 후보: 카테고리만 (자기 자신 제외). 카테고리는 최상위에만 둘 수 있다.
   const categories = boards.filter((b) => b.type === "CATEGORY" && b.id !== editing?.id);
@@ -97,6 +105,8 @@ function BoardForm({
       parentBoardId: isCategory || parentValue === ROOT ? null : Number(parentValue),
       description: trimmedDescription,
       ...(!isCategory ? { isAnonymous, allowSecret } : {}),
+      // 캘린더가 아니면 보내지 않는다 (서버가 타입 변경 시 끈다)
+      ...(isCalendar && leavesEnabled ? { showLeaves } : {}),
     });
   };
 
@@ -188,6 +198,14 @@ function BoardForm({
             checked={allowSecret}
             onChange={setAllowSecret}
           />
+          {isCalendar && leavesEnabled && (
+            <OptionCheckbox
+              id="board-show-leaves"
+              label="휴가자 표시 (승인된 휴가를 날짜마다 '휴가 N명'으로 표시)"
+              checked={showLeaves}
+              onChange={setShowLeaves}
+            />
+          )}
         </fieldset>
       )}
 

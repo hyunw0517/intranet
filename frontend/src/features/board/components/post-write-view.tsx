@@ -110,7 +110,7 @@ export function PostEditView({ boardId, postId }: { boardId: number; postId: num
           content: data.content ?? "",
           isSecret: data.isSecret,
           isPinned: data.isPinned,
-          event: toEventInput(data.eventStartAt, data.eventEndAt, data.isAllDay),
+          event: toEventInput(data.eventStartAt, data.eventEndAt, data.isAllDay, data.eventColor),
           files: data.files,
         }}
         showPin={false}

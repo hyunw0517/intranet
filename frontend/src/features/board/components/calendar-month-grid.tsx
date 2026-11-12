@@ -5,7 +5,10 @@ import { useState } from "react";
 import { Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { LeaveDayChip } from "@/features/leave/components/leave-day-chip";
 import type { CalendarEvent } from "@/types/calendar";
+import type { LeaveCalendarDay } from "@/types/leave";
+import { eventColorOption } from "../calendar-colors";
 import { eventTimeLabel, todayKst, type CalendarDay } from "../calendar-month";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -23,14 +26,17 @@ const VISIBLE_MOBILE = 2;
 
 // 월간 달력 (일~토, 앞뒤 달은 그 주만 흐리게)
 // 일정은 해당하는 날 칸에 박스로 넣는다. 여러 날 일정은 걸친 날마다 박스를 반복한다.
+// leavesByDate: 게시판 옵션 "휴가자 표시"가 켜져 있을 때 날짜별 휴가자 (칸마다 "휴가 N명" 항목 하나)
 export function CalendarMonthGrid({
   boardId,
   weeks,
   eventsByDate,
+  leavesByDate,
 }: {
   boardId: number;
   weeks: CalendarDay[][];
   eventsByDate: Map<string, CalendarEvent[]>;
+  leavesByDate?: Map<string, LeaveCalendarDay>;
 }) {
   const today = todayKst();
   const [openDate, setOpenDate] = useState<string | null>(null);
@@ -50,6 +56,7 @@ export function CalendarMonthGrid({
           <div key={week[0].date} className="grid grid-cols-7 border-b last:border-b-0" role="row">
             {week.map((day) => {
               const events = eventsByDate.get(day.date) ?? [];
+              const leaves = leavesByDate?.get(day.date);
               const hiddenDesktop = events.length - VISIBLE_DESKTOP;
               const hiddenMobile = events.length - VISIBLE_MOBILE;
               return (
@@ -70,6 +77,7 @@ export function CalendarMonthGrid({
                     >
                       {day.day}
                     </span>
+                    {leaves && <LeaveDayChip day={leaves} />}
                     {events.map((event, i) => (
                       <EventBox
                         key={event.id}
@@ -135,7 +143,8 @@ function EventBox({
       href={`/boards/${boardId}/posts/${event.id}`}
       title={event.title}
       className={cn(
-        "flex min-w-0 items-center gap-1 rounded border border-primary/20 bg-primary/10 px-1 py-0.5 text-[11px] leading-4 text-foreground hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none sm:px-1.5 sm:text-xs",
+        "flex min-w-0 items-center gap-1 rounded border px-1 py-0.5 text-[11px] leading-4 text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none sm:px-1.5 sm:text-xs",
+        eventColorOption(event.eventColor).box, // 작성자가 고른 일정 색 (없으면 기본 포인트색)
         large && "px-2.5 py-1.5 text-sm sm:px-2.5 sm:text-sm",
         className,
       )}

@@ -12,6 +12,7 @@ export interface BoardInput {
   description: string; // 빈 문자열이면 서버에서 null로 저장
   isAnonymous?: boolean;
   allowSecret?: boolean;
+  showLeaves?: boolean; // 캘린더 게시판만 켤 수 있다 (다른 타입이면 서버 400, 타입을 바꾸면 서버가 끈다)
 }
 
 // 직원용 게시판 단건 - 게시판 설정(타입·비밀글 허용·익명)과 내 권한. 읽기 권한이 없거나 카테고리면 404.

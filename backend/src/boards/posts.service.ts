@@ -170,6 +170,7 @@ export class PostsService {
                 eventStartAt: true,
                 eventEndAt: true,
                 isAllDay: true,
+                eventColor: true,
                 isSecret: true,
                 author: { select: { id: true, name: true, nickname: true } },
             },
@@ -239,6 +240,7 @@ export class PostsService {
             eventStartAt: true,
             eventEndAt: true,
             isAllDay: true,
+            eventColor: true,
             isSecret: true,
             createdAt: true,
             updatedAt: true,
@@ -276,6 +278,7 @@ export class PostsService {
             eventStartAt: true,
             eventEndAt: true,
             isAllDay: true,
+            eventColor: true,
             createdAt: true,
             updatedAt: true,
             editedAt: true,
@@ -644,10 +647,10 @@ export class PostsService {
     //   (종일 일정은 화면에서 시간 입력을 숨기므로 어떤 시간이 와도 그날 경계로 맞춘다)
     private resolveEventFields(
         boardType: BoardType,
-        body: Pick<CreatePostDto, 'eventStartAt' | 'eventEndAt' | 'isAllDay'>,
+        body: Pick<CreatePostDto, 'eventStartAt' | 'eventEndAt' | 'isAllDay' | 'eventColor'>,
     ){
         if( boardType !== BoardType.CALENDAR ){
-            return { eventStartAt: null, eventEndAt: null, isAllDay: null };
+            return { eventStartAt: null, eventEndAt: null, isAllDay: null, eventColor: null };
         }
 
         if( !body.eventStartAt || !body.eventEndAt ){
@@ -663,7 +666,9 @@ export class PostsService {
             throw new BadRequestException('종료일시는 시작일시보다 빠를 수 없습니다.');
         }
 
-        return { eventStartAt, eventEndAt, isAllDay };
+        // 일정 색 (2026-11-12 사용자 결정): 정해진 색 중 작성자가 선택, null = 기본색.
+        // 생략(undefined)하면 작성은 기본색, 수정은 기존 색을 유지한다(Prisma가 undefined 필드를 건드리지 않음).
+        return { eventStartAt, eventEndAt, isAllDay, eventColor: body.eventColor };
     }
 
     //* 게시글 고정·해제 (게시판 관리 권한, 작성자 여부 무관)

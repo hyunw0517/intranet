@@ -24,7 +24,13 @@ export interface ApprovalDocumentHandler {
 
     // 최종 승인 시 업무 반영 (예: 휴가 확정)
     onFinalApproved?( tx: Prisma.TransactionClient, doc: HandledDocument ): Promise<void>;
+
+    // 다시 기안 시 업무 데이터 복사 (새 DRAFT 문서와 같은 tx). directCreate: false 유형은 이것이 있어야 다시 기안할 수 있다.
+    onCopy?( tx: Prisma.TransactionClient, sourceId: number, newId: number ): Promise<void>;
 }
+
+//* 업무 데이터를 문서와 같은 트랜잭션에서 저장하는 콜백 (휴가 신청 생성·수정)
+export type DraftDataWriter = ( tx: Prisma.TransactionClient, documentId: number ) => Promise<unknown>;
 
 //! 문서 유형 → 처리기 등록 지점
 // 처리기가 등록되지 않은 유형(옵션이 꺼진 업무)은 문서를 만들 수 없다.

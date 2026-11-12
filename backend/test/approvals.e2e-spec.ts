@@ -76,9 +76,9 @@ describe('전자결재', () => {
         await app.close();
     });
 
-    it('쓸 수 있는 문서 유형: 결재 본체가 등록한 일반 문서', async () => {
+    it('쓸 수 있는 문서 유형: 결재 본체가 등록한 일반 문서 (휴가 옵션이 켜져 있으면 LEAVE도 - leaves.e2e-spec.ts)', async () => {
         const res = await http().get( '/approvals/document-types' ).set( auth( token.a ) ).expect( 200 );
-        expect( res.body ).toEqual([ { type: 'GENERAL', directCreate: true } ]);
+        expect( res.body[0] ).toEqual({ type: 'GENERAL', directCreate: true }); // 등록 순서 = 결재 본체가 먼저
     });
 
     it('결재자 검색: 지정할 수 있는 회원만, 부서명으로도 찾고 이메일은 내보내지 않는다', async () => {

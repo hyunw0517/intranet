@@ -19,6 +19,7 @@ import { BoardsModule } from './boards/boards.module';
 import { addonModule } from './config/addons.config';
 import { ReservationsModule } from './reservations/reservations.module';
 import { ApprovalsModule } from './approvals/approvals.module';
+import { LeavesModule } from './approvals/leaves/leaves.module';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { ApprovalsModule } from './approvals/approvals.module';
       envFilePath: '.env', 
       isGlobal: true
     }),
-    ScheduleModule.forRoot(), // @Cron 배치 (알림 보관 기간 정리, 없는 사번 로그인 실패 기록 정리)
+    ScheduleModule.forRoot(), // @Cron 배치 (알림 보관 기간 정리, 없는 사번 로그인 실패 기록 정리, 휴가 옵션의 월 연차 재계산)
     // IP당 요청 수 제한 - 전역 가드로 걸지 않고 로그인·가입 라우트에만 @UseGuards(ThrottlerGuard)로 적용한다.
     // 카운터는 서버 메모리에 둔다. (서버 1대 기준. 여러 대로 늘리면 Redis 등 공용 저장소로 바꿔야 한다)
     ThrottlerModule.forRoot({
@@ -42,6 +43,7 @@ import { ApprovalsModule } from './approvals/approvals.module';
     // 애드온: backend/.env의 ADDONS에 있는 것만 등록된다. (src/config/addons.config.ts, AGENTS.md 10.1)
     addonModule( 'reservations', ReservationsModule ), // 시설 예약
     addonModule( 'approvals', ApprovalsModule ),       // 전자결재
+    addonModule( 'leaves', LeavesModule ),             // 휴가 (결재의 옵션)
   ],
   controllers: [AppController],
   providers: [

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { ErrorState, LoadingState } from "@/components/common/data-state";
@@ -10,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/format";
 import type { AdminUserDetail } from "@/services/api/users";
 import { useAuth } from "@/providers/auth-provider";
+import { useEnabledAddons } from "@/features/addon/hooks/use-addons";
+import { JoinAtLeaveDialog } from "./join-at-leave-dialog";
 import { useAdminUser } from "../../hooks/use-admin-users";
 import { RoleBadge, StatusBadge } from "./user-badges";
 import { UserDangerZone } from "./user-danger-zone";
@@ -20,6 +23,10 @@ import { toFormValues, UserInfoForm } from "./user-info-form";
 export function UserDetailView({ userId }: { userId: number }) {
   const { user: me } = useAuth();
   const { data: user, isPending, isError, error, refetch } = useAdminUser(userId);
+  // 입사일 변경 후 연차 재계산 안내 - 휴가 옵션(leaves)이 켜져 있을 때만
+  const { data: addons } = useEnabledAddons();
+  const leavesEnabled = addons?.enabled.includes("leaves") ?? false;
+  const [joinAtNoticeOpen, setJoinAtNoticeOpen] = useState(false);
 
   const backLink = (
     <Button variant="ghost" size="sm" asChild className="-ml-2 mb-2 text-muted-foreground">
@@ -47,13 +54,19 @@ export function UserDetailView({ userId }: { userId: number }) {
         </Section>
 
         <Section title="기본 정보" description="사번, 이름, 연락처, 입사일을 수정합니다.">
-          <UserInfoForm key={JSON.stringify(toFormValues(user))} user={user} />
+          <UserInfoForm
+            key={JSON.stringify(toFormValues(user))}
+            user={user}
+            onJoinAtChanged={leavesEnabled ? () => setJoinAtNoticeOpen(true) : undefined}
+          />
         </Section>
 
         <Section title="계정 관리" description="로그인 잠금 해제, 비밀번호 초기화, 회원 삭제. 초기화와 삭제는 되돌리기 어려우니 확인 후 진행하세요.">
           <UserDangerZone user={user} isSelf={isSelf} />
         </Section>
       </div>
+
+      {leavesEnabled && <JoinAtLeaveDialog open={joinAtNoticeOpen} onOpenChange={setJoinAtNoticeOpen} />}
     </>
   );
 }

@@ -32,6 +32,6 @@ import { LineManagersService } from './line-managers.service';
         ApprovalDocumentsService,
         ApprovalNotifier,
     ],
-    exports: [ ApprovalHandlerRegistry ],
+    exports: [ ApprovalHandlerRegistry, ApprovalDocumentsService ], // 휴가 옵션: 처리기 등록 + 업무 데이터와 함께 임시저장·수정, 열람 권한 확인
 })
 export class ApprovalsModule {}

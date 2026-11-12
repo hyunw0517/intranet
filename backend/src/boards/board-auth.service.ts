@@ -386,7 +386,7 @@ export class BoardAuthService {
         action: BoardAction,
     ): Promise<BoardAccess> {
         const board = await this.prisma.board.findFirst({
-            select: { id: true, type: true, name: true, description: true, allowSecret: true, isAnonymous: true },
+            select: { id: true, type: true, name: true, description: true, allowSecret: true, isAnonymous: true, showLeaves: true },
             where: {
                 id: boardId,
                 deleted: false,

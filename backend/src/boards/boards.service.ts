@@ -36,6 +36,7 @@ export class BoardsService {
                 description: true,
                 isAnonymous: true,
                 allowSecret: true,
+                showLeaves: true,
                 sortOrder: true,
                 _count: {
                     select: {
@@ -76,6 +77,7 @@ export class BoardsService {
     ){
         const targetParentId = body.parentBoardId ?? null;
         const targetType = body.type ?? BoardType.NORMAL;
+        const showLeaves = this.resolveShowLeaves( targetType, body.showLeaves, false );
 
         // 상위 게시판 검증
         await this.validateParent( targetParentId, targetType );
@@ -101,6 +103,7 @@ export class BoardsService {
                     description: body.description ?? null,
                     isAnonymous: body.isAnonymous,
                     allowSecret: body.allowSecret,
+                    showLeaves,
                     sortOrder: boardCount,
                     createdId: user.id,
                     updatedId: user.id,
@@ -112,6 +115,7 @@ export class BoardsService {
                 type: newBoard.type,
                 isAnonymous: newBoard.isAnonymous,
                 allowSecret: newBoard.allowSecret,
+                showLeaves: newBoard.showLeaves,
             });
 
             return newBoard;
@@ -139,6 +143,7 @@ export class BoardsService {
         // undefined면 기존 값 유지
         const targetParentId = ( body.parentBoardId !== undefined ) ? body.parentBoardId : thisBoard.parentBoardId;
         const targetType = body.type ?? thisBoard.type;
+        const showLeaves = this.resolveShowLeaves( targetType, body.showLeaves, thisBoard.showLeaves );
 
         // 타입 변경 검증
         if( targetType !== thisBoard.type ){
@@ -159,6 +164,7 @@ export class BoardsService {
             description: body.description, 
             isAnonymous: body.isAnonymous,
             allowSecret: body.allowSecret,
+            showLeaves,
             updatedId: user.id,
         };
 
@@ -374,6 +380,19 @@ export class BoardsService {
     // - CATEGORY ↔ 게시판: 카테고리는 글을, 게시판은 하위 게시판을 가질 수 없으므로 비어 있을 때만 가능
     // - CALENDAR ↔ 그 외: 캘린더 글은 일정 필드(eventStartAt 등)를 쓰므로 글이 없을 때만 가능
     // - NORMAL ↔ NOTICE: 글 구조가 같아 자유롭게 변경
+    //* 휴가자 표시 값 (2026-11-12 사용자 결정): 캘린더 게시판만 켤 수 있다
+    // - 캘린더가 아닌데 true를 보내면 400. 캘린더가 아닌 타입으로 바꾸면 자동으로 끈다.
+    // - 게시판은 값만 저장한다. 휴가 애드온이 켜져 있을 때 화면이 휴가 API를 함께 불러 표시한다. (핵심은 애드온을 모른다)
+    private resolveShowLeaves( type: BoardType, requested: boolean | undefined, current: boolean ): boolean {
+        if( type !== BoardType.CALENDAR ){
+            if( requested === true ){
+                throw new BadRequestException('휴가자 표시는 캘린더 게시판에서만 쓸 수 있습니다.');
+            }
+            return false;
+        }
+        return requested ?? current;
+    }
+
     private async validateTypeChange(
         boardId: number,
         fromType: BoardType,

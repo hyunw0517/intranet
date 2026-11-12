@@ -158,7 +158,7 @@ export class PostsService {
 
         const boards = await this.resolveCalendarBoards( user, target );
         if( boards.length === 0 ){
-            return { boards: [], events: [] };
+            return { boards: [], showLeaves: false, events: [] };
         }
         const anonymousIds = new Set( boards.filter( b => b.isAnonymous ).map( b => b.id ) );
 
@@ -184,7 +184,9 @@ export class PostsService {
         });
 
         return {
-            boards: boards.map( ( { id, name } ) => ({ id, name }) ),
+            boards: boards.map( ( { id, name, showLeaves } ) => ({ id, name, showLeaves }) ),
+            // 휴가자 표시: 보고 있는 게시판 중 하나라도 켜져 있으면 true → 화면이 휴가 API를 한 번만 불러 "휴가 N명"을 그린다 (2026-11-12 사용자 결정)
+            showLeaves: boards.some( ( b ) => b.showLeaves ),
             events: rows.map( ( row ) => ({
                 ...row,
                 author: this.isAuthorHidden( anonymousIds.has( row.boardId ), row.author.id, user.id ) ? null : row.author,
@@ -202,7 +204,7 @@ export class PostsService {
             if( board.type !== BoardType.CALENDAR ){
                 throw new BadRequestException('캘린더 게시판이 아닙니다.');
             }
-            return [ { id: board.id, name: board.name, isAnonymous: board.isAnonymous } ];
+            return [ { id: board.id, name: board.name, isAnonymous: board.isAnonymous, showLeaves: board.showLeaves } ];
         }
 
         // 읽기 권한 판정은 내비게이션과 같은 로직을 쓴다. (메뉴에 보이는 캘린더 = 일정을 볼 수 있는 캘린더)
@@ -217,7 +219,7 @@ export class PostsService {
         }
 
         return this.prisma.board.findMany({
-            select: { id: true, name: true, isAnonymous: true },
+            select: { id: true, name: true, isAnonymous: true, showLeaves: true },
             where: { id: { in: ids }, deleted: false },
             orderBy: [ { sortOrder: 'asc' }, { id: 'asc' } ],
         });

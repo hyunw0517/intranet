@@ -7,7 +7,7 @@ import { diffChanges } from "src/common/util/audit-detail.util";
 import { PaginatePage } from "src/common/util/pagination.util";
 import { sanitizeEditorHtml } from "src/common/util/sanitize-html.util";
 import { PrismaService } from "src/prisma/prisma.service";
-import { ApprovalHandlerRegistry, HandledDocument } from "./approval-handler.registry";
+import { ApprovalHandlerRegistry, DraftDataWriter, HandledDocument } from "./approval-handler.registry";
 import { ApprovalLinesService } from "./approval-lines.service";
 import { ApprovalNotifier, NotifiedDocument } from "./approval-notifier";
 import { ApproverInfo, ApproversService } from "./approvers.service";
@@ -241,24 +241,46 @@ export class ApprovalDocumentsService {
         if ( !handler.directCreate ) {
             throw new BadRequestException( '이 문서 유형은 해당 업무 화면에서 신청합니다.' );
         }
+
+        const id = await this.createWithData( user, body, '결재 문서 임시저장' );
+        return this.findOne( user, id );
+    }
+
+    //* 업무 옵션(휴가 등)용 임시저장: 문서와 업무 데이터(writeData)를 같은 트랜잭션에서 만든다 → 새 문서 id
+    // 결재 본체는 업무 데이터가 무엇인지 모른다. 처리기가 등록된 유형만 만들 수 있다.
+    async createWithData( user: Actor, body: CreateApprovalDocumentDto, auditLabel: string, writeData?: DraftDataWriter ){
+        this.registry.get( body.documentType );
         if ( body.approvalLineTemplateId ) {
             await this.lines.assertUsableTemplate( user, body.approvalLineTemplateId );
         }
 
-        const id = await this.createDraft( user, {
+        return this.createDraft( user, {
             documentType: body.documentType,
             title: body.title,
             content: body.content ?? null,
             groups: ( body.steps ?? [] ).map( ( s ) => s.approverIds ),
             approvalLineTemplateId: body.approvalLineTemplateId ?? null,
             attachmentIds: body.attachmentIds ?? [],
-        }, '결재 문서 임시저장' );
-
-        return this.findOne( user, id );
+        }, auditLabel, writeData );
     }
 
     async update( user: Actor, id: number, body: UpdateApprovalDocumentDto ){
         const doc = await this.findMyDocument( user, id );
+        if ( !this.registry.get( doc.documentType ).directCreate ) {
+            throw new BadRequestException( '이 문서 유형은 해당 업무 화면에서 수정합니다.' );
+        }
+
+        await this.updateWithData( user, id, doc.documentType, body );
+        return this.findOne( user, id );
+    }
+
+    //* 업무 옵션(휴가 등)용 임시저장 수정: 문서와 업무 데이터(writeData)를 같은 트랜잭션에서 고친다
+    // documentType이 다르면 404 (휴가 API로 일반 문서를 고치지 못하게)
+    async updateWithData( user: Actor, id: number, documentType: HandledDocument['documentType'], body: UpdateApprovalDocumentDto, writeData?: DraftDataWriter ){
+        const doc = await this.findMyDocument( user, id );
+        if ( doc.documentType !== documentType ) {
+            throw new NotFoundException( '존재하지 않는 결재 문서입니다.' );
+        }
         this.assertStatus( doc, [ ApprovalStatus.DRAFT ], '임시저장 문서만 수정할 수 있습니다.' );
 
         const groups = body.steps?.map( ( s ) => s.approverIds );
@@ -288,13 +310,13 @@ export class ApprovalDocumentsService {
                 await this.syncAttachments( tx, id, user.id, body.attachmentIds );
             }
 
+            await writeData?.( tx, id );
+
             await this.audit.updated( tx, id, `결재 문서 수정: ${body.title ?? doc.title}`, diffChanges(
                 { title: doc.title, steps: groupSteps( doc.steps ) },
                 { title: body.title ?? doc.title, steps: groups ?? groupSteps( doc.steps ) },
             ), body.attachmentIds !== undefined ? { attachmentIds: body.attachmentIds } : undefined );
         });
-
-        return this.findOne( user, id );
     }
 
     async delete( user: Actor, id: number ){
@@ -320,7 +342,7 @@ export class ApprovalDocumentsService {
         this.assertStatus( doc, [ ApprovalStatus.REJECTED, ApprovalStatus.CANCELLED ], '반려되거나 회수한 문서만 다시 기안할 수 있습니다.' );
 
         const handler = this.registry.get( doc.documentType );
-        if ( !handler.directCreate ) {
+        if ( !handler.directCreate && !handler.onCopy ) {
             throw new BadRequestException( '이 문서 유형은 해당 업무 화면에서 다시 신청합니다.' );
         }
 
@@ -341,7 +363,7 @@ export class ApprovalDocumentsService {
             groups,
             approvalLineTemplateId: templateId,
             attachmentIds,
-        }, `결재 문서 다시 기안(원본 ${id})` );
+        }, `결재 문서 다시 기안(원본 ${id})`, handler.onCopy && ( ( tx, newId ) => handler.onCopy!( tx, id, newId ) ) );
 
         return this.findOne( user, newId );
     }
@@ -593,6 +615,7 @@ export class ApprovalDocumentsService {
             attachmentIds: number[];
         },
         auditLabel: string,
+        writeData?: DraftDataWriter,
     ){
         const rows = await this.checkDraftSteps( user, data.groups );
 
@@ -612,6 +635,7 @@ export class ApprovalDocumentsService {
             });
 
             await this.syncAttachments( tx, doc.id, user.id, data.attachmentIds );
+            await writeData?.( tx, doc.id );
             await this.history( tx, doc.id, user.id, null, ApprovalStatus.DRAFT, null );
             await this.audit.created( tx, doc.id, `${auditLabel}: ${data.title}`, {
                 documentType: data.documentType, steps: data.groups, attachmentIds: data.attachmentIds,
@@ -658,6 +682,12 @@ export class ApprovalDocumentsService {
             throw new NotFoundException( '존재하지 않는 결재 문서입니다.' );
         }
         return doc;
+    }
+
+    //* 업무 옵션(휴가 등)이 문서에 딸린 업무 데이터를 보여 주기 전에 쓰는 열람 권한 확인 (볼 수 없으면 404)
+    async assertVisible( user: Actor, id: number ){
+        const doc = await this.findVisible( user, id );
+        return { id: doc.id, documentType: doc.documentType, status: doc.status, requesterId: doc.requesterId };
     }
 
     //* 볼 수 있는 문서 (기안자 + 결재라인 전원 + 관리자, DRAFT는 기안자만) - 아니면 404

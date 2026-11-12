@@ -233,6 +233,7 @@ model Users {
   approvalSteps           ApprovalDocumentStep[]      @relation("ApprovalDocumentStepApprover") // 결재자로 지정된 문서 단계
   approvalHistories       ApprovalDocumentHistory[]   @relation("ApprovalDocumentHistoryActor") // 결재 상태 변경 이력
   leaveRequests           LeaveRequest[]              @relation("LeaveRequestUser")             // 연차/병가 신청 목록
+  leaveGrants             LeaveGrant[]                @relation("LeaveGrantUser")               // 연도별 연차 부여
   chatRooms               ChatRoomMember[]    // 참여 중인 채팅방
   chatMessages            ChatMessage[]               @relation("ChatMessageSender")            // 보낸 채팅 메시지
   authSessions            AuthSession[]       // 로그인 세션 (기기별 refresh token)
@@ -478,6 +479,7 @@ model Board {
   description   String?   // 게시판 설명
   isAnonymous   Boolean   @default(false) @map("is_anonymous") // 익명 게시판 여부
   allowSecret   Boolean   @default(false) @map("allow_secret") // 비밀글 허용 여부
+  showLeaves    Boolean   @default(false) @map("show_leaves") // 휴가자 표시 (캘린더 게시판만, 휴가 애드온이 켜져 있을 때 화면이 휴가 API를 함께 부른다 - 게시판은 휴가를 모른다)
   sortOrder     Int       @default(0) @map("sort_order") // 정렬 순서
 
   parent    Board?  @relation("BoardHierarchy", fields: [parentBoardId], references: [id]) // 상위 게시판
@@ -948,6 +950,28 @@ model LeaveRequest {
 
   @@index([userId, type, startDate(sort: Desc)])
   @@map("leave_request_model")
+}
+
+//* 연차 부여 (회원·회계연도 한 행) -> 모듈: Leaves (approvals/leaves)
+// 부여 = baseDays + adjustDays. 사용·진행 중 일수는 저장하지 않고 LeaveRequest 합계로 계산한다.
+// 계산식·조정 절차: docs/design/leave_calculate_manual.md
+model LeaveGrant {
+  id     Int @id @default(autoincrement())
+  userId Int @map("user_id")
+  year   Int // 회계연도 (1/1~12/31, KST)
+
+  baseDays     Decimal @db.Decimal(5, 2) @map("base_days")               // 규칙 계산값 (배치·재계산만 쓴다)
+  adjustDays   Decimal @default(0) @db.Decimal(5, 2) @map("adjust_days") // 관리자 조정값 (±, 0.25 단위, 배치는 건드리지 않음)
+  adjustReason String? @map("adjust_reason")                             // 조정 사유
+
+  user Users @relation("LeaveGrantUser", fields: [userId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, year])
+  @@index([year])
+  @@map("leave_grant_model")
 }
 
 //* 채팅방 -> 모듈: Chat

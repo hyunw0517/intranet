@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { ErrorState, LoadingState } from "@/components/common/data-state";
 import { FormError } from "@/components/common/form-field";
 import { RichTextContent } from "@/features/board/components/rich-text-content";
+import { useEnabledAddons } from "@/features/addon/hooks/use-addons";
 import { LeaveInfoPanel } from "@/features/leave/components/leave-info-panel";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +67,8 @@ const CONFIRM_TEXT: Record<ConfirmKind, { title: string; description: string; la
 export function ApprovalDetailView({ id }: { id: number }) {
   const router = useRouter();
   const { data, isPending, isError, error, refetch } = useApprovalDocument(id);
+  const { data: addons } = useEnabledAddons();
+  const leavesEnabled = addons?.enabled.includes("leaves") ?? false;
 
   const [confirm, setConfirm] = useState<ConfirmKind | null>(null);
   const [decision, setDecision] = useState<"approve" | "reject" | null>(null);
@@ -174,9 +177,15 @@ export function ApprovalDetailView({ id }: { id: number }) {
 
       <ApprovalSteps doc={doc} onReplace={setReplacing} />
 
-      {/* 휴가 신청은 본문 대신 휴가 정보 (휴가 옵션이 꺼져 있으면 휴가 API가 없어 오류 안내) */}
+      {/* 휴가 신청은 본문 대신 휴가 정보. 휴가 옵션이 꺼져 있으면 휴가 API가 없으므로 부르지 않고 안내만 한다 */}
       {doc.documentType === "LEAVE" ? (
-        <LeaveInfoPanel documentId={id} />
+        leavesEnabled ? (
+          <LeaveInfoPanel documentId={id} />
+        ) : (
+          <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+            휴가 기능이 꺼져 있어 휴가 정보를 볼 수 없습니다. 결재선과 처리 이력은 그대로 확인할 수 있습니다.
+          </p>
+        )
       ) : (
         <section aria-label="본문" className="border-t pt-6">
           <RichTextContent html={doc.content} />

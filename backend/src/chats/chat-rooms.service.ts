@@ -3,12 +3,19 @@ import { AuditActionType, AuditTargetType, ChatMessageType, ChatRoomMemberRole, 
 import { AuditService, TargetAudit } from 'src/common/audit.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ChatEvents } from './chat-events';
-import { ChatMessageView, chatMessageSelect, chatUserSelect, toChatMessage, toChatUser } from './chat-view';
-import { CHAT_GROUP_MIN_MEMBERS, ChatAuditAction, directKeyOf } from './const/chat.const';
-import { CreateGroupChatDto, InviteChatMembersDto, LeaveChatDto, OpenDirectChatDto, ReadChatDto, RenameChatRoomDto, SetMyChatRoomNameDto } from './dto/chat-room.dto';
+import { ChatMessageView, ChatUserView, chatMessageSelect, chatUserSelect, toChatMessage, toChatUser } from './chat-view';
+import { CHAT_GROUP_MIN_MEMBERS, CHAT_USER_SEARCH_MAX, ChatAuditAction, directKeyOf } from './const/chat.const';
+import { ChatUserSearchQueryDto, CreateGroupChatDto, InviteChatMembersDto, LeaveChatDto, OpenDirectChatDto, ReadChatDto, RenameChatRoomDto, SetMyChatRoomNameDto } from './dto/chat-room.dto';
 
 type Tx = Prisma.TransactionClient;
 type Db = PrismaService | Tx;
+
+//* 채팅 대상 (features.md 8.3): USER 이상, ACTIVE, 삭제되지 않은 회원 - 상대 검색과 생성·초대 검사가 같은 조건을 쓴다
+const chatableUserWhere = {
+    deleted: false,
+    status: UserStatus.ACTIVE,
+    role: { in: [ UserRole.USER, UserRole.ADMIN ] },
+} satisfies Prisma.UsersWhereInput;
 
 //! 채팅방 (features.md 8.3, 8.5, 8.6)
 // - 시각은 서버에서 만든 같은 Date(now)를 joinedAt·메시지 createdAt에 함께 넣는다.
@@ -155,6 +162,31 @@ export class ChatRoomsService {
         `;
 
         return new Map( rows.map( ( r ) => [ r.roomId, r.count ] ) );
+    }
+
+    //* 채팅 상대 검색 (새 1:1·그룹 만들기, 초대) - 채팅할 수 있는 회원만, 본인 제외, 최대 20명
+    // 이름·사번·소속 부서명(겸직 포함)으로 찾는다. 결재 애드온의 결재자 검색을 쓰지 않는다(애드온끼리 의존하지 않음, R-ARCH-01).
+    async searchUsers( userId: number, dto: ChatUserSearchQueryDto ): Promise<ChatUserView[]> {
+        const keyword = dto.search?.trim();
+
+        const users = await this.prisma.users.findMany({
+            where: {
+                ...chatableUserWhere,
+                id: { not: userId },
+                ...( keyword && {
+                    OR: [
+                        { name: { contains: keyword, mode: 'insensitive' } },
+                        { empNo: { contains: keyword, mode: 'insensitive' } },
+                        { departments: { some: { deleted: false, department: { deleted: false, name: { contains: keyword, mode: 'insensitive' } } } } },
+                    ],
+                }),
+            },
+            orderBy: [ { name: 'asc' }, { id: 'asc' } ],
+            take: CHAT_USER_SEARCH_MAX,
+            select: chatUserSelect,
+        });
+
+        return users.map( toChatUser );
     }
 
     //* 방 상세 - 메시지별 안 읽은 사람 수는 화면이 members의 lastReadMessageId·joinedAt으로 계산한다 (features.md 8.5)
@@ -574,7 +606,7 @@ export class ChatRoomsService {
     //* 채팅할 수 있는 회원인지 (USER 이상, ACTIVE, 삭제 안 됨) - 하나라도 아니면 전체 실패
     private async findChatUsers( db: Db, ids: number[] ) {
         const users = await db.users.findMany({
-            where: { id: { in: ids }, deleted: false, status: UserStatus.ACTIVE, role: { in: [ UserRole.USER, UserRole.ADMIN ] } },
+            where: { id: { in: ids }, ...chatableUserWhere },
             select: { id: true, name: true },
             orderBy: { id: 'asc' },
         });

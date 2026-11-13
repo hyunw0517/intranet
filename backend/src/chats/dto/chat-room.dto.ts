@@ -1,6 +1,16 @@
-import { ArrayMaxSize, ArrayNotEmpty, ArrayUnique, IsArray, IsInt, IsOptional, IsString, Length, Min, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayNotEmpty, ArrayUnique, IsArray, IsInt, IsOptional, IsString, Length, MaxLength, Min, ValidateIf } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
 import { CHAT_GROUP_NAME_MAX_LENGTH, CHAT_INVITE_MAX } from '../const/chat.const';
+
+//* 채팅 상대 검색 - 이름·사번·부서명 (비우면 이름순으로 앞에서부터)
+export class ChatUserSearchQueryDto {
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(50)
+    search?: string;
+}
 
 //* 1:1 채팅 열기 (있으면 그 방, 없으면 생성)
 export class OpenDirectChatDto {
@@ -13,7 +23,7 @@ export class OpenDirectChatDto {
 //* 그룹 채팅 생성 - userIds에 본인은 넣지 않아도 된다(넣어도 무시). 본인 포함 3명 이상.
 export class CreateGroupChatDto {
 
-    @Transform( ({ value }) => typeof value === 'string' ? value.trim() : value )
+    @Transform( ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value )
     @IsString()
     @Length( 1, CHAT_GROUP_NAME_MAX_LENGTH )
     name: string;
@@ -29,7 +39,7 @@ export class CreateGroupChatDto {
 //* 방 기본 이름 변경 (그룹, OWNER만) - 모든 참여자에게 보이는 이름
 export class RenameChatRoomDto {
 
-    @Transform( ({ value }) => typeof value === 'string' ? value.trim() : value )
+    @Transform( ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value )
     @IsString()
     @Length( 1, CHAT_GROUP_NAME_MAX_LENGTH )
     name: string;
@@ -38,7 +48,7 @@ export class RenameChatRoomDto {
 //* 나만 보는 방 이름 (참여자 누구나, 1:1·그룹 모두) - null 또는 빈 문자열이면 기본 이름으로 되돌린다
 export class SetMyChatRoomNameDto {
 
-    @Transform( ({ value }) => typeof value === 'string' ? ( value.trim() === '' ? null : value.trim() ) : value )
+    @EmptyToNull()
     @ValidateIf( ( _, value ) => value !== null )
     @IsString()
     @Length( 1, CHAT_GROUP_NAME_MAX_LENGTH )

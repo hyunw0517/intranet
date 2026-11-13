@@ -20,6 +20,7 @@ import { addonModule } from './config/addons.config';
 import { ReservationsModule } from './reservations/reservations.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { LeavesModule } from './approvals/leaves/leaves.module';
+import { ChatsModule } from './chats/chats.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { LeavesModule } from './approvals/leaves/leaves.module';
     addonModule( 'reservations', ReservationsModule ), // 시설 예약
     addonModule( 'approvals', ApprovalsModule ),       // 전자결재
     addonModule( 'leaves', LeavesModule ),             // 휴가 (결재의 옵션)
+    addonModule( 'chats', ChatsModule ),               // 채팅
   ],
   controllers: [AppController],
   providers: [

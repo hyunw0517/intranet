@@ -55,7 +55,6 @@ enum NotificationTargetType {
   COMMENT             // 댓글
   APPROVAL            // 전자결재 문서
   FACILITY_RESERVATION // 시설 예약
-  CHAT_ROOM           // 채팅방
 }
 
 //? 알림 이벤트 구분 -> 모델: Notification (받는 사람 입장에서 무슨 일이 생겼는지)
@@ -75,7 +74,7 @@ enum NotificationActionType {
   RESERVATION_CANCELLED_BY_ADMIN // 관리자가 내 시설 예약을 취소함
   RESERVATION_UPDATED_BY_ADMIN   // 관리자가 내 시설 예약 시간을 변경함
   RESERVATION_DELETED_BY_ADMIN   // 관리자가 내 시설 예약을 삭제함
-  CHAT_MESSAGE          // 새 채팅 메시지
+  // 채팅은 알림 행을 만들지 않는다(헤더 채팅 배지 + 소켓 푸시, 2026-11-13 사용자 결정)
 }
 
 //? 감사 로그 대상 구분 -> 모델: Audit (작업한 대상)
@@ -98,6 +97,7 @@ enum AuditTargetType {
   APPROVAL_LINE_MANAGER // 결재라인 관리자 규칙
   APPROVAL            // 전자결재 문서
   LEAVE               // 휴가
+  CHAT_ROOM           // 채팅방 (생성·초대·내보내기·나가기만, 메시지는 기록하지 않음)
 }
 
 //? 감사 로그 이벤트 구분 -> 모델: Audit (작업자가 무엇을 했는지)
@@ -1049,6 +1049,9 @@ model ChatRoomMember {
   // 마지막으로 읽은 메시지
   lastReadMessageId Int? @map("last_read_message_id")
 
+  // 나만 보는 방 이름 (NULL = 방 기본 이름 사용). 나갔다가 다시 참여하면 NULL로 초기화
+  customName String? @map("custom_name")
+
   chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id])
   user     Users    @relation(fields: [userId], references: [id])
 
@@ -1068,9 +1071,11 @@ model ChatMessage {
 
   chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id])
   sender Users? @relation("ChatMessageSender", fields: [senderId], references: [id])
+  edits  ChatMessageEdit[] // 수정 이력 (수정 전 내용)
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  editedAt  DateTime? @map("edited_at") // 마지막 수정 시각 ("수정됨" 표시용, 수정한 적 없으면 NULL)
 
   deleted   Boolean  @default(false)
   deletedAt DateTime? @map("deleted_at")
@@ -1079,6 +1084,22 @@ model ChatMessage {
   @@index([chatRoomId, deleted, id(sort: Desc)])
   @@index([senderId, createdAt(sort: Desc)])
   @@map("chat_message_model")
+}
+
+
+//* 채팅 메시지 수정 이력 -> 모듈: Chat
+// 수정할 때마다 "수정 전 내용"을 1행씩 쌓는다. 최신 내용은 ChatMessage.content.
+// 조회 API는 두지 않는다(필요하면 개발자가 DB에서 확인, 2026-11-13 사용자 결정).
+model ChatMessageEdit {
+  id        Int      @id @default(autoincrement())
+  messageId Int      @map("message_id")
+  content   String   // 수정 전 내용
+  createdAt DateTime @default(now()) @map("created_at") // 수정한 시각
+
+  message ChatMessage @relation(fields: [messageId], references: [id])
+
+  @@index([messageId, id])
+  @@map("chat_message_edit_model")
 }
 
 // =====================================================================

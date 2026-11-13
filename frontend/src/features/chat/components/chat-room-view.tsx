@@ -26,14 +26,16 @@ import {
   type ChatRoomDetail,
 } from "@/services/api/chats";
 import { roomTitle, userMeta } from "../chat-display";
+import { useChatFileUpload } from "../hooks/use-chat-file-upload";
 import { chatKeys, useChatRoom } from "../hooks/use-chats";
 import { ChatComposer } from "./chat-composer";
 import { ChatMessageList } from "./chat-message-list";
+import { ChatRoomFilesPanel } from "./chat-room-files";
 import { ChatInvitePanel, ChatMembersPanel } from "./chat-room-members";
 import { ChatPanelHeader } from "./chat-window";
 import { useChat } from "./chat-provider";
 
-type Panel = "chat" | "members" | "invite";
+type Panel = "chat" | "members" | "invite" | "files";
 type NameDialog = "room" | "mine" | null;
 
 // 채팅방 화면: 대화 + 입력, 메뉴(참여자·초대·이름·나가기)
@@ -45,6 +47,8 @@ export function ChatRoomView({ roomId }: { roomId: number }) {
   const [panel, setPanel] = useState<Panel>("chat");
   const [nameDialog, setNameDialog] = useState<NameDialog>(null);
   const [leaving, setLeaving] = useState(false);
+  const upload = useChatFileUpload(roomId);
+  const [dragging, setDragging] = useState(false);
 
   if (isPending || !user) {
     return (
@@ -74,6 +78,7 @@ export function ChatRoomView({ roomId }: { roomId: number }) {
     <>
       {panel === "members" && <ChatMembersPanel room={room} userId={user.id} onBack={() => setPanel("chat")} />}
       {panel === "invite" && <ChatInvitePanel room={room} onDone={() => setPanel("chat")} />}
+      {panel === "files" && <ChatRoomFilesPanel room={room} onBack={() => setPanel("chat")} />}
 
       <div className={panel === "chat" ? "contents" : "hidden"}>
         <ChatPanelHeader
@@ -91,6 +96,8 @@ export function ChatRoomView({ roomId }: { roomId: number }) {
                 <DropdownMenuItem onSelect={() => setPanel("members")}>참여자 보기</DropdownMenuItem>
                 {isGroup && <DropdownMenuItem onSelect={() => setPanel("invite")}>대화 상대 초대</DropdownMenuItem>}
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setPanel("files")}>파일 보관함</DropdownMenuItem>
+                <DropdownMenuSeparator />
                 {isGroup && room.myRole === "OWNER" && (
                   <DropdownMenuItem onSelect={() => setNameDialog("room")}>방 이름 변경</DropdownMenuItem>
                 )}
@@ -103,8 +110,33 @@ export function ChatRoomView({ roomId }: { roomId: number }) {
             </DropdownMenu>
           }
         />
-        <ChatMessageList room={room} userId={user.id} />
-        <ChatComposer roomId={room.id} readOnly={room.readOnly} />
+        {/* 파일 끌어다 놓기 (대화·입력란 영역). 읽기 전용 방이거나 보내는 중이면 받지 않는다 */}
+        <div
+          className="relative flex min-h-0 flex-1 flex-col"
+          onDragOver={(e) => {
+            if (room.readOnly || upload.progress || !e.dataTransfer.types.includes("Files")) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+            setDragging(true);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+          }}
+          onDrop={(e) => {
+            if (!dragging) return;
+            e.preventDefault();
+            setDragging(false);
+            void upload.upload(Array.from(e.dataTransfer.files));
+          }}
+        >
+          <ChatMessageList room={room} userId={user.id} />
+          <ChatComposer roomId={room.id} readOnly={room.readOnly} upload={upload} />
+          {dragging && (
+            <div className="pointer-events-none absolute inset-2 flex items-center justify-center rounded-lg border-2 border-dashed border-primary/60 bg-background/90 text-sm text-muted-foreground">
+              여기에 놓으면 보냅니다 (최대 10개)
+            </div>
+          )}
+        </div>
       </div>
 
       {nameDialog && <RoomNameDialog room={room} kind={nameDialog} onClose={() => setNameDialog(null)} />}

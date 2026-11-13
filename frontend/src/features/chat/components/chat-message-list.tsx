@@ -22,6 +22,7 @@ import {
 } from "@/services/api/chats";
 import { messageDate, messageTime, unreadReaders } from "../chat-display";
 import { chatKeys, patchMessageInCache, useChatMessages } from "../hooks/use-chats";
+import { ChatFileContent } from "./chat-file-content";
 
 // 맨 아래에서 이만큼 안쪽이면 "맨 아래를 보고 있다"로 본다 (새 메시지가 오면 따라 내려간다)
 const STICK_THRESHOLD = 80;
@@ -91,7 +92,7 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
   const remove = useMutation({
     mutationFn: (id: number) => deleteChatMessage(room.id, id),
     onSuccess: (_, id) => {
-      patchMessageInCache(queryClient, room.id, id, (m) => ({ ...m, deleted: true, content: null }));
+      patchMessageInCache(queryClient, room.id, id, (m) => ({ ...m, deleted: true, content: null, files: [] }));
       void queryClient.invalidateQueries({ queryKey: chatKeys.rooms() });
       setDeleting(null);
     },
@@ -134,8 +135,10 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
         const mine = message.sender?.id === userId;
         const showName =
           !mine && message.type !== "SYSTEM" && (showDate || !prev || prev.type === "SYSTEM" || prev.sender?.id !== message.sender?.id);
-        const editable =
-          mine && message.type === "TEXT" && !message.deleted && now - new Date(message.createdAt).getTime() < CHAT_EDIT_LIMIT_MS;
+        // 본인 메시지, 보낸 뒤 5분 이내: 텍스트는 수정·삭제, 파일은 삭제만 (이미지 묶음은 통째로)
+        const deletable =
+          mine && message.type !== "SYSTEM" && !message.deleted && now - new Date(message.createdAt).getTime() < CHAT_EDIT_LIMIT_MS;
+        const editable = deletable && message.type === "TEXT";
 
         return (
           <Fragment key={message.id}>
@@ -160,7 +163,7 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
                 showName={showName}
                 unread={unreadReaders(message, room.members)}
                 actions={
-                  editable ? (
+                  deletable ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -173,7 +176,7 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => setEditingId(message.id)}>수정</DropdownMenuItem>
+                        {editable && <DropdownMenuItem onSelect={() => setEditingId(message.id)}>수정</DropdownMenuItem>}
                         <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(message)}>
                           삭제
                         </DropdownMenuItem>
@@ -219,18 +222,22 @@ function MessageBubble({
     <div className={cn("group mt-1 flex flex-col", mine ? "items-end" : "items-start", showName && "mt-3")}>
       {showName && <p className="mb-1 px-1 text-xs text-muted-foreground">{message.sender?.name ?? "(알 수 없음)"}</p>}
       <div className={cn("flex max-w-[85%] items-end gap-1.5", mine && "flex-row-reverse")}>
-        <p
-          className={cn(
-            "rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap",
-            message.deleted
-              ? "border text-muted-foreground italic"
-              : mine
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted",
-          )}
-        >
-          {message.deleted ? "삭제된 메시지입니다" : message.content}
-        </p>
+        {message.type === "FILE" && !message.deleted ? (
+          <ChatFileContent message={message} mine={mine} />
+        ) : (
+          <p
+            className={cn(
+              "rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap",
+              message.deleted
+                ? "border text-muted-foreground italic"
+                : mine
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted",
+            )}
+          >
+            {message.deleted ? "삭제된 메시지입니다" : message.content}
+          </p>
+        )}
         <span className={cn("flex shrink-0 flex-col pb-0.5 text-[11px] leading-tight text-muted-foreground", mine ? "items-end" : "items-start")}>
           {unread > 0 && (
             <span className="font-medium text-primary">

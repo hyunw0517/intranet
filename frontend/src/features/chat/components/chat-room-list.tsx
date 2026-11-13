@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { SquarePen, Users } from "lucide-react";
+import { FileText, Image as ImageIcon, SquarePen, Users, Video } from "lucide-react";
 import { ErrorState, LoadingState } from "@/components/common/data-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatListDate } from "@/lib/format";
-import type { ChatRoomSummary } from "@/services/api/chats";
+import type { ChatFileKind, ChatMessage, ChatRoomSummary } from "@/services/api/chats";
 import { badgeCount, messagePreview, roomTitle } from "../chat-display";
 import { useChatRooms } from "../hooks/use-chats";
 import { ChatPanelHeader } from "./chat-window";
@@ -110,7 +110,7 @@ function ChatRoomRow({
             )}
           </span>
           <span className="mt-0.5 flex items-center gap-2">
-            <span className="truncate text-sm text-muted-foreground">{messagePreview(room.lastMessage) || " "}</span>
+            <PreviewLine message={room.lastMessage} />
             {room.unreadCount > 0 && (
               <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-semibold text-white tabular-nums">
                 <span className="sr-only">읽지 않은 메시지 </span>
@@ -121,5 +121,19 @@ function ChatRoomRow({
         </span>
       </button>
     </li>
+  );
+}
+
+// 미리보기 한 줄: 파일 메시지는 회색 작은 아이콘 + "이미지" / "동영상" / "파일명.확장자"
+const PREVIEW_ICON: Record<ChatFileKind, typeof FileText> = { image: ImageIcon, video: Video, file: FileText };
+
+function PreviewLine({ message }: { message: ChatMessage | null }) {
+  const { icon, text } = messagePreview(message);
+  const Icon = icon ? PREVIEW_ICON[icon] : null;
+  return (
+    <span className="flex min-w-0 items-center gap-1 text-sm text-muted-foreground">
+      {Icon && <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
+      <span className="truncate">{text || " "}</span>
+    </span>
   );
 }

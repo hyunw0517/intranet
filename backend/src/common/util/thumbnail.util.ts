@@ -1,14 +1,16 @@
 import sharp from "sharp";
-import { FileKind, THUMBNAIL_KEY_PREFIX, THUMBNAIL_MAX_SIZE, THUMBNAIL_QUALITY } from "../const/file.const";
+import { ATTACHMENT_THUMBNAIL_KEY_PREFIX, FileKind, THUMBNAIL_KEY_PREFIX, THUMBNAIL_MAX_SIZE, THUMBNAIL_QUALITY } from "../const/file.const";
 
 //* 원본 이미지 저장소 key(Files.path) → 썸네일 저장소 key
-// 종류 접두사만 thumbnails로, 확장자만 .webp로 바꾸고 날짜 폴더는 원본과 같게 둔다.
-//   images/2026/11/<uuid>.png → thumbnails/2026/11/<uuid>.webp
+// 종류 접두사만 바꾸고(본문 이미지 → thumbnails, 첨부 → attachment-thumbnails) 확장자만 .webp로, 날짜 폴더는 원본과 같게 둔다.
+//   images/2026/11/<uuid>.png      → thumbnails/2026/11/<uuid>.webp
+//   attachments/2026/11/<uuid>.png → attachment-thumbnails/2026/11/<uuid>.webp
 //   images/<uuid>.png (날짜 폴더 이전 업로드) → thumbnails/<uuid>.webp
 // 썸네일 위치를 DB에 따로 두지 않고 원본 위치에서 계산하므로 둘이 어긋날 수 없다.
 export function thumbnailKey( imagePath: string ): string {
     return imagePath
         .replace( new RegExp(`^${FileKind.IMAGE}/`), `${THUMBNAIL_KEY_PREFIX}/` )
+        .replace( new RegExp(`^${FileKind.ATTACHMENT}/`), `${ATTACHMENT_THUMBNAIL_KEY_PREFIX}/` )
         .replace( /\.[^./]+$/, '.webp' );
 }
 

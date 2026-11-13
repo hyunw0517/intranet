@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery, type InfiniteData, type QueryClient } from 
 import {
   fetchChatMessages,
   fetchChatRoom,
+  fetchChatRoomFiles,
   fetchChatRooms,
   fetchChatUnreadTotal,
   searchChatUsers,
@@ -19,6 +20,7 @@ export const chatKeys = {
   unreadTotal: () => [...chatKeys.all, "unread-total"] as const,
   room: (roomId: number) => [...chatKeys.all, "room", roomId] as const,
   messages: (roomId: number) => [...chatKeys.all, "messages", roomId] as const,
+  files: (roomId: number) => [...chatKeys.all, "files", roomId] as const,
   users: (search: string) => [...chatKeys.all, "users", search] as const,
 };
 
@@ -56,6 +58,19 @@ export function useChatMessages(roomId: number) {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.meta.nextCursor ?? undefined,
     staleTime: Infinity, // 소켓이 최신으로 유지한다. 다시 연결되면 chatKeys.all 무효화로 새로 받는다.
+  });
+}
+
+// 파일 보관함 (최신순, [더 보기]로 이어 받기)
+// 파일 메시지가 오거나 지워지면 소켓 이벤트가 이 키를 무효화한다(use-chat-socket).
+const FILE_PAGE_SIZE = 30;
+
+export function useChatRoomFiles(roomId: number) {
+  return useInfiniteQuery({
+    queryKey: chatKeys.files(roomId),
+    queryFn: ({ pageParam }) => fetchChatRoomFiles(roomId, { cursor: pageParam, take: FILE_PAGE_SIZE }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.meta.nextCursor ?? undefined,
   });
 }
 

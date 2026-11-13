@@ -1,7 +1,8 @@
 // 백엔드 chats/chat-rooms.controller · chat-messages.controller 대응 (/chats/*)
 // - 모두 USER 이상(GUEST 403), 내가 참여한 방만 다룬다(아니면 404). 채팅 애드온이 꺼져 있으면 API 자체가 없다(404).
 // - 보내기·수정·삭제·방 관리는 이 REST로만 한다. 실시간 받기는 소켓(services/chat-socket.ts)이 서버 푸시만 받는다.
-import { apiFetch } from "@/services/api-client";
+import { apiFetch, apiFetchBlob, apiUpload } from "@/services/api-client";
+import { MAX_ATTACHMENT_SIZE, MAX_IMAGE_SIZE } from "@/services/api/files";
 import type { CursorResult } from "@/types/pagination";
 
 export type ChatRoomType = "DIRECT" | "GROUP";
@@ -17,12 +18,24 @@ export interface ChatUser {
   active: boolean; // 재직(ACTIVE)이고 삭제되지 않음. 1:1 상대가 false면 읽기 전용
 }
 
+// 파일 메시지의 파일 (백엔드 ChatFileView, 종류는 확장자 기준)
+// 이미지는 썸네일 API로 미리보기를 받아 보고, 없으면(가짜·깨진 파일) 엑스박스를 그린다.
+export type ChatFileKind = "image" | "video" | "file";
+
+export interface ChatFile {
+  id: number;
+  name: string;
+  size: number;
+  kind: ChatFileKind;
+}
+
 // 메시지 (REST 응답과 소켓 푸시가 같은 형태)
 export interface ChatMessage {
   id: number;
   roomId: number;
   type: ChatMessageType;
   content: string | null; // 삭제된 메시지는 null
+  files: ChatFile[]; // FILE 메시지의 파일 (이미지 묶음은 여러 개, 삭제된 메시지는 [])
   sender: { id: number; name: string } | null;
   createdAt: string;
   editedAt: string | null; // 있으면 "수정됨"
@@ -133,7 +146,7 @@ export function sendChatMessage(roomId: number, content: string) {
   return apiFetch<ChatMessage>(`/chats/${roomId}/messages`, { method: "POST", body: { content } });
 }
 
-// 수정·삭제: 본인 TEXT 메시지, 보낸 뒤 5분 이내 (서버 시각 기준)
+// 수정: 본인 TEXT 메시지만 · 삭제: 본인 TEXT·FILE 메시지 (둘 다 보낸 뒤 5분 이내, 서버 시각 기준)
 export function updateChatMessage(roomId: number, messageId: number, content: string) {
   return apiFetch<ChatMessage>(`/chats/${roomId}/messages/${messageId}`, { method: "PATCH", body: { content } });
 }
@@ -142,7 +155,59 @@ export function deleteChatMessage(roomId: number, messageId: number) {
   return apiFetch<boolean>(`/chats/${roomId}/messages/${messageId}`, { method: "DELETE" });
 }
 
-// 백엔드 chat.const.ts와 같은 값 (화면에서 미리 막는 용도, 최종 판단은 서버)
+// ── 파일 (백엔드 chat-files.controller) ─────────────────────────
+
+// 보내기: 요청 1개 = 메시지 1개. 서버는 용량 한도를 경로별로 건다.
+// - 이미지(1~10장, 장당 20MB) → POST /chats/:roomId/images (묶음 메시지)
+// - 동영상·그 밖의 파일(1개, 200MB) → POST /chats/:roomId/files
+// onProgress: 이 요청에서 지금까지 보낸 바이트 수 (화면이 "3/7" 계산에 쓴다)
+export function sendChatImages(roomId: number, images: File[], onProgress?: (loaded: number) => void) {
+  return upload(`/chats/${roomId}/images`, images, onProgress);
+}
+
+export function sendChatFile(roomId: number, file: File, onProgress?: (loaded: number) => void) {
+  return upload(`/chats/${roomId}/files`, [file], onProgress);
+}
+
+function upload(path: string, files: File[], onProgress?: (loaded: number) => void) {
+  const form = new FormData();
+  for (const file of files) form.append("files", file);
+  return apiUpload<ChatMessage>(path, form, onProgress);
+}
+
+// 파일 보관함의 한 칸 (백엔드 listFiles) - 이미지 묶음은 파일마다 한 칸
+export interface ChatRoomFile extends ChatFile {
+  messageId: number;
+  createdAt: string; // 보낸 시각 (메시지 기준)
+  senderName: string | null;
+}
+
+// 파일 보관함: 이 방에서 주고받은 파일 (최신순 커서, 참여 시점 이후·삭제되지 않은 것만)
+export function fetchChatRoomFiles(roomId: number, query: { cursor?: string; take?: number } = {}) {
+  return apiFetch<CursorResult<ChatRoomFile>>(`/chats/${roomId}/files`, { query });
+}
+
+// 다운로드·미리보기: Bearer 헤더가 필요해 <a href>·<img src>를 바로 쓸 수 없다 → Blob으로 받는다
+export function fetchChatFile(roomId: number, fileId: number) {
+  return apiFetchBlob(`/chats/${roomId}/files/${fileId}`);
+}
+
+export function fetchChatThumbnail(roomId: number, fileId: number) {
+  return apiFetchBlob(`/chats/${roomId}/files/${fileId}/thumbnail`);
+}
+
+// 백엔드 chat.const.ts·file.const.ts와 같은 값 (화면에서 미리 막는 용도, 최종 판단은 서버)
+export const CHAT_FILES_PER_SEND = 10;
+export const CHAT_FILE_MAX_SIZE = MAX_ATTACHMENT_SIZE; // 동영상·그 밖의 파일: 게시판 첨부와 같은 값 (파일당)
+export const CHAT_IMAGE_MAX_SIZE = MAX_IMAGE_SIZE; // 이미지: 게시판 본문 이미지와 같은 값 (장당)
+export const CHAT_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp"];
+export const CHAT_VIDEO_EXTENSIONS = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv"];
+export const CHAT_FILE_EXTENSIONS = [
+  ".pdf", ".txt", ".csv", ".zip",
+  ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".hwp", ".hwpx",
+  ...CHAT_IMAGE_EXTENSIONS,
+  ...CHAT_VIDEO_EXTENSIONS,
+];
 export const CHAT_MESSAGE_MAX_LENGTH = 2000;
 export const CHAT_GROUP_NAME_MAX_LENGTH = 50;
 export const CHAT_EDIT_LIMIT_MS = 5 * 60 * 1000;

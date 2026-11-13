@@ -1,5 +1,5 @@
 // 채팅 화면 표시 규칙 (features.md 8.3·8.5) - 채팅 기능 안에서만 쓴다.
-import type { ChatMessage, ChatRoomDetail, ChatRoomMember, ChatRoomSummary, ChatUser } from "@/services/api/chats";
+import type { ChatFileKind, ChatMessage, ChatRoomDetail, ChatRoomMember, ChatRoomSummary, ChatUser } from "@/services/api/chats";
 import { toKstParts } from "@/lib/format";
 
 // 방 이름: 나만 보는 이름 → 기본 이름 → (1:1) 상대 이름 (2026-11-13 사용자 결정)
@@ -12,11 +12,19 @@ export function userMeta(user: Pick<ChatUser, "positionName" | "departmentName">
   return [user.positionName, user.departmentName].filter(Boolean).join(" · ");
 }
 
-// 목록 미리보기 한 줄
-export function messagePreview(message: ChatMessage | null) {
-  if (!message) return "";
-  if (message.deleted) return "삭제된 메시지입니다";
-  return message.content ?? "";
+// 목록 미리보기 한 줄 → 문구 + 왼쪽 아이콘 종류 (아이콘은 화면이 회색 작은 크기로 그린다)
+// 파일 메시지: 이미지(묶음 포함) "이미지", 동영상 "동영상", 그 밖의 파일은 "파일명.확장자" (2026-11-13 사용자 결정)
+export function messagePreview(message: ChatMessage | null): { icon: ChatFileKind | null; text: string } {
+  if (!message) return { icon: null, text: "" };
+  if (message.deleted) return { icon: null, text: "삭제된 메시지입니다" };
+  if (message.type === "FILE") {
+    const first = message.files[0];
+    if (!first) return { icon: "file", text: "파일" };
+    if (first.kind === "image") return { icon: "image", text: "이미지" };
+    if (first.kind === "video") return { icon: "video", text: "동영상" };
+    return { icon: "file", text: first.name };
+  }
+  return { icon: null, text: message.content ?? "" };
 }
 
 // 메시지별 안 읽은 사람 수 (카톡의 "1", features.md 8.5)

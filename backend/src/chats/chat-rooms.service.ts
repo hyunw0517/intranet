@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { AuditActionType, AuditTargetType, ChatMessageType, ChatRoomMemberRole, ChatRoomType, Prisma, UserRole, UserStatus } from 'src/generated/prisma/client';
+import { AuditActionType, AuditTargetType, ChatMessageType, ChatRoomMemberRole, ChatRoomType, FileTargetType, Prisma, UserRole, UserStatus } from 'src/generated/prisma/client';
 import { AuditService, TargetAudit } from 'src/common/audit.service';
+import { FilesService } from 'src/common/files.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ChatEvents } from './chat-events';
 import { ChatMessageView, ChatUserView, chatMessageSelect, chatUserSelect, toChatMessage, toChatUser } from './chat-view';
@@ -32,6 +33,7 @@ export class ChatRoomsService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly chatEvents: ChatEvents,
+        private readonly filesService: FilesService,
         auditService: AuditService,
     ){
         this.audit = auditService.target( AuditTargetType.CHAT_ROOM );
@@ -115,6 +117,10 @@ export class ChatRoomsService {
             this.unreadCounts( userId ),
         ]);
 
+        // 마지막 메시지가 파일 메시지면 미리보기 문구("이미지" / "동영상" / 파일명)에 파일 종류가 필요하다 → 쿼리 1번으로 붙인다
+        const fileMessageIds = memberships.flatMap( ( m ) => m.chatRoom.messages ).filter( ( msg ) => msg.type === ChatMessageType.FILE ).map( ( msg ) => msg.id );
+        const filesByMessage = await this.filesService.listByTargets( FileTargetType.CHAT_MESSAGE, fileMessageIds );
+
         return memberships.map( ( { role, joinedAt, customName, chatRoom: room } ) => {
             const last = room.messages[0];
             const activeMembers = room.members.filter( ( m ) => m.leftAt === null );
@@ -128,7 +134,7 @@ export class ChatRoomsService {
                 otherUser: other ? toChatUser( other.user ) : null,     // 1:1 상대 (그룹은 null)
                 memberCount: activeMembers.length,
                 myRole: role,
-                lastMessage: last && last.createdAt >= joinedAt ? toChatMessage( last ) : null, // 참여 전 메시지는 미리보기에도 보이지 않게
+                lastMessage: last && last.createdAt >= joinedAt ? toChatMessage( last, filesByMessage.get( last.id ) ) : null, // 참여 전 메시지는 미리보기에도 보이지 않게
                 lastMessageAt: room.lastMessageAt,
                 unreadCount: unread.get( room.id ) ?? 0,
             };

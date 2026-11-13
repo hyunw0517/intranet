@@ -6,6 +6,7 @@ export const CHAT_INVITE_MAX = 100;               // 한 번에 초대할 수 �
 export const CHAT_MESSAGE_MAX_LENGTH = 2000;      // 메시지 최대 길이
 export const CHAT_USER_SEARCH_MAX = 20;          // 채팅 상대 검색 결과 최대 인원
 export const CHAT_EDIT_LIMIT_MS = 5 * 60 * 1000;  // 수정·삭제 가능 시간: 보낸 뒤 5분
+// 파일: 한 번 보내기에 최대 10개(화면), 이미지 묶음 메시지 1개도 최대 10장 = 첨부 한도 MAX_ATTACHMENTS_PER_TARGET와 같다
 
 //* 소켓 room 이름 - 회원마다 하나 (채팅방 room은 두지 않는다, features.md 8.1)
 export const userRoom = ( userId: number ) => `user:${userId}`;

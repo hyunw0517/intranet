@@ -72,14 +72,16 @@ export function useChatSocket({
     socket.on("message:created", (message) => {
       addMessageToCache(queryClient, message);
       refreshRoomLists();
+      if (message.type === "FILE") void queryClient.invalidateQueries({ queryKey: chatKeys.files(message.roomId) }); // 파일 보관함
     });
     socket.on("message:updated", (message) => {
       patchMessageInCache(queryClient, message.roomId, message.id, () => message);
       void queryClient.invalidateQueries({ queryKey: chatKeys.rooms() }); // 목록 미리보기
     });
     socket.on("message:deleted", ({ roomId, messageId }) => {
-      patchMessageInCache(queryClient, roomId, messageId, (m) => ({ ...m, deleted: true, content: null }));
+      patchMessageInCache(queryClient, roomId, messageId, (m) => ({ ...m, deleted: true, content: null, files: [] }));
       refreshRoomLists();
+      void queryClient.invalidateQueries({ queryKey: chatKeys.files(roomId) }); // 지운 파일 메시지면 보관함에서도 빠진다
     });
     socket.on("room:read", ({ roomId, userId: readerId, lastReadMessageId }) => {
       patchReadInCache(queryClient, roomId, readerId, lastReadMessageId);

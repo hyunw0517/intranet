@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Users, UserStatus } from 'src/generated/prisma/client';
+import { AuditActionType, AuditTargetType, Users, UserStatus } from 'src/generated/prisma/client';
+import { AuditService, TargetAudit } from 'src/common/audit.service';
+import { diffChanges } from 'src/common/util/audit-detail.util';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateSortOrderDto } from './dto/update-sort-order.dto';
 import { isSameIdSet } from 'src/common/util/id-set.util';
@@ -11,9 +13,14 @@ import { PaginatePage } from 'src/common/util/pagination.util';
 @Injectable()
 export class JobTitlesService {
   
+    private readonly audit: TargetAudit;
+
     constructor(
         private readonly prisma: PrismaService,
-    ){}
+        auditService: AuditService,
+    ){
+        this.audit = auditService.target( AuditTargetType.JOB_TITLE );
+    }
     
     //* 전체 직책 조회
     async paginateJobTitle(query: PaginateJobTitleQueryDto) {
@@ -63,16 +70,20 @@ export class JobTitlesService {
         });
         
         // INSERT
-        const newJobTitle = await this.prisma.jobTitle.create({
-            data: {
-                name: body.name,
-                sortOrder: jobTitleCount,
-                createdId: user.id,
-                updatedId: user.id,
-            },
+        return await this.prisma.$transaction( async (tx) => {
+            const newJobTitle = await tx.jobTitle.create({
+                data: {
+                    name: body.name,
+                    sortOrder: jobTitleCount,
+                    createdId: user.id,
+                    updatedId: user.id,
+                },
+            });
+
+            await this.audit.created( tx, newJobTitle.id, `직책 생성: ${newJobTitle.name}` );
+
+            return newJobTitle;
         });
-        
-        return newJobTitle;
     }
 
     //* 직책 수정
@@ -107,18 +118,22 @@ export class JobTitlesService {
         }
 
         // UPDATE
-        const updateJobTitle = await this.prisma.jobTitle.update({
-            where: {
-                id: thisJobTitle.id,
-                deleted: false,
-            },
-            data: {
-                name: body.name,
-                updatedId: user.id,
-            },
+        return await this.prisma.$transaction( async (tx) => {
+            const updateJobTitle = await tx.jobTitle.update({
+                where: {
+                    id: thisJobTitle.id,
+                    deleted: false,
+                },
+                data: {
+                    name: body.name,
+                    updatedId: user.id,
+                },
+            });
+
+            await this.audit.updated( tx, thisJobTitle.id, `직책 수정: ${updateJobTitle.name}`, diffChanges( thisJobTitle, { name: body.name } ) );
+
+            return updateJobTitle;
         });
-        
-        return updateJobTitle;
     }
 
     //* 직책 순서 변경 (드래그 정렬)
@@ -132,6 +147,7 @@ export class JobTitlesService {
             const jobTitles = await tx.jobTitle.findMany({
                 select: { id: true },
                 where: { deleted: false },
+                orderBy: { sortOrder: 'asc' },
             });
 
             if( !isSameIdSet( jobTitles.map( (j) => j.id ), body.ids ) ){
@@ -147,6 +163,13 @@ export class JobTitlesService {
                     },
                 });
             }
+
+            await this.audit.logBatch({
+                targetIds: body.ids,
+                actionType: AuditActionType.UPDATE,
+                content: '직책 순서 변경',
+                extra: { orderBefore: jobTitles.map( (j) => j.id ), orderAfter: body.ids },
+            }, tx);
         });
 
         return true;
@@ -197,10 +220,10 @@ export class JobTitlesService {
             throw new BadRequestException('게시판 권한에서 사용 중인 직책은 삭제할 수 없습니다.');
         }
 
-        // DELETE (트랜잭션: 삭제+재정렬)
-        await this.prisma.$transaction([
+        // DELETE (트랜잭션: 삭제+재정렬+감사 로그)
+        await this.prisma.$transaction( async (tx) => {
             // 대상 직책 삭제
-            this.prisma.jobTitle.update({
+            await tx.jobTitle.update({
                 where: {
                     id: thisJobTitle.id,
                     deleted: false,
@@ -210,10 +233,10 @@ export class JobTitlesService {
                     deletedAt: new Date(),
                     deletedId: user.id,
                 },
-            }),
+            });
 
             // 삭제된 직책을 제외한 직급을 재정렬
-            this.prisma.jobTitle.updateMany({
+            await tx.jobTitle.updateMany({
                 where: {
                     sortOrder: { gt: thisJobTitle.sortOrder }, // 기준 sortOrder를 초과한 정렬 데이터만
                     deleted: false,
@@ -221,8 +244,10 @@ export class JobTitlesService {
                 data: {
                     sortOrder: { decrement: 1 }, // -1씩
                 },
-            }),
-        ]);
+            });
+
+            await this.audit.deleted( tx, thisJobTitle.id, `직책 삭제: ${thisJobTitle.name}` );
+        });
         
         return true; 
 

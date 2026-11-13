@@ -17,8 +17,9 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useEnabledAddons } from "@/features/addon/hooks/use-addons";
 import { useAuth } from "@/providers/auth-provider";
-import { filterNavForRole, navByVariant, type ShellVariant } from "./nav-items";
+import { filterNavForAddons, filterNavForRole, navByVariant, type ShellVariant } from "./nav-items";
 import { isActivePath } from "./is-active-path";
 
 interface AppSidebarProps {
@@ -28,7 +29,9 @@ interface AppSidebarProps {
 
 export function AppSidebar({ variant, extraNav }: AppSidebarProps) {
   const { user } = useAuth();
-  const nav = filterNavForRole(navByVariant[variant], user?.role);
+  // 애드온 목록은 GUEST에게 403이라 승인된 회원만 조회한다. (GUEST 메뉴에는 애드온이 없다)
+  const { data: addons } = useEnabledAddons(!!user && user.role !== "GUEST");
+  const nav = filterNavForAddons(filterNavForRole(navByVariant[variant], user?.role), addons?.enabled);
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
   const isAdmin = variant === "admin";

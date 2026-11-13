@@ -5,7 +5,7 @@ import { User } from 'src/auth/decorator/user.decorator';
 import { UserRole, Users } from 'src/generated/prisma/client';
 import { Roles } from 'src/auth/decorator/roles.decorator';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
-import { PaginateDepartmentQueryDto } from './dto/paginate-department-query.dto';
+import { DepartmentListQueryDto } from './dto/department-list-query.dto';
 import { UpdateDepartmentOrderDto } from './dto/update-department-order.dto';
 
 // 소속 - 부서 전용 컨트롤러
@@ -18,9 +18,9 @@ export class DepartmentsController {
   @Get()
   @Roles(UserRole.ADMIN)
   getListDepartments(
-    @Query() query: PaginateDepartmentQueryDto,
+    @Query() query: DepartmentListQueryDto,
   ) {
-    return this.departmentsService.paginateDepartment(query);
+    return this.departmentsService.getDepartments(query);
   }
 
   //* 부서 생성

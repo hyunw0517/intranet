@@ -1,5 +1,6 @@
 // 게시글·댓글 응답 타입 (백엔드 posts.service / comments.service 응답 기준, 날짜는 ISO 문자열)
 import type { BoardType } from "./board";
+import type { CalendarEventColor } from "./calendar";
 import type { FileInfo } from "./file";
 import type { PageMeta } from "./pagination";
 
@@ -19,6 +20,7 @@ export interface PostBoardInfo {
   description: string | null;
   allowSecret: boolean;
   isAnonymous: boolean;
+  showLeaves: boolean; // 휴가자 표시 (캘린더 게시판)
 }
 
 // GET /boards/:boardId 응답 (BoardAccess) - 게시글 없이 게시판 설정·권한이 필요한 화면(글쓰기)에서 사용
@@ -54,6 +56,7 @@ export interface PostListItem extends AuthorSnapshot {
   eventStartAt: string | null; // 캘린더 게시판만 값이 있다.
   eventEndAt: string | null;
   isAllDay: boolean | null;
+  eventColor: CalendarEventColor | null; // 일정 색 (캘린더 게시판, null = 기본색)
   createdAt: string;
   updatedAt: string;
   _count: { comments: number }; // 삭제되지 않은 댓글 수
@@ -86,6 +89,7 @@ export interface PostDetail extends AuthorSnapshot {
   eventStartAt: string | null; // 캘린더 게시판만 값이 있다.
   eventEndAt: string | null;
   isAllDay: boolean | null;
+  eventColor: CalendarEventColor | null; // 일정 색 (캘린더 게시판, null = 기본색)
   createdAt: string;
   updatedAt: string; // 조회수·좋아요·고정 변경에도 갱신되므로 "수정됨" 판단에 쓰지 않는다.
   editedAt: string | null; // 내용을 수정한 시각 (updatePost에서만 기록, 수정한 적 없으면 null)

@@ -50,7 +50,7 @@ export function register(input: RegisterInput) {
   });
 }
 
-// 로그아웃 → refresh 쿠키 삭제
+// 로그아웃 → refresh 쿠키 삭제 + 서버가 이 기기의 세션만 폐기 (다른 기기는 유지)
 export function logout() {
   return apiFetch<boolean>("/auth/logout", { method: "POST", skipAuth: true });
 }
@@ -63,4 +63,9 @@ export function changePassword(input: ChangePasswordInput) {
 // (관리자) 비밀번호 초기화 → 서버가 만든 임시 비밀번호를 응답으로 한 번만 돌려준다. (대상 회원의 기존 로그인은 해제)
 export function resetPassword(userId: number) {
   return apiFetch<{ temporaryPassword: string }>(`/auth/reset/pw/${userId}`, { method: "PATCH" });
+}
+
+// (관리자) 로그인 잠금 해제 → 실패 횟수·잠금 단계 초기화. 잠긴 적이 없으면 unlocked: false (오류 아님)
+export function unlockLogin(userId: number) {
+  return apiFetch<{ unlocked: boolean }>(`/auth/unlock/${userId}`, { method: "PATCH" });
 }

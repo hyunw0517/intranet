@@ -42,4 +42,10 @@ export class CreateBoardDto {
     @StringToBoolean()
     @IsBoolean()
     allowSecret: boolean;
+
+    // 휴가자 표시 (캘린더 게시판만 켤 수 있다. 휴가 애드온이 꺼져 있으면 화면이 무시한다)
+    @IsOptional()
+    @StringToBoolean()
+    @IsBoolean()
+    showLeaves?: boolean;
 }

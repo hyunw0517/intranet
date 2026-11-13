@@ -20,6 +20,7 @@ export interface BoardAccess {
         description: string | null;
         allowSecret: boolean;   // 비밀글 허용 여부
         isAnonymous: boolean;   // 익명 게시판 여부
+        showLeaves: boolean;    // 휴가자 표시 (캘린더 게시판, 화면이 휴가 애드온 API를 함께 부른다)
     };
     perm: BoardPermission;
 }

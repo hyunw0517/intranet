@@ -9,6 +9,7 @@ import { getErrorMessage } from "@/lib/error-message";
 import { ApiError } from "@/services/api-client";
 import { createPost, updatePost, type PostInput } from "@/services/api/posts";
 import { toEventInput } from "../event-date";
+import { useBoardListHref } from "../board-list-href";
 import { useBoardAccess, usePost, usePostCache } from "../hooks/use-posts";
 import { BoardNotFound, NotFoundMessage, PostNotFound } from "./board-not-found";
 import { EMPTY_POST_FORM, PostForm } from "./post-form";
@@ -19,7 +20,7 @@ export function PostCreateView({ boardId }: { boardId: number }) {
   const router = useRouter();
   const { data, isPending, isError, error, refetch } = useBoardAccess(boardId);
   const cache = usePostCache(boardId);
-  const listHref = `/boards/${boardId}`;
+  const listHref = useBoardListHref(boardId); // 보던 목록 조건으로 돌아감 (취소·권한 없음 안내)
 
   const mutation = useMutation({
     mutationFn: (input: PostInput) => createPost(boardId, input),
@@ -109,7 +110,7 @@ export function PostEditView({ boardId, postId }: { boardId: number; postId: num
           content: data.content ?? "",
           isSecret: data.isSecret,
           isPinned: data.isPinned,
-          event: toEventInput(data.eventStartAt, data.eventEndAt, data.isAllDay),
+          event: toEventInput(data.eventStartAt, data.eventEndAt, data.isAllDay, data.eventColor),
           files: data.files,
         }}
         showPin={false}

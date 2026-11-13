@@ -1,5 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { BoardType, FileTargetType, Prisma, Users } from "src/generated/prisma/client";
+import { AuditTargetType, BoardType, FileTargetType, Prisma, Users } from "src/generated/prisma/client";
+import { AuditService, TargetAudit } from "src/common/audit.service";
+import { BoardNotifier } from "./board-notifier";
+import { diffChanges } from "src/common/util/audit-detail.util";
 import { PrismaService } from "src/prisma/prisma.service";
 import { BoardAuthService } from "./board-auth.service";
 import { PaginatePostQueryDto, PostSortBy } from "./dto/paginate-post-query.dto";
@@ -8,7 +11,7 @@ import { BoardPermission } from "./interface/board-permission.interface";
 import { CreatePostDto } from "./dto/create-post.dto";
 import { OrganizationService } from "src/organization/organization.service";
 import { UpdatePostDto } from "./dto/update-post.dto";
-import { MAX_PINNED_POSTS } from "./const/post.const";
+import { MAX_CALENDAR_RANGE_DAYS, MAX_PINNED_POSTS } from "./const/post.const";
 import { kstDayEnd, kstDayStart } from "src/common/util/date.util";
 import { extractImageNames, sanitizeEditorHtml } from "src/common/util/sanitize-html.util";
 import { FileInfo, FilesService } from "src/common/files.service";
@@ -19,13 +22,19 @@ type AuthorField = 'author' | 'authorDepartmentName' | 'authorPositionName' | 'a
 
 @Injectable()
 export class PostsService {
-    
-    constructor( 
-        private readonly prisma: PrismaService, 
-        private readonly boardAuthService: BoardAuthService, 
+
+    private readonly audit: TargetAudit;
+
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly boardAuthService: BoardAuthService,
         private readonly organizationService: OrganizationService,
         private readonly filesService: FilesService,
-    ){}
+        auditService: AuditService,
+        private readonly boardNotifier: BoardNotifier,
+    ){
+        this.audit = auditService.target( AuditTargetType.POST );
+    }
 
     async paginatePost( 
         user: Pick<Users, 'id' | 'role'>, 
@@ -126,6 +135,97 @@ export class PostsService {
         };
     }
 
+    //* 캘린더 일정 조회 (통합 조회 / 게시판 하나)
+    // - 대상 게시판: { boardId } → 그 게시판(읽기 권한 없으면 404, 캘린더가 아니면 400)
+    //                { boardIds } → 볼 수 있는 캘린더 게시판과의 교집합 (null이면 볼 수 있는 캘린더 전체)
+    // - 기간: 겹치는 일정 모두 (eventStartAt < end && eventEndAt >= start) → 여러 날 일정이 기간 앞뒤로 걸쳐도 빠지지 않음
+    // - 비밀글 일정은 작성자 본인에게만 보인다. (게시판 관리자·시스템 관리자도 달력·일정 목록에서는 볼 수 없음, 사용자 결정)
+    //   게시글 상세는 기존 규칙(작성자 + 게시판 관리자)을 따른다.
+    // - 익명 캘린더 게시판은 본인 일정이 아니면 작성자를 가린다.
+    async findCalendarEvents(
+        user: Pick<Users, 'id' | 'role'>,
+        target: { boardId: number } | { boardIds: number[] | null },
+        start: Date,
+        end: Date,
+    ){
+        if( end <= start ){
+            throw new BadRequestException('조회 종료일시는 시작일시보다 뒤여야 합니다.');
+        }
+        // 달력 한 화면(최대 6주) + 여유. 범위 제한 없이 열어 두면 한 번에 모든 일정을 읽을 수 있다.
+        if( end.getTime() - start.getTime() > MAX_CALENDAR_RANGE_DAYS * 24 * 60 * 60 * 1000 ){
+            throw new BadRequestException(`일정은 한 번에 ${MAX_CALENDAR_RANGE_DAYS}일까지 조회할 수 있습니다.`);
+        }
+
+        const boards = await this.resolveCalendarBoards( user, target );
+        if( boards.length === 0 ){
+            return { boards: [], showLeaves: false, events: [] };
+        }
+        const anonymousIds = new Set( boards.filter( b => b.isAnonymous ).map( b => b.id ) );
+
+        const rows = await this.prisma.post.findMany({
+            select: {
+                id: true,
+                boardId: true,
+                title: true,
+                eventStartAt: true,
+                eventEndAt: true,
+                isAllDay: true,
+                eventColor: true,
+                isSecret: true,
+                author: { select: { id: true, name: true, nickname: true } },
+            },
+            where: {
+                boardId: { in: boards.map( b => b.id ) },
+                deleted: false,
+                eventStartAt: { lt: end },
+                eventEndAt: { gte: start },
+                OR: [ { isSecret: false }, { authorId: user.id } ],
+            },
+            orderBy: [ { eventStartAt: 'asc' }, { id: 'asc' } ],
+        });
+
+        return {
+            boards: boards.map( ( { id, name, showLeaves } ) => ({ id, name, showLeaves }) ),
+            // 휴가자 표시: 보고 있는 게시판 중 하나라도 켜져 있으면 true → 화면이 휴가 API를 한 번만 불러 "휴가 N명"을 그린다 (2026-11-12 사용자 결정)
+            showLeaves: boards.some( ( b ) => b.showLeaves ),
+            events: rows.map( ( row ) => ({
+                ...row,
+                author: this.isAuthorHidden( anonymousIds.has( row.boardId ), row.author.id, user.id ) ? null : row.author,
+            }) ),
+        };
+    }
+
+    //* 일정을 조회할 캘린더 게시판 (id·이름·익명 여부)
+    private async resolveCalendarBoards(
+        user: Pick<Users, 'id' | 'role'>,
+        target: { boardId: number } | { boardIds: number[] | null },
+    ){
+        if( 'boardId' in target ){
+            const { board } = await this.boardAuthService.assertBoardPermission( target.boardId, user, 'read' );
+            if( board.type !== BoardType.CALENDAR ){
+                throw new BadRequestException('캘린더 게시판이 아닙니다.');
+            }
+            return [ { id: board.id, name: board.name, isAnonymous: board.isAnonymous, showLeaves: board.showLeaves } ];
+        }
+
+        // 읽기 권한 판정은 내비게이션과 같은 로직을 쓴다. (메뉴에 보이는 캘린더 = 일정을 볼 수 있는 캘린더)
+        const navigation = await this.boardAuthService.getUserBoardNavigate( user );
+        const requested = target.boardIds ? new Set( target.boardIds ) : null;
+        const ids = navigation
+            .filter( ( b ) => b.type === BoardType.CALENDAR && ( !requested || requested.has( b.id ) ) )
+            .map( ( b ) => b.id );
+
+        if( ids.length === 0 ){
+            return [];
+        }
+
+        return this.prisma.board.findMany({
+            select: { id: true, name: true, isAnonymous: true, showLeaves: true },
+            where: { id: { in: ids }, deleted: false },
+            orderBy: [ { sortOrder: 'asc' }, { id: 'asc' } ],
+        });
+    }
+
     //* 게시글 목록 select (일반 조회·정렬 조회 공용)
     private postListSelect() {
         return {
@@ -140,6 +240,7 @@ export class PostsService {
             eventStartAt: true,
             eventEndAt: true,
             isAllDay: true,
+            eventColor: true,
             isSecret: true,
             createdAt: true,
             updatedAt: true,
@@ -177,6 +278,7 @@ export class PostsService {
             eventStartAt: true,
             eventEndAt: true,
             isAllDay: true,
+            eventColor: true,
             createdAt: true,
             updatedAt: true,
             editedAt: true,
@@ -290,7 +392,7 @@ export class PostsService {
         }
 
         // 글 저장과 파일 연결을 한 트랜잭션으로 (파일 연결이 실패하면 글도 저장하지 않는다)
-        return await this.prisma.$transaction( async ( tx ) => {
+        const post = await this.prisma.$transaction( async ( tx ) => {
             const post = await tx.post.create({
                 data: {
                     boardId,
@@ -311,9 +413,23 @@ export class PostsService {
 
             await this.syncPostFiles( tx, post.id, user.id, imageIds, body.attachmentIds ?? [] );
 
+            await this.audit.created( tx, post.id, `게시글 작성: ${post.title}`, {
+                boardId,
+                isPinned: post.isPinned,
+                isSecret: post.isSecret,
+                imageIds,
+                attachmentIds: body.attachmentIds ?? [],
+            });
+
             return post;
         });
 
+        // 커밋 후: 공지 게시판 새 글 → 읽을 수 있는 회원에게 알림 (작성 시에만, 규칙은 BoardNotifier, 실패해도 글 작성은 성공)
+        if( board.type === BoardType.NOTICE ){
+            await this.boardNotifier.noticeCreated({ board, post, writerId: user.id });
+        }
+
+        return post;
     }
 
     //* 게시글 단일 조회
@@ -377,8 +493,8 @@ export class PostsService {
         postId: number,
         body: UpdatePostDto
     ) {
-        const { board } = await this.checkPost(boardId, postId, user, 'update');
-        
+        const { board, post: before } = await this.checkPost(boardId, postId, user, 'update');
+
         // 작성자 대표 소속/직급
         const author = await this.organizationService.getPrimaryOrganizationNames( user.id );
 
@@ -386,6 +502,15 @@ export class PostsService {
         const { imageIds, ...contentFields } = await this.toContentFields( body.content, user.id, postId );
 
         return await this.prisma.$transaction( async ( tx ) => {
+            // 감사 로그 비교 대상 (본문 HTML은 크므로 바뀌었는지만 남긴다)
+            const changedFields = {
+                title: body.title,
+                // 고정 여부는 별도 API(pinPost)에서만 바꾼다. (작성자 수정으로 관리자가 고정한 글이 풀리지 않게)
+                // 비밀글을 허용하지 않는 게시판이면 기존 값 유지 (허용 → 비허용으로 바뀐 게시판의 기존 비밀글이 공개되지 않게)
+                isSecret: board.allowSecret ? ( body.isSecret ?? false ) : undefined,
+                ...this.resolveEventFields( board.type, body ),
+            };
+
             const post = await tx.post.update({
                 where: {
                     id: postId,
@@ -395,12 +520,8 @@ export class PostsService {
                     authorPositionName: author.positionName,
                     authorDepartmentName: author.departmentName,
                     authorJobTitleName: author.jobTitleName,
-                    title: body.title,
                     ...contentFields,
-                    // 고정 여부는 별도 API(pinPost)에서만 바꾼다. (작성자 수정으로 관리자가 고정한 글이 풀리지 않게)
-                    // 비밀글을 허용하지 않는 게시판이면 기존 값 유지 (허용 → 비허용으로 바뀐 게시판의 기존 비밀글이 공개되지 않게)
-                    isSecret: board.allowSecret ? ( body.isSecret ?? false ) : undefined,
-                    ...this.resolveEventFields( board.type, body ),
+                    ...changedFields,
                     updatedId: user.id,
                     editedAt: new Date(),
                 },
@@ -408,6 +529,13 @@ export class PostsService {
 
             // 첨부는 attachmentIds를 보냈을 때만 맞춘다. (안 보내면 기존 첨부 유지)
             await this.syncPostFiles( tx, postId, user.id, imageIds, body.attachmentIds );
+
+            await this.audit.updated( tx, postId, `게시글 수정: ${post.title}`, diffChanges( before, changedFields ), {
+                boardId,
+                contentChanged: before.content !== contentFields.content,
+                imageIds,
+                ...( body.attachmentIds !== undefined && { attachmentIds: body.attachmentIds } ),
+            });
 
             return post;
         });
@@ -419,7 +547,7 @@ export class PostsService {
         boardId: number,
         postId: number,
     ) {
-        await this.checkPost(boardId, postId, user, 'delete');
+        const { post, board } = await this.checkPost(boardId, postId, user, 'delete');
 
         // 글과 연결 파일(첨부·본문 이미지)을 함께 soft delete (실제 파일은 남겨 둔다)
         await this.prisma.$transaction( async ( tx ) => {
@@ -435,7 +563,15 @@ export class PostsService {
             });
 
             await this.filesService.softDeleteByTarget( tx, [ FileTargetType.POST, FileTargetType.POST_IMAGE ], postId, user.id );
+
+            // 관리 권한으로 남의 글을 지운 경우를 구분
+            await this.audit.deleted( tx, postId, `게시글 삭제${ post.authorId !== user.id ? '(관리자)' : '' }: ${post.title}`,
+                { boardId, authorId: post.authorId } );
+
         });
+
+        // 커밋 후: 남의 글이면 작성자에게 알림 (본인 삭제는 BoardNotifier가 거른다)
+        await this.boardNotifier.postDeletedByAdmin({ board, post, deleterId: user.id });
 
         return true;
     }
@@ -511,10 +647,10 @@ export class PostsService {
     //   (종일 일정은 화면에서 시간 입력을 숨기므로 어떤 시간이 와도 그날 경계로 맞춘다)
     private resolveEventFields(
         boardType: BoardType,
-        body: Pick<CreatePostDto, 'eventStartAt' | 'eventEndAt' | 'isAllDay'>,
+        body: Pick<CreatePostDto, 'eventStartAt' | 'eventEndAt' | 'isAllDay' | 'eventColor'>,
     ){
         if( boardType !== BoardType.CALENDAR ){
-            return { eventStartAt: null, eventEndAt: null, isAllDay: null };
+            return { eventStartAt: null, eventEndAt: null, isAllDay: null, eventColor: null };
         }
 
         if( !body.eventStartAt || !body.eventEndAt ){
@@ -530,7 +666,9 @@ export class PostsService {
             throw new BadRequestException('종료일시는 시작일시보다 빠를 수 없습니다.');
         }
 
-        return { eventStartAt, eventEndAt, isAllDay };
+        // 일정 색 (2026-11-12 사용자 결정): 정해진 색 중 작성자가 선택, null = 기본색.
+        // 생략(undefined)하면 작성은 기본색, 수정은 기존 색을 유지한다(Prisma가 undefined 필드를 건드리지 않음).
+        return { eventStartAt, eventEndAt, isAllDay, eventColor: body.eventColor };
     }
 
     //* 게시글 고정·해제 (게시판 관리 권한, 작성자 여부 무관)
@@ -556,12 +694,17 @@ export class PostsService {
             await this.assertPinLimit( boardId );
         }
 
-        await this.prisma.post.update({
-            where: { id: postId },
-            data: {
-                isPinned,
-                updatedId: user.id,
-            },
+        await this.prisma.$transaction( async ( tx ) => {
+            await tx.post.update({
+                where: { id: postId },
+                data: {
+                    isPinned,
+                    updatedId: user.id,
+                },
+            });
+
+            await this.audit.updated( tx, postId, `게시글 ${ isPinned ? '고정' : '고정 해제' }: ${post.title}`,
+                { isPinned: { before: post.isPinned, after: isPinned } }, { boardId } );
         });
 
         return true;

@@ -22,10 +22,10 @@ export class UsersController {
 
   //* (개인) 회원 개인정보 조회
   @Get('me')
-  getMe( 
-    @User() user: Users 
+  getMe(
+    @User() user: Pick<Users, 'id'>
   ) {
-    return user;
+    return this.usersService.getMyInfo(user.id);
   }
 
   //* (개인) 회원 개인정보 수정(UPDATE)

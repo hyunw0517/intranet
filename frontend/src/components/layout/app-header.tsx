@@ -7,8 +7,10 @@ import { navByVariant, type ShellVariant } from "./nav-items";
 import { isActivePath } from "./is-active-path";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
+import { NotificationBell } from "@/features/notification/components/notification-bell";
+import { ChatButton } from "@/features/chat/components/chat-button";
 
-// 알림은 해당 기능 구현 시 추가한다. (미구현 기능을 동작하는 것처럼 표시하지 않음)
+// 오른쪽: 테마 선택 · 알림 · 채팅(애드온) · 사용자 메뉴 (직원·관리자 화면 공용, 알림·채팅은 승인 전 GUEST에게 숨김)
 export function AppHeader({ variant }: { variant: ShellVariant }) {
   const pathname = usePathname();
   const current = navByVariant[variant].flatMap((group) => group.items).find((item) => isActivePath(pathname, item.href));
@@ -22,6 +24,8 @@ export function AppHeader({ variant }: { variant: ShellVariant }) {
       <span className="truncate font-medium">{title}</span>
       <div className="ml-auto flex items-center gap-1">
         <ThemeToggle />
+        <NotificationBell />
+        <ChatButton />
         <UserMenu />
       </div>
     </header>

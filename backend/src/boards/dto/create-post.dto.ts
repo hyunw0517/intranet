@@ -1,5 +1,6 @@
-import { ArrayMaxSize, IsArray, IsBoolean, IsDate, IsInt, IsNotEmpty, IsOptional, IsString, Length } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsDate, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Length } from "class-validator";
 import { MAX_ATTACHMENTS_PER_TARGET } from "src/common/const/file.const";
+import { CalendarEventColor } from "src/generated/prisma/client";
 import { StringToBoolean } from "src/common/decorator/string-to-boolean.decorator";
 import { StringToDate } from "src/common/decorator/string-to-date.decorator";
 
@@ -39,6 +40,11 @@ export class CreatePostDto {
     @IsOptional()
     @StringToBoolean()
     isAllDay?: boolean | null;
+
+    // 일정 색 (캘린더 게시판만, null = 기본색). 수정에서 생략하면 기존 색 유지
+    @IsEnum(CalendarEventColor)
+    @IsOptional()
+    eventColor?: CalendarEventColor | null;
 
     // 첨부파일 id 최종 목록 (POST /common/files/attachments로 먼저 올린 파일, 순서 = 표시 순서)
     // 작성: 없으면 첨부 없음 / 수정: 없으면 기존 첨부 유지, 배열이면 이 목록으로 맞춤 (빠진 파일은 삭제)

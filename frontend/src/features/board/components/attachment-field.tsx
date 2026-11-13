@@ -104,7 +104,7 @@ export function AttachmentField({ value, onChange, onUploadingChange }: Attachme
         />
       </div>
       <p id="post-attachments-hint" className="text-xs text-muted-foreground">
-        파일당 100MB 이하 · 문서(pdf, hwp, office), 이미지, 동영상, txt, csv, zip
+        파일당 200MB 이하 · 문서(pdf, hwp, office), 이미지, 동영상, txt, csv, zip
       </p>
 
       {value.length > 0 && (

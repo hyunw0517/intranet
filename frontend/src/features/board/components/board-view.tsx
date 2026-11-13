@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PenSquare, Search } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/common/data-state";
 import { PaginationBar } from "@/components/common/pagination-bar";
@@ -14,9 +14,11 @@ import { cn } from "@/lib/utils";
 import { ApiError } from "@/services/api-client";
 import type { PostListQuery, PostSortBy } from "@/services/api/posts";
 import { BOARD_TYPE_LABEL } from "@/types/board";
+import { rememberBoardListHref } from "../board-list-href";
 import { useBoardNavigation } from "../hooks/use-board-navigation";
 import { usePosts } from "../hooks/use-posts";
 import { BoardNotFound } from "./board-not-found";
+import { CalendarBoard } from "./calendar-board";
 import { PostGrid } from "./post-grid";
 import { PostList } from "./post-list";
 
@@ -56,6 +58,12 @@ export function BoardView({ boardId }: { boardId: number }) {
   const { data, isPending, isError, error, refetch, isFetching, isPlaceholderData } = usePosts(boardId, toQuery(filters));
   // 카테고리 이름만 메뉴 캐시에서 찾는다. (사이드바가 이미 받아 둔 데이터라 추가 요청 없음)
   const navigation = useBoardNavigation();
+
+  // 지금 보는 조건(페이지·검색·정렬, 달력의 년월·보기)을 기억해 상세·글쓰기에서 돌아올 때 쓴다.
+  const currentQs = searchParams.toString();
+  useEffect(() => {
+    rememberBoardListHref(boardId, currentQs ? `${pathname}?${currentQs}` : pathname);
+  }, [boardId, pathname, currentQs]);
 
   const updateFilters = (patch: Partial<Filters>) => {
     const next = { ...filters, page: 1, ...patch };
@@ -104,6 +112,10 @@ export function BoardView({ boardId }: { boardId: number }) {
         {board.isAnonymous && " · 익명"}
       </p>
 
+      {/* 캘린더 게시판은 달력(기본)·월간 일정 목록으로 본다. (검색·정렬·페이지 목록 대신) */}
+      {board.type === "CALENDAR" ? (
+        <CalendarBoard boardId={boardId} board={board} />
+      ) : (
       <div className="grid gap-4">
         <BoardToolbar
           key={searchParams.toString()}
@@ -141,6 +153,7 @@ export function BoardView({ boardId }: { boardId: number }) {
 
         {meta.total > 0 && <PaginationBar meta={meta} onPageChange={(page) => updateFilters({ page })} />}
       </div>
+      )}
     </>
   );
 }

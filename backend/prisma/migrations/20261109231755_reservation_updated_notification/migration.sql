@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "NotificationActionType" ADD VALUE 'RESERVATION_UPDATED_BY_ADMIN';
+

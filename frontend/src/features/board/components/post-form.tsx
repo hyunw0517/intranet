@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { FormError, FormField } from "@/components/common/form-field";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { PostInput } from "@/services/api/posts";
+import { cn } from "@/lib/utils";
+import type { CalendarEventColor } from "@/types/calendar";
 import type { PostBoardInfo } from "@/types/post";
+import { EVENT_COLOR_OPTIONS } from "../calendar-colors";
 import { EMPTY_EVENT, toEventPayload, validateEvent, type EventInput } from "../event-date";
 import type { FileInfo } from "@/types/file";
 import { AttachmentField } from "./attachment-field";
@@ -270,12 +273,47 @@ function EventFields({
           onTime={(endTime) => set({ endTime })}
         />
       </div>
+      <EventColorPicker value={value.color} onChange={(color) => set({ color })} />
       {error && (
         <p id="post-event-message" className="text-xs text-destructive">
           {error}
         </p>
       )}
     </fieldset>
+  );
+}
+
+// 일정 색 고르기 (정해진 색 중 하나, 2026-11-12 사용자 결정) - 달력의 일정 박스 색
+function EventColorPicker({ value, onChange }: { value: CalendarEventColor | null; onChange: (color: CalendarEventColor | null) => void }) {
+  return (
+    <div className="grid gap-1.5">
+      <span id="post-event-color-label" className="text-sm font-medium">
+        색상
+      </span>
+      <div role="radiogroup" aria-labelledby="post-event-color-label" className="flex flex-wrap gap-2">
+        {EVENT_COLOR_OPTIONS.map((o) => {
+          const selected = o.value === value;
+          return (
+            <button
+              key={o.label}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={o.label}
+              title={o.label}
+              onClick={() => onChange(o.value)}
+              className={cn(
+                "flex size-7 items-center justify-center rounded-full ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                o.swatch,
+                selected && "ring-2 ring-foreground",
+              )}
+            >
+              {selected && <Check className="size-4 text-white" aria-hidden />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

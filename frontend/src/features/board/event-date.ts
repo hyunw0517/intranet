@@ -1,4 +1,5 @@
 import { toKstParts } from "@/lib/format";
+import type { CalendarEventColor } from "@/types/calendar";
 
 // 캘린더 게시글 일정 입력값 ↔ API 값 변환
 // 입력(<input type="date|datetime-local">)은 시간대가 없는 값이므로 KST(+09:00)로 고정해 보낸다.
@@ -12,16 +13,17 @@ export interface EventInput {
   startTime: string; // HH:mm (종일이면 사용하지 않음)
   endDate: string;
   endTime: string;
+  color: CalendarEventColor | null; // 일정 색 (null = 기본색)
 }
 
-export const EMPTY_EVENT: EventInput = { isAllDay: false, startDate: "", startTime: "09:00", endDate: "", endTime: "10:00" };
+export const EMPTY_EVENT: EventInput = { isAllDay: false, startDate: "", startTime: "09:00", endDate: "", endTime: "10:00", color: null };
 
 // 상세 응답 → 입력값 (수정 화면)
-export function toEventInput(start: string | null, end: string | null, isAllDay: boolean | null): EventInput {
-  if (!start || !end) return EMPTY_EVENT;
+export function toEventInput(start: string | null, end: string | null, isAllDay: boolean | null, color: CalendarEventColor | null): EventInput {
+  if (!start || !end) return { ...EMPTY_EVENT, color };
   const s = toKstParts(start);
   const e = toKstParts(end);
-  return { isAllDay: !!isAllDay, startDate: s.date, startTime: s.time, endDate: e.date, endTime: e.time };
+  return { isAllDay: !!isAllDay, startDate: s.date, startTime: s.time, endDate: e.date, endTime: e.time, color };
 }
 
 // 입력값 → API 값. 날짜가 비었으면 null (서버가 "시작·종료를 입력하세요" 400)
@@ -32,6 +34,7 @@ export function toEventPayload(input: EventInput) {
     eventStartAt: at(input.startDate, input.startTime),
     eventEndAt: at(input.endDate, input.endTime),
     isAllDay: input.isAllDay,
+    eventColor: input.color,
   };
 }
 

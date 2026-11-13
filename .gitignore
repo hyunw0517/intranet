@@ -43,6 +43,7 @@ coverage
 .env.local
 .env*
 !.env.example
+!.env.test.example
 
 # temp directory
 .temp
@@ -62,22 +63,24 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /backend/public/*
 /uploads/
+/uploads-test/
 /backend/src/generated
 
 # Next.js (frontend)
-/frontend/.next/
+.next/
 /frontend/out/
 /frontend/next-env.d.ts
 .vercel
 *.tsbuildinfo
 *.pem
 
+# AI Agents
 .agents/
+.claude/
 .windsurf/
 skills-lock.json
-
-.claude/
-claude_guide[0-9]*.md
+AGENTS.md
 CLAUDE.md
 Plan.md
 docs/*
+harness/*

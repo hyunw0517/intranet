@@ -48,30 +48,78 @@ enum FileTargetType {
   CHAT_MESSAGE        // 채팅 첨부파일
 }
 
-//? 대상 모듈 구분 -> 모델: Notification, Audit
-enum SystemTargetType {
-  USER      // 회원
-  POST      // 게시글
-  APPROVAL  // 전자결재
-  LEAVE     // 휴가
-  MEETING_ROOM  // 회의실
-  MEETING_RESERVATION // 회의실 예약
-  CHAT_MESSAGE  // 채팅
+//? 알림 대상 구분 -> 모델: Notification (받는 사람이 확인할 대상)
+enum NotificationTargetType {
+  USER                // 회원 (가입 승인 대기·승인)
+  POST                // 게시글
+  COMMENT             // 댓글
+  APPROVAL            // 전자결재 문서
+  FACILITY_RESERVATION // 시설 예약
 }
 
-//? 시스템 이벤트 구분 -> 모델: Notification, Audit
-enum SystemActionType {
-  SYSTEM    // 시스템
-  APPROVED  // 승인
-  REJECTED  // 반려
-  CREATE    // 생성
-  UPDATE    // 수정
-  DELETE    // 삭제
-  LOGIN     // 로그인 (Audit 전용)
+//? 알림 이벤트 구분 -> 모델: Notification (받는 사람 입장에서 무슨 일이 생겼는지)
+enum NotificationActionType {
+  SYSTEM                // 시스템 안내
+  SIGNUP_REQUESTED      // 신규 회원가입 - 승인 대기 (관리자에게)
+  SIGNUP_APPROVED       // 가입 승인 완료 (가입한 회원에게)
+  NOTICE_CREATED        // 공지사항 등록
+  POST_COMMENTED        // 내 글에 댓글
+  COMMENT_REPLIED       // 내 댓글에 답글
+  POST_DELETED_BY_ADMIN    // 관리 권한으로 내 글이 삭제됨
+  COMMENT_DELETED_BY_ADMIN // 관리 권한으로 내 댓글이 삭제됨
+  SESSION_REVOKED          // 보안: refresh token 재사용 감지로 한 기기의 로그인 해제
+  APPROVAL_REQUESTED    // 결재 요청 (내 차례 도착)
+  APPROVAL_APPROVED     // 결재 완료 (최종 승인)
+  APPROVAL_REJECTED     // 결재 반려
+  RESERVATION_CANCELLED_BY_ADMIN // 관리자가 내 시설 예약을 취소함
+  RESERVATION_UPDATED_BY_ADMIN   // 관리자가 내 시설 예약 시간을 변경함
+  RESERVATION_DELETED_BY_ADMIN   // 관리자가 내 시설 예약을 삭제함
+  // 채팅은 알림 행을 만들지 않는다(헤더 채팅 배지 + 소켓 푸시, 2026-11-13 사용자 결정)
 }
 
-//? 회의실 예약 상태 -> 모델: MeetingRoomReservation
-enum MeetingReservationStatus {
+//? 감사 로그 대상 구분 -> 모델: Audit (작업한 대상)
+enum AuditTargetType {
+  USER                // 회원
+  AUTH_SESSION        // 로그인 세션 (기기)
+  DEPARTMENT          // 부서
+  POSITION            // 직급
+  JOB_TITLE           // 직책
+  USER_DEPARTMENT     // 회원 소속
+  BOARD               // 게시판
+  BOARD_AUTH          // 게시판 권한
+  POST                // 게시글
+  COMMENT             // 댓글
+  FILE                // 파일
+  FACILITY_CATEGORY   // 시설 분류
+  FACILITY            // 시설
+  FACILITY_RESERVATION // 시설 예약
+  APPROVAL_LINE       // 결재라인 템플릿
+  APPROVAL_LINE_MANAGER // 결재라인 관리자 규칙
+  APPROVAL            // 전자결재 문서
+  LEAVE               // 휴가
+  CHAT_ROOM           // 채팅방 (생성·초대·내보내기·나가기만, 메시지는 기록하지 않음)
+}
+
+//? 감사 로그 이벤트 구분 -> 모델: Audit (작업자가 무엇을 했는지)
+enum AuditActionType {
+  CREATE          // 생성
+  UPDATE          // 수정
+  DELETE          // 삭제
+  RESTORE         // 복구
+  ROLE_CHANGE     // 권한 변경 (가입 승인 포함)
+  STATUS_CHANGE   // 상태 변경
+  LOGIN           // 로그인
+  LOGIN_FAILED    // 로그인 실패
+  LOGOUT          // 로그아웃 (기기 로그아웃 포함)
+  PASSWORD_CHANGE // 본인 비밀번호 변경
+  PASSWORD_RESET  // 관리자 비밀번호 초기화
+  TOKEN_REUSE     // refresh token 재사용 감지 (세션 폐기)
+  LOGIN_LOCKED    // 로그인 실패 누적으로 잠금 (잠긴 동안의 시도는 기록하지 않음)
+  LOGIN_UNLOCKED  // 관리자 로그인 잠금 해제
+}
+
+//? 시설 예약 상태 -> 모델: FacilityReservation
+enum FacilityReservationStatus {
   RESERVED   // 예약
   CANCELLED  // 예약 취소
 }
@@ -105,6 +153,24 @@ enum ApprovalLineScope {
   ADMIN       // 관리자 공용 결재라인
   DEPARTMENT  // 부서 결재라인
   PERSONAL    // 개인 결재라인
+}
+
+//? 결재라인 관리자 범위 -> 모델: ApprovalLineManager
+enum ApprovalLineManagerScope {
+  ALL            // 공용 + 모든 부서 결재라인
+  DEPARTMENT     // 지정한 부서(departmentId)의 부서 결재라인
+  MY_DEPARTMENT  // 직책 대상만: 그 직책으로 소속된 부서의 부서 결재라인
+}
+
+//? 캘린더 일정 색 -> 모델: Post (캘린더 게시판, NULL = 기본색). 화면이 라이트/다크 색을 정한다.
+// 초록은 캘린더의 "휴가 N명" 항목 색이라 넣지 않는다. (2026-11-12 사용자 결정: 정해진 색 중 일정마다 작성자가 선택)
+enum CalendarEventColor {
+  RED
+  ORANGE
+  YELLOW
+  BLUE
+  PURPLE
+  GRAY
 }
 
 //? 휴가 종류 -> 모델: LeaveRequest
@@ -163,20 +229,26 @@ model Users {
 
   position                Position?        @relation(fields: [positionId], references: [id]) // 직급
   departments             UserDepartment[] // 소속 목록 (겸직 시 여러 개)
-  notifications           Notification[]  // 받은 알림 목록
+  notifications           Notification[]              @relation("NotificationRecipient")        // 받은 알림 목록
+  sentNotifications       Notification[]              @relation("NotificationSender")           // 보낸 알림 목록
+  audits                  Audit[]                     @relation("AuditActor")                   // 작업한 감사 로그
   posts                   Post[]                      @relation("PostAuthor")    // 작성한 게시글 목록
   postViews               PostView[]          // 게시글 조회 기록
   postLikes               PostLike[]          // 좋아요한 게시글 기록
   comments                Comment[]                   @relation("CommentAuthor") // 작성한 댓글 목록
-  reservations            MeetingRoomReservation[]    @relation("MeetingRoomReservationUser")   // 예약한 회의실 목록
+  reservations            FacilityReservation[]       @relation("FacilityReservationUser")      // 예약한 시설 목록
   approvalLineTemplates   ApprovalLineTemplate[]      @relation("ApprovalLineOwner")            // 소유한 개인 결재라인
   approvalLineSteps       ApprovalLineTemplateStep[]  @relation("ApprovalLineStepApprover")     // 결재라인 템플릿의 결재자로 지정된 단계
+  approvalLineManagers    ApprovalLineManager[]       @relation("ApprovalLineManagerUser")      // 결재라인 관리자로 지정된 규칙
   requestedApprovals      ApprovalDocument[]          @relation("ApprovalDocumentRequester")    // 기안한 결재 문서
   approvalSteps           ApprovalDocumentStep[]      @relation("ApprovalDocumentStepApprover") // 결재자로 지정된 문서 단계
   approvalHistories       ApprovalDocumentHistory[]   @relation("ApprovalDocumentHistoryActor") // 결재 상태 변경 이력
   leaveRequests           LeaveRequest[]              @relation("LeaveRequestUser")             // 연차/병가 신청 목록
+  leaveGrants             LeaveGrant[]                @relation("LeaveGrantUser")               // 연도별 연차 부여
+  leaveSetting            LeaveUserSetting?           @relation("LeaveUserSettingUser")         // 영구 연차 조정
   chatRooms               ChatRoomMember[]    // 참여 중인 채팅방
   chatMessages            ChatMessage[]               @relation("ChatMessageSender")            // 보낸 채팅 메시지
+  authSessions            AuthSession[]       // 로그인 세션 (기기별 refresh token)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -190,7 +262,54 @@ model Users {
   @@map("users_model")
 }
 
-//* 부서 -> 모듈: Organization 
+//* 로그인 세션 -> 모듈: Auth
+//  - 로그인 1번 = 행 1개 (기기·브라우저별). refresh token payload의 sid가 이 행의 id다.
+//  - access token은 stateless로 두고, refresh token만 이 테이블로 폐기·교체(rotation)를 관리한다.
+//  - 재발급할 때마다 currentJti를 새 값으로 바꾸고, 직전 값은 previousJti에 남긴다.
+//    이미 교체된 jti가 다시 들어오면 탈취로 보고 세션을 폐기한다. (단, 교체 직후 1분은 다른 탭의 동시 요청으로 허용)
+//* 로그인 실패 횟수·잠금 상태 -> 모듈: Auth
+//  - 이력(로그)이 아니라 사번별 "현재 상태" 1행이다. 시도 기록은 감사 로그(LOGIN_FAILED / LOGIN_LOCKED)에 남는다.
+//  - 없는 사번도 같은 방식으로 센다. (잠금 여부로 등록된 사번을 알아낼 수 없도록)
+//  - 5회 연속 실패마다 잠금 단계가 올라간다: 1단계 10분 → 2단계 30분 → 3단계 이상 1시간 (최대)
+//  - 로그인에 성공하거나 관리자가 해제하면 행을 지운다. (단계 초기화)
+//  - userId: 시도 당시 그 사번의 회원 (없는 사번은 NULL → 하루 지나면 배치로 정리). 다형 참조는 아니지만 상태 테이블이라 FK는 두지 않는다.
+model LoginHistory {
+  id           Int       @id @default(autoincrement())
+  empNo        String    @unique @db.VarChar(50) @map("emp_no") // 시도한 사번
+  userId       Int?      @map("user_id")
+  failCount    Int       @default(0) @map("fail_count")  // 현재 단계에서 연속 실패 횟수 (잠기면 0으로)
+  lockLevel    Int       @default(0) @map("lock_level")  // 잠금 단계 (0: 아직 잠긴 적 없음)
+  lockedUntil  DateTime? @map("locked_until")            // 이 시각까지 로그인 시도 거부
+  lastFailedAt DateTime  @map("last_failed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([lastFailedAt]) // 없는 사번 행 정리 배치
+  @@map("login_history_model")
+}
+
+model AuthSession {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       Int       @map("user_id")
+  tokenVersion Int       @map("token_version") // 발급 당시 Users.tokenVersion (다르면 비밀번호 변경·전체 로그아웃으로 끊긴 세션)
+  currentJti   String    @map("current_jti") @db.Uuid  // 현재 유효한 refresh token의 jti
+  previousJti  String?   @map("previous_jti") @db.Uuid // 직전 refresh token의 jti (유예 시간 판단용)
+  rotatedAt    DateTime? @map("rotated_at")   // 마지막 교체 시각
+  userAgent    String?   @map("user_agent") @db.VarChar(500) // 기기 목록 표시용
+  lastUsedAt   DateTime  @default(now()) @map("last_used_at") // 마지막 재발급 시각 (유휴 만료 판단)
+  expiresAt    DateTime  @map("expires_at")   // 절대 만료 (로그인 + 7일, 재발급해도 늘어나지 않음)
+  revokedAt    DateTime? @map("revoked_at")   // 폐기 시각 (로그아웃·기기 로그아웃·재사용 감지)
+
+  user         Users     @relation(fields: [userId], references: [id])
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("auth_session_model")
+}
+
+//* 부서 -> 모듈: Organization
 model Department {
   id        Int      @id @default(autoincrement())
   parentDepartmentId Int? @map("parent_department_id") // 상위 부서 id (최상위 부서는 NULL)
@@ -202,6 +321,7 @@ model Department {
   members   UserDepartment[] // 소속 회원 목록
   boardAuths BoardAuth[] // 게시판 권한 목록
   approvalLineTemplates ApprovalLineTemplate[] // 부서 결재라인
+  approvalLineManagers  ApprovalLineManager[]  // 이 부서를 관리 범위로 둔 결재라인 관리자 규칙
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -243,6 +363,7 @@ model JobTitle {
 
   members   UserDepartment[] // 해당 직책 소속 목록
   boardAuths BoardAuthJobTitle[] // 게시판 권한 목록
+  approvalLineManagers ApprovalLineManager[] // 결재라인 관리자 규칙 (직책 대상)
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -307,42 +428,51 @@ model Files {
 }
 
 //* 사용자 알림 -> 모듈: 공용
+//  - 받는 사람마다 행 1개 (전체 공지면 직원 수만큼 createMany).
+//  - 삭제는 물리 삭제: 본인 삭제 + 90일 지난 알림은 하루 1회 배치로 정리 (soft delete 없음).
+//  - link: 알림을 만드는 쪽이 이동할 화면 주소를 정해서 저장한다. (핵심은 애드온 테이블을 조회하지 않음)
 model Notification {
   id         BigInt   @id @default(autoincrement())
   userId     Int      @map("user_id") // 수신자 id
-  targetType SystemTargetType? @map("target_type") // 알림 대상 모델
+  targetType NotificationTargetType? @map("target_type") // 알림 대상 모델
   targetId   Int?     @map("target_id") // 알림 대상 id (다형 참조라 FK 없음)
-  actionType SystemActionType  @map("action_type") // 이벤트 구분
+  actionType NotificationActionType  @map("action_type") // 이벤트 구분
   title      String   // 알림 제목
   content    String?  // 알림 내용
+  link       String?  // 눌렀을 때 이동할 프론트 주소 (예: /boards/3/posts/120)
 
   isRead     Boolean   @default(false) @map("is_read") // 확인 여부
   readAt     DateTime? @map("read_at") // 확인 시간
 
-  user       Users    @relation(fields: [userId], references: [id]) // 수신자
+  user       Users    @relation("NotificationRecipient", fields: [userId], references: [id]) // 수신자
+  sender     Users?   @relation("NotificationSender", fields: [createdId], references: [id]) // 발신자 (시스템 알림은 NULL)
 
   createdAt DateTime  @default(now()) @map("created_at")
   createdId Int?      @map("created_id") // 발신자 id
-  deleted   Boolean   @default(false)
-  deletedAt DateTime? @map("deleted_at")
-  deletedId Int?      @map("deleted_id")
 
-  @@index([userId, deleted, createdAt(sort: Desc), id(sort: Desc)]) // 내 알림 목록 (커서 페이지네이션)
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)]) // 내 알림 목록 (커서 페이지네이션)
+  @@index([userId, isRead]) // 안 읽은 알림 수
   @@index([targetType, targetId, createdAt(sort: Desc)])
+  @@index([createdAt]) // 90일 지난 알림 정리 배치
   @@map("notification_model")
 }
 
 //* 주요 DB 로그 -> 모듈: 공용 (수정/삭제 없이 쌓기만 함)
+//  - 단건: targetId에 대상 id, detail에 변경 내용.
+//  - 일괄 처리(ids 배열): 묶어서 1행. targetId는 NULL, detail에 batch: true + 대상 pk 배열 + 변경 내용.
 model Audit {
   id         BigInt   @id @default(autoincrement())
-  targetType SystemTargetType? @map("target_type") // 작업 대상 모델
-  targetId   Int?     @map("target_id") // 작업 대상 id (다형 참조라 FK 없음)
-  actionType SystemActionType  @map("action_type") // 이벤트 구분
+  targetType AuditTargetType? @map("target_type") // 작업 대상 모델
+  targetId   Int?     @map("target_id") // 작업 대상 id (다형 참조라 FK 없음, 일괄 처리는 NULL)
+  actionType AuditActionType  @map("action_type") // 이벤트 구분
 
-  content    String?  // 작업 내용
+  content    String?  // 작업 내용 (사람이 읽는 요약)
+  detail     Json?    // 변경 내용 (변경 전후 값, 일괄 처리 여부·대상 pk 배열)
 
   ipAddress  String?  @db.VarChar(45) @map("ip_address") // IPv6 방식 사용을 고려한 길이
   userAgent  String?  @map("user_agent") // 사용자 접속 환경
+
+  actor      Users?   @relation("AuditActor", fields: [createdId], references: [id]) // 작업자 (로그인 실패 등 회원이 없으면 NULL)
 
   createdAt DateTime  @default(now()) @map("created_at")
   createdId Int?      @map("created_id") // 작업자 id
@@ -361,6 +491,7 @@ model Board {
   description   String?   // 게시판 설명
   isAnonymous   Boolean   @default(false) @map("is_anonymous") // 익명 게시판 여부
   allowSecret   Boolean   @default(false) @map("allow_secret") // 비밀글 허용 여부
+  showLeaves    Boolean   @default(false) @map("show_leaves") // 휴가자 표시 (캘린더 게시판만, 휴가 애드온이 켜져 있을 때 화면이 휴가 API를 함께 부른다 - 게시판은 휴가를 모른다)
   sortOrder     Int       @default(0) @map("sort_order") // 정렬 순서
 
   parent    Board?  @relation("BoardHierarchy", fields: [parentBoardId], references: [id]) // 상위 게시판
@@ -399,6 +530,7 @@ model Post {
   eventStartAt  DateTime? @map("event_start_at")  // 일정 시작 시간 (캘린더 게시판용)
   eventEndAt    DateTime? @map("event_end_at")  // 일정 종료 시간 (캘린더 게시판용)
   isAllDay      Boolean?  @map("is_all_day")  // 시간 미선택 (캘린더 게시판용)
+  eventColor    CalendarEventColor? @map("event_color") // 일정 색 (캘린더 게시판용, NULL = 기본색)
 
   board     Board     @relation(fields: [boardId], references: [id])
   author    Users     @relation("PostAuthor", fields: [authorId], references: [id]) // 작성자
@@ -525,17 +657,23 @@ model BoardAuthJobTitle {
   @@map("board_auth_job_title_model")
 }
 
-//* 회의실 -> 모듈: MeetingRooms
-model MeetingRoom {
-  id          Int     @id @default(autoincrement())
-  name        String  // 회의실 명
-  location    String? // 위치
-  capacity    Int?    // 최대 인원
-  description String? // 설명
-  isActive    Boolean @default(true) @map("is_active") // 활성화 여부
+//* 시설 분류 -> 모듈: Reservations (애드온)
+// 관리자가 만든다. (회의실, 차량, 장비 …) 분류가 그 시설들의 예약 규칙(단위·운영 시간·요일·예약 가능 기간)을 정한다.
+// 시설이 남아 있는 분류는 삭제할 수 없다. (2026-11-09 사용자 결정, 상세 docs/design/features.md 6장)
+// 시각은 한국 시간 기준, 자정부터의 분. 예약은 하루 안에서만 하므로 종료는 최대 1440(24:00)
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): 단위 > 0, 0 <= 시작 < 종료 <= 1440, 예약 가능 기간 > 0
+model FacilityCategory {
+  id        Int     @id @default(autoincrement())
+  name      String  // 분류명
+  sortOrder Int     @default(0) @map("sort_order") // 정렬 순서
 
-  reservations        MeetingRoomReservation[]
-  unavailablePeriods  MeetingRoomUnavailable[]
+  slotMinutes    Int   @default(30) @map("slot_minutes")                // 예약 단위(분). 시작·종료가 운영 시작부터 이 단위에 맞아야 한다
+  openMinute     Int   @default(540) @map("open_minute")                // 운영 시작 (540 = 09:00)
+  closeMinute    Int   @default(1080) @map("close_minute")              // 운영 종료 (1080 = 18:00), 이 시각에 끝나는 예약까지 가능 [)
+  operatingDays  Int[] @default([1, 2, 3, 4, 5]) @map("operating_days") // 운영 요일 (ISO: 1 = 월 … 7 = 일)
+  maxAdvanceDays Int   @default(90) @map("max_advance_days")            // 오늘부터 며칠 앞까지 예약 가능 (반복 예약 기간 포함)
+
+  facilities Facility[] // 이 분류의 시설 목록
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -545,23 +683,51 @@ model MeetingRoom {
   deletedAt DateTime? @map("deleted_at")
   deletedId Int?     @map("deleted_id")
 
-  @@index([deleted, isActive])
-  @@map("meeting_room_model")
+  @@index([deleted, sortOrder])
+  @@map("facility_category_model")
 }
 
-//* 회의실 예약 -> 모듈: MeetingRooms
-model MeetingRoomReservation {
+//* 시설 (회의실·차량·장비 등) -> 모듈: Reservations (애드온)
+// 예약 시간 겹침은 시설 단위로 막는다. 같은 분류의 다른 시설끼리는 겹쳐도 된다. (2026-11-09 사용자 결정)
+model Facility {
+  id          Int     @id @default(autoincrement())
+  categoryId  Int     @map("category_id") // 분류 id (필수)
+  name        String  // 시설명
+  location    String? // 위치
+  capacity    Int?    // 최대 인원
+  description String? // 설명
+  isActive    Boolean @default(true) @map("is_active") // 활성화 여부
+
+  category            FacilityCategory @relation(fields: [categoryId], references: [id])
+  reservations        FacilityReservation[]
+  unavailablePeriods  FacilityUnavailable[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdId Int      @map("created_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedId Int      @map("updated_id")
+  deleted   Boolean  @default(false)
+  deletedAt DateTime? @map("deleted_at")
+  deletedId Int?     @map("deleted_id")
+
+  @@index([categoryId, deleted, isActive])
+  @@map("facility_model")
+}
+
+//* 시설 예약 -> 모듈: Reservations (애드온)
+// DB 제약(마이그레이션 SQL에 직접 작성): 종료 > 시작, 같은 시설의 RESERVED·삭제 안 된 예약끼리 [시작, 종료) 겹침 금지 (exclusion constraint, btree_gist)
+model FacilityReservation {
   id            Int       @id @default(autoincrement())
-  meetingRoomId Int       @map("meeting_room_id") // 회의실 id
+  facilityId    Int       @map("facility_id") // 시설 id
   userId        Int       @map("user_id") // 예약자 id
-  title         String?   // 회의명
-  description   String?   // 설명 (회의 목적)
+  title         String?   // 예약 제목 (회의명 등)
+  description   String?   // 설명 (사용 목적)
   startAt       DateTime  @map("start_at") // 시작 시간
   endAt         DateTime  @map("end_at") // 종료 시간
-  status        MeetingReservationStatus @default(RESERVED)
+  status        FacilityReservationStatus @default(RESERVED)
 
-  meetingRoom   MeetingRoom @relation(fields: [meetingRoomId], references: [id])
-  user          Users       @relation("MeetingRoomReservationUser", fields: [userId], references: [id])
+  facility      Facility    @relation(fields: [facilityId], references: [id])
+  user          Users       @relation("FacilityReservationUser", fields: [userId], references: [id])
 
   createdAt     DateTime @default(now()) @map("created_at")
   createdId     Int      @map("created_id")
@@ -571,20 +737,20 @@ model MeetingRoomReservation {
   deletedAt     DateTime? @map("deleted_at")
   deletedId     Int?     @map("deleted_id")
 
-  @@index([meetingRoomId, status, startAt, endAt])
+  @@index([facilityId, status, startAt, endAt])
   @@index([userId, status, startAt])
-  @@map("meeting_room_reservation_model")
+  @@map("facility_reservation_model")
 }
 
-//* 회의실 예약 불가 기간 -> 모듈: MeetingRooms
-model MeetingRoomUnavailable {
+//* 시설 예약 불가 기간 -> 모듈: Reservations (애드온)
+model FacilityUnavailable {
   id            Int      @id @default(autoincrement())
-  meetingRoomId Int      @map("meeting_room_id") // 회의실 id
+  facilityId    Int      @map("facility_id") // 시설 id
   startAt       DateTime @map("start_at") // 예약 불가 시작 시간
   endAt         DateTime @map("end_at") // 예약 불가 종료 시간
   reason        String?  // 예약 불가 사유
 
-  meetingRoom MeetingRoom @relation(fields: [meetingRoomId], references: [id])
+  facility    Facility @relation(fields: [facilityId], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -594,11 +760,13 @@ model MeetingRoomUnavailable {
   deletedAt DateTime? @map("deleted_at")
   deletedId Int?     @map("deleted_id")
 
-  @@index([meetingRoomId, deleted, startAt, endAt])
-  @@map("meeting_room_unavailable_model")
+  @@index([facilityId, deleted, startAt, endAt])
+  @@map("facility_unavailable_model")
 }
 
 //* 결재라인 템플릿 -> 모듈: Approvals
+// 상신 화면에서 결재자 목록을 채우는 불러오기용. 공용·부서는 결재라인 관리자, 개인은 본인이 만든다. (features.md 7.5)
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): ADMIN = 부서·소유자 없음 / DEPARTMENT = 부서만 / PERSONAL = 소유자만
 model ApprovalLineTemplate {
   id           Int               @id @default(autoincrement())
   name         String            // 결재라인명
@@ -626,19 +794,52 @@ model ApprovalLineTemplate {
   @@map("approval_line_template_model")
 }
 
+//* 결재라인 관리자 규칙 -> 모듈: Approvals (애드온)
+// 공용·부서 결재라인을 관리할 수 있는 사람을 ADMIN이 지정한다. (Role.ADMIN과 별개 위임 권한, ADMIN은 규칙 없이도 항상 관리)
+// 한 행 = 대상 1개(회원 또는 직책) + 범위. 요청마다 DB로 판정해 지정·해제가 즉시 반영된다. (2026-11-10 사용자 결정, features.md 7.5)
+// 삭제된 부서·직책을 쓰는 규칙은 판정에서 무시한다. (핵심 삭제를 막지 않음)
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): 대상은 user_id / job_title_id 중 정확히 하나,
+//   DEPARTMENT ⇔ department_id 있음, MY_DEPARTMENT ⇒ 직책 대상
+model ApprovalLineManager {
+  id           Int                      @id @default(autoincrement())
+  userId       Int?                     @map("user_id")       // 대상: 회원
+  jobTitleId   Int?                     @map("job_title_id")  // 대상: 직책
+  scope        ApprovalLineManagerScope // 관리 범위
+  departmentId Int?                     @map("department_id") // scope = DEPARTMENT인 경우 관리할 부서
+
+  user       Users?      @relation("ApprovalLineManagerUser", fields: [userId], references: [id])
+  jobTitle   JobTitle?   @relation(fields: [jobTitleId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdId Int      @map("created_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedId Int      @map("updated_id")
+  deleted   Boolean  @default(false)
+  deletedAt DateTime? @map("deleted_at")
+  deletedId Int?     @map("deleted_id")
+
+  @@index([userId, deleted])
+  @@index([jobTitleId, deleted])
+  @@map("approval_line_manager_model")
+}
+
 //* 결재라인 단계 -> 모듈: Approvals
+// 행 하나 = 결재자 한 명. 같은 stepOrder의 행들이 한 단계(병렬, 모두 승인해야 다음 단계)다. (2026-11-10 사용자 결정)
+// 단계명은 단계의 모든 행에 같은 값으로 저장한다.
 model ApprovalLineTemplateStep {
   id                     Int     @id @default(autoincrement())
   approvalLineTemplateId Int     @map("approval_line_template_id")
   approverId             Int     @map("approver_id") // 결재자
-  stepOrder              Int     @map("step_order") // 결재 순서
+  stepOrder              Int     @map("step_order") // 단계 번호 (1부터, 같은 번호 = 같은 단계)
   name                   String? // 단계명
 
   approvalLineTemplate ApprovalLineTemplate @relation(fields: [approvalLineTemplateId], references: [id])
 
   approver Users @relation("ApprovalLineStepApprover", fields: [approverId], references: [id])
 
-  @@unique([approvalLineTemplateId, stepOrder])
+  @@unique([approvalLineTemplateId, approverId]) // 한 템플릿에 같은 결재자는 한 번
+  @@index([approvalLineTemplateId, stepOrder])
   @@index([approverId])
   @@map("approval_line_template_step_model")
 }
@@ -655,7 +856,7 @@ model ApprovalDocument {
 
   status  ApprovalStatus @default(DRAFT)  // 결재 상태
 
-  currentStepOrder Int? @map("current_step_order") // 현재 결재 순서
+  currentStepOrder Int? @map("current_step_order") // 현재 단계 번호 (병렬 단계면 그 단계의 결재자 모두가 PENDING)
 
   requestedAt DateTime? @map("requested_at") // 결재요청 시간
   completedAt DateTime? @map("completed_at") // 최종 승인/반려 완료 시간
@@ -683,6 +884,9 @@ model ApprovalDocument {
 }
 
 //* 실제 전자결재 단계 -> 모듈: Approvals
+// 행 하나 = 결재자 한 명. 같은 stepOrder의 행들이 한 단계(병렬, 모두 승인해야 다음 단계, 한 명이라도 반려하면 문서 반려)
+// DB 제약(마이그레이션 SQL에 직접 작성): 같은 문서의 PENDING 행은 모두 같은 단계 번호여야 한다
+//   (EXCLUDE USING gist (approval_document_id WITH =, step_order WITH <>) WHERE status = 'PENDING')
 model ApprovalDocumentStep {
   id                 Int                @id @default(autoincrement())
   approvalDocumentId Int                @map("approval_document_id")
@@ -703,7 +907,8 @@ model ApprovalDocumentStep {
 
   approver Users @relation("ApprovalDocumentStepApprover", fields: [approverId], references: [id])
 
-  @@unique([approvalDocumentId, stepOrder])
+  @@unique([approvalDocumentId, approverId]) // 한 문서에 같은 결재자는 한 번
+  @@index([approvalDocumentId, stepOrder])
   @@index([approverId, status])
   @@index([approvalDocumentId, status])
   @@map("approval_document_step_model")
@@ -760,6 +965,45 @@ model LeaveRequest {
   @@map("leave_request_model")
 }
 
+//* 연차 부여 (회원·회계연도 한 행) -> 모듈: Leaves (approvals/leaves)
+// 부여 = baseDays + adjustDays. 사용·진행 중 일수는 저장하지 않고 LeaveRequest 합계로 계산한다.
+// 계산식·조정 절차: docs/design/leave_calculate_manual.md
+model LeaveGrant {
+  id     Int @id @default(autoincrement())
+  userId Int @map("user_id")
+  year   Int // 회계연도 (1/1~12/31, KST)
+
+  baseDays      Decimal @db.Decimal(5, 2) @map("base_days")                  // 규칙 계산값 (배치·재계산만 쓴다)
+  permanentDays Decimal @default(0) @db.Decimal(5, 2) @map("permanent_days") // 그해에 적용된 영구 조정값 (LeaveUserSetting에서 복사, 입사한 해는 0) - 지난 연도 기록이 바뀌지 않게 연도마다 저장
+  adjustDays    Decimal @default(0) @db.Decimal(5, 2) @map("adjust_days")    // 매년 초기화되는 조정값 (±, 0.25 단위, 배치는 건드리지 않음, 새해 행은 0)
+  adjustReason  String? @map("adjust_reason")                                // 매년 조정 사유
+
+  user Users @relation("LeaveGrantUser", fields: [userId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, year])
+  @@index([year])
+  @@map("leave_grant_model")
+}
+
+//* 회원별 영구 연차 조정 (임원 전입 등 근속 인정, 2026-11-12 사용자 결정) -> 모듈: Leaves (approvals/leaves)
+// 저장하면 올해·(있으면) 내년 LeaveGrant.permanentDays에 반영하고, 이후 재계산이 매년 복사한다. 입사한 해는 적용하지 않는다(월 단위는 매년 조정값으로만).
+model LeaveUserSetting {
+  id              Int     @id @default(autoincrement())
+  userId          Int     @unique @map("user_id")
+  permanentDays   Decimal @default(0) @db.Decimal(5, 2) @map("permanent_days") // 매년 더하는 일수 (±, 0.25 단위, 25일 한도 없음)
+  permanentReason String? @map("permanent_reason")                             // 영구 조정 사유 (예: 계열사 근속 10년 인정)
+
+  user Users @relation("LeaveUserSettingUser", fields: [userId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("leave_user_setting_model")
+}
+
 //* 채팅방 -> 모듈: Chat
 model ChatRoom {
   id   Int          @id @default(autoincrement())
@@ -805,6 +1049,9 @@ model ChatRoomMember {
   // 마지막으로 읽은 메시지
   lastReadMessageId Int? @map("last_read_message_id")
 
+  // 나만 보는 방 이름 (NULL = 방 기본 이름 사용). 나갔다가 다시 참여하면 NULL로 초기화
+  customName String? @map("custom_name")
+
   chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id])
   user     Users    @relation(fields: [userId], references: [id])
 
@@ -824,9 +1071,11 @@ model ChatMessage {
 
   chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id])
   sender Users? @relation("ChatMessageSender", fields: [senderId], references: [id])
+  edits  ChatMessageEdit[] // 수정 이력 (수정 전 내용)
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  editedAt  DateTime? @map("edited_at") // 마지막 수정 시각 ("수정됨" 표시용, 수정한 적 없으면 NULL)
 
   deleted   Boolean  @default(false)
   deletedAt DateTime? @map("deleted_at")
@@ -835,6 +1084,22 @@ model ChatMessage {
   @@index([chatRoomId, deleted, id(sort: Desc)])
   @@index([senderId, createdAt(sort: Desc)])
   @@map("chat_message_model")
+}
+
+
+//* 채팅 메시지 수정 이력 -> 모듈: Chat
+// 수정할 때마다 "수정 전 내용"을 1행씩 쌓는다. 최신 내용은 ChatMessage.content.
+// 조회 API는 두지 않는다(필요하면 개발자가 DB에서 확인, 2026-11-13 사용자 결정).
+model ChatMessageEdit {
+  id        Int      @id @default(autoincrement())
+  messageId Int      @map("message_id")
+  content   String   // 수정 전 내용
+  createdAt DateTime @default(now()) @map("created_at") // 수정한 시각
+
+  message ChatMessage @relation(fields: [messageId], references: [id])
+
+  @@index([messageId, id])
+  @@map("chat_message_edit_model")
 }
 
 // =====================================================================

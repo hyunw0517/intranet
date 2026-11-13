@@ -30,6 +30,7 @@ export interface AdminBoard {
   authCount: number; // 권한 규칙 수 (0이면 관리자만 볼 수 있음)
   isAnonymous: boolean; // 익명 게시판 (작성자를 본인 외에 가림)
   allowSecret: boolean; // 비밀글 허용
+  showLeaves: boolean; // 휴가자 표시 (캘린더 게시판만, 휴가 애드온이 켜져 있을 때 캘린더에 "휴가 N명")
 }
 
 // GET /boards/:boardId/auths 항목 - 게시판 권한 규칙

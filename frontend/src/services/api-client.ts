@@ -34,12 +34,27 @@ export class ApiError extends Error {
   }
 }
 
+// 서버에 닿지 못한 요청 (서버 꺼짐, 네트워크 끊김, 프록시 오류 등)
+// fetch는 이때 TypeError를 던지는데, 화면 코드의 버그도 TypeError라 둘을 구분하려고 여기서만 바꿔 던진다.
+// (예전에는 모든 TypeError를 "서버에 연결할 수 없습니다"로 보여 줘 코드 버그가 네트워크 문제처럼 보였다 - 11/05 캘린더 버그)
+export class NetworkError extends Error {
+  constructor(cause: unknown) {
+    super("서버에 연결할 수 없습니다.", { cause });
+    this.name = "NetworkError";
+  }
+}
+
 // ── access token (메모리) ─────────────────────────────────────────
 
 let accessToken: string | null = null;
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
+}
+
+// 소켓 연결(services/chat-socket.ts)이 handshake에 넣을 토큰을 읽는다. fetch 밖에서 토큰이 필요한 유일한 곳이다.
+export function getAccessToken() {
+  return accessToken;
 }
 
 // 재발급까지 실패했을 때(로그인 만료) AuthProvider가 상태를 바꿀 수 있도록 등록하는 콜백
@@ -95,19 +110,25 @@ async function parseBody(res: Response): Promise<unknown> {
   return contentType.includes("application/json") ? res.json() : res.text();
 }
 
-function send(path: string, options: ApiRequestOptions) {
+async function send(path: string, options: ApiRequestOptions) {
   const { body, query, headers, skipAuth, ...init } = options;
   const isFormData = body instanceof FormData;
 
-  return fetch(buildUrl(path, query), {
-    ...init,
-    headers: {
-      ...(body !== undefined && !isFormData ? { "Content-Type": "application/json" } : {}),
-      ...(!skipAuth && accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...headers,
-    },
-    body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
-  });
+  try {
+    return await fetch(buildUrl(path, query), {
+      ...init,
+      headers: {
+        ...(body !== undefined && !isFormData ? { "Content-Type": "application/json" } : {}),
+        ...(!skipAuth && accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...headers,
+      },
+      body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
+    });
+  } catch (error) {
+    // 요청 취소(화면 이동 시 TanStack Query가 취소)는 네트워크 오류가 아니므로 그대로 던진다.
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new NetworkError(error);
+  }
 }
 
 // 요청 + access token 만료 시 재발급 1회 → 원래 요청 1회 재시도
@@ -140,6 +161,43 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   if (!res.ok) throw toApiError(res.status, data);
 
   return data as T;
+}
+
+// 업로드 진행률이 필요한 multipart 요청 (fetch는 업로드 진행률을 알려 주지 않아 이 요청만 XHR로 보낸다)
+// - onProgress(loaded): 지금까지 보낸 바이트 수 (multipart 경계·헤더가 섞여 있어 파일 크기 합과 조금 다르다)
+// - access token 만료(401)면 apiFetch와 같이 재발급 1회 → 원래 요청 1회 재시도 (재시도하면 진행률은 처음부터 다시)
+export async function apiUpload<T>(path: string, form: FormData, onProgress?: (loaded: number) => void): Promise<T> {
+  const once = () =>
+    new Promise<{ status: number; data: unknown }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", buildUrl(path));
+      if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+      xhr.upload.onprogress = (e) => onProgress?.(e.loaded);
+      xhr.onload = () => {
+        let data: unknown = xhr.responseText;
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch {
+          // JSON이 아니면 문자열 그대로
+        }
+        resolve({ status: xhr.status, data });
+      };
+      xhr.onerror = () => reject(new NetworkError(new Error("upload failed")));
+      xhr.send(form);
+    });
+
+  let res = await once();
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (!newToken) {
+      onSessionExpired?.();
+    } else {
+      res = await once();
+    }
+  }
+
+  if (res.status < 200 || res.status >= 300) throw toApiError(res.status, res.data);
+  return res.data as T;
 }
 
 // 파일 응답을 Blob으로 받는다. (첨부 다운로드)

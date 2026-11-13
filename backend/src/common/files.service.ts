@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import { extname } from "path";
-import { FileTargetType, Prisma } from "src/generated/prisma/client";
+import { AuditTargetType, FileTargetType, Prisma } from "src/generated/prisma/client";
+import { AuditService, TargetAudit } from "./audit.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { FileKind, IMAGE_MIME_BY_EXT, MAX_ATTACHMENTS_PER_TARGET, PUBLIC_IMAGE_URL_PREFIX, PUBLIC_THUMBNAIL_URL_PREFIX, STORED_IMAGE_NAME_REGEX } from "./const/file.const";
 import { FileStorage } from "./storage/file-storage";
@@ -38,17 +39,27 @@ export interface FileInfo {
 @Injectable()
 export class FilesService {
 
+    private readonly audit: TargetAudit;
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly storage: FileStorage,
-    ){}
+        auditService: AuditService,
+    ){
+        this.audit = auditService.target( AuditTargetType.FILE );
+    }
 
     //* 업로드 저장 + 기록
     // 대상(targetType/targetId)은 비워 두고, 글 저장 시 syncTargetFiles로 연결한다.
+    // options.attachmentThumbnail: 첨부 중 이미지 확장자 파일의 썸네일을 만든다 (비공개 미리보기용. 예: 채팅)
+    //   - 시그니처가 확장자와 같은 실제 이미지일 때만 만든다. 아니면(가짜·깨진 파일) 썸네일 없이 일반 첨부로 저장한다.
+    //     (첨부는 원래 시그니처를 보지 않으므로 업로드를 거절하지 않는다. 미리보기를 쓰는 화면이 "썸네일 없음"을 표시한다)
+    //   - 이미지 MIME은 시그니처로 확인했을 때만 저장한다. 클라이언트가 보낸 image/* 값은 믿지 않는다.
     async saveUploaded(
         file: Express.Multer.File | undefined,
         kind: FileKind,
         userId: number,
+        options: { attachmentThumbnail?: boolean } = {},
     ): Promise<FileInfo> {
         if ( !file ) {
             throw new BadRequestException('업로드할 파일이 없습니다. (form-data 필드명: file)');
@@ -57,6 +68,16 @@ export class FilesService {
         const ext = extname( file.originalname ).toLowerCase();
         let mimeType = file.mimetype || 'application/octet-stream';
         let thumbnail: Buffer | null = null;
+
+        if ( kind === FileKind.ATTACHMENT && options.attachmentThumbnail && IMAGE_MIME_BY_EXT[ ext ] ) {
+            const detected = detectImageMime( file.buffer );
+            if ( detected && detected === IMAGE_MIME_BY_EXT[ ext ] ) {
+                mimeType = detected;
+                thumbnail = await createThumbnail( file.buffer ).catch( () => null ); // 깨진 이미지 → 썸네일 없음
+            } else {
+                mimeType = 'application/octet-stream';
+            }
+        }
 
         if ( kind === FileKind.IMAGE ) {
             // 실제 형식이 확장자와 같은 이미지인지 확인 (.png로 이름만 바꾼 html 등 차단)
@@ -94,17 +115,24 @@ export class FilesService {
         }
 
         try {
-            const row = await this.prisma.files.create({
-                select: FILE_INFO_SELECT,
-                data: {
-                    originalName: file.originalname,
-                    storedName,
-                    path: key,
-                    size: file.size,
-                    mimeType,
-                    createdId: userId,
-                    updatedId: userId,
-                },
+            // 파일 행 + 감사 로그를 한 트랜잭션으로 (연결·해제는 게시글 감사 로그의 imageIds·attachmentIds에 남는다)
+            const row = await this.prisma.$transaction( async ( tx ) => {
+                const created = await tx.files.create({
+                    select: FILE_INFO_SELECT,
+                    data: {
+                        originalName: file.originalname,
+                        storedName,
+                        path: key,
+                        size: file.size,
+                        mimeType,
+                        createdId: userId,
+                        updatedId: userId,
+                    },
+                });
+
+                await this.audit.created( tx, created.id, `파일 업로드(${kind}): ${file.originalname}`, { path: key, size: file.size, mimeType } );
+
+                return created;
             });
 
             return this.toFileInfo( row );
@@ -218,6 +246,53 @@ export class FilesService {
         return this.openStream( row );
     }
 
+    //* 대상에 연결된 첨부의 썸네일 열기 (비공개 미리보기. 예: 채팅 이미지)
+    // 호출 전에 업무 모듈이 권한을 확인해야 한다. 썸네일이 없으면(이미지가 아님·가짜·깨진 파일) 404 → 화면이 "미리보기 없음"을 표시
+    async openTargetThumbnail(
+        fileId: number,
+        targetType: FileTargetType,
+        targetId: number,
+    ) {
+        const row = await this.prisma.files.findFirst({
+            select: FILE_INFO_SELECT,
+            where: { id: fileId, targetType, targetId, deleted: false },
+        });
+
+        const stream = row ? await this.storage.openStream( thumbnailKey( row.path ) ) : null;
+
+        if ( !stream ) {
+            throw new NotFoundException('미리보기를 찾을 수 없습니다.');
+        }
+
+        return { stream, mimeType: 'image/webp' };
+    }
+
+    //* 대상들에 연결된 파일 목록 → targetId별 파일 행 (정렬 순서대로, 쿼리 1번)
+    // 메시지 목록처럼 대상 여러 개의 파일을 한 번에 붙일 때 쓴다.
+    async listByTargets(
+        targetType: FileTargetType,
+        targetIds: number[],
+    ): Promise<Map<number, FileInfo[]>> {
+        const result = new Map<number, FileInfo[]>();
+        if ( targetIds.length === 0 ) {
+            return result;
+        }
+
+        const rows = await this.prisma.files.findMany({
+            select: { ...FILE_INFO_SELECT, targetId: true },
+            where: { targetType, targetId: { in: targetIds }, deleted: false },
+            orderBy: [ { order: 'asc' }, { id: 'asc' } ],
+        });
+
+        for ( const row of rows ) {
+            const list = result.get( row.targetId! ) ?? [];
+            list.push( this.toFileInfo( row ) );
+            result.set( row.targetId!, list );
+        }
+
+        return result;
+    }
+
     //* 대상에 연결된 파일 목록 (정렬 순서대로)
     async listByTarget(
         targetType: FileTargetType,
@@ -324,6 +399,62 @@ export class FilesService {
         for ( const [ order, id ] of fileIds.entries() ) {
             await tx.files.update({ where: { id }, data: { order } });
         }
+    }
+
+    //* 대상의 첨부를 복사해 "내가 올린 미연결 첨부"로 만든다 → 새 파일 id 목록 (원래 순서)
+    // 결재 문서 "다시 기안"처럼 원래 대상을 그대로 두고 새 대상에 같은 첨부를 붙일 때 쓴다.
+    // - 저장 파일명이 unique라 행만 복사할 수 없다 → 저장소에서도 새 uuid 이름으로 복사한다.
+    // - 트랜잭션 밖에서 호출하고, 새 대상 저장 트랜잭션에서 syncTargetFiles로 연결한다.
+    //   (그 트랜잭션이 실패하면 업로드만 하고 글을 저장하지 않은 경우와 같은 미연결 파일로 남는다)
+    // - 첨부만 복사한다. (본문 이미지는 공개 주소라 결재 문서에서 쓰지 않음)
+    async duplicateAttachments(
+        targetType: FileTargetType,
+        targetId: number,
+        userId: number,
+    ): Promise<number[]> {
+        const rows = await this.prisma.files.findMany({
+            select: { ...FILE_INFO_SELECT, originalName: true },
+            where: { targetType, targetId, deleted: false, path: { startsWith: `${FileKind.ATTACHMENT}/` } },
+            orderBy: [ { order: 'asc' }, { id: 'asc' } ],
+        });
+
+        const ids: number[] = [];
+        for ( const row of rows ) {
+            const stream = await this.storage.openStream( row.path );
+            if ( !stream ) continue; // 저장소에서 사라진 파일은 건너뛴다
+
+            const chunks: Buffer[] = [];
+            for await ( const chunk of stream ) chunks.push( Buffer.from( chunk as Buffer ) );
+
+            const storedName = `${randomUUID()}${extname( row.storedName )}`;
+            const key = `${FileKind.ATTACHMENT}/${kstYearMonthPath( new Date() )}/${storedName}`;
+            await this.storage.save( key, Buffer.concat( chunks ), row.mimeType );
+
+            try {
+                const created = await this.prisma.$transaction( async ( tx ) => {
+                    const file = await tx.files.create({
+                        select: { id: true },
+                        data: {
+                            originalName: row.originalName,
+                            storedName,
+                            path: key,
+                            size: row.size,
+                            mimeType: row.mimeType,
+                            createdId: userId,
+                            updatedId: userId,
+                        },
+                    });
+                    await this.audit.created( tx, file.id, `파일 복사: ${row.originalName}`, { from: row.id, path: key } );
+                    return file;
+                });
+                ids.push( created.id );
+            } catch ( e ) {
+                await this.storage.remove( key );
+                throw e;
+            }
+        }
+
+        return ids;
     }
 
     //* 대상 삭제 시 연결된 파일 soft delete

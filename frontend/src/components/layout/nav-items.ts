@@ -1,11 +1,27 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, LayoutList, Network, Settings, UserRound, Users } from "lucide-react";
+import {
+  Building,
+  CalendarCheck,
+  CalendarClock,
+  CalendarRange,
+  FileCheck,
+  LayoutDashboard,
+  LayoutList,
+  Network,
+  Plane,
+  Settings,
+  UserCog,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { isGuestAllowedPath } from "@/lib/guest-access";
+import type { AddonName } from "@/services/api/addons";
 
 export interface NavItem {
   title: string;
   href: string;
   icon: LucideIcon;
+  addon?: AddonName; // 애드온 메뉴: 그 애드온이 켜져 있을 때만 보인다. (GET /common/addons)
 }
 
 export interface NavGroup {
@@ -17,11 +33,18 @@ export interface NavGroup {
 export const mainNav: NavGroup[] = [
   {
     label: "업무",
-    items: [{ title: "대시보드", href: "/", icon: LayoutDashboard }],
+    items: [
+      { title: "대시보드", href: "/", icon: LayoutDashboard },
+      { title: "시설 예약", href: "/reservations", icon: CalendarClock, addon: "reservations" },
+      { title: "전자결재", href: "/approvals", icon: FileCheck, addon: "approvals" },
+    ],
   },
   {
     label: "개인",
-    items: [{ title: "마이페이지", href: "/mypage", icon: UserRound }],
+    items: [
+      { title: "마이페이지", href: "/mypage", icon: UserRound },
+      { title: "휴가내역", href: "/leaves", icon: Plane, addon: "leaves" }, // 마이페이지 아래 (2026-11-12 사용자 결정)
+    ],
   },
 ];
 
@@ -33,6 +56,10 @@ export const adminNav: NavGroup[] = [
       { title: "회원 관리", href: "/admin/users", icon: Users },
       { title: "조직 관리", href: "/admin/organization", icon: Network },
       { title: "게시판 관리", href: "/admin/boards", icon: LayoutList },
+      { title: "시설 관리", href: "/admin/facilities", icon: Building, addon: "reservations" },
+      { title: "예약 관리", href: "/admin/reservations", icon: CalendarRange, addon: "reservations" },
+      { title: "결재라인 관리자", href: "/admin/approval-managers", icon: UserCog, addon: "approvals" },
+      { title: "연차 관리", href: "/admin/leaves", icon: CalendarCheck, addon: "leaves" },
     ],
   },
 ];
@@ -45,6 +72,13 @@ export const navByVariant: Record<ShellVariant, NavGroup[]> = {
   main: mainNav,
   admin: adminNav,
 };
+
+// 켜지지 않은 애드온의 메뉴를 뺀다. (목록을 아직 못 받았으면 애드온 메뉴는 모두 숨김, 비어 버린 그룹은 제외)
+export function filterNavForAddons(nav: NavGroup[], enabled: AddonName[] | undefined): NavGroup[] {
+  return nav
+    .map((group) => ({ ...group, items: group.items.filter((item) => !item.addon || (enabled ?? []).includes(item.addon)) }))
+    .filter((group) => group.items.length > 0);
+}
 
 // GUEST에게는 접근 가능한 경로(lib/guest-access)의 메뉴만 보여 준다. (비어 버린 그룹은 제외)
 export function filterNavForRole(nav: NavGroup[], role: string | undefined): NavGroup[] {

@@ -6,14 +6,14 @@ import type { FileInfo } from "@/types/file";
 
 // 서버 제한과 같게 둔다. (프론트 검사는 안내용, 실제 차단은 서버 - 413/400)
 export const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp"];
-export const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+export const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20MB
 export const ATTACHMENT_EXTENSIONS = [
   ".pdf", ".txt", ".csv", ".zip",
   ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".hwp", ".hwpx",
   ".png", ".jpg", ".jpeg", ".gif", ".webp",
   ".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv",
 ];
-export const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024; // 100MB
+export const MAX_ATTACHMENT_SIZE = 200 * 1024 * 1024; // 200MB
 export const MAX_ATTACHMENTS = 10; // 게시글당
 
 function upload(kind: "images" | "attachments", file: File) {

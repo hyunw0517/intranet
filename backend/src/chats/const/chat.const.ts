@@ -4,6 +4,7 @@ export const CHAT_GROUP_MIN_MEMBERS = 3;          // 그룹 생성 시 본인 �
 export const CHAT_GROUP_NAME_MAX_LENGTH = 50;     // 그룹 이름 최대 길이
 export const CHAT_INVITE_MAX = 100;               // 한 번에 초대할 수 있는 인원
 export const CHAT_MESSAGE_MAX_LENGTH = 2000;      // 메시지 최대 길이
+export const CHAT_USER_SEARCH_MAX = 20;          // 채팅 상대 검색 결과 최대 인원
 export const CHAT_EDIT_LIMIT_MS = 5 * 60 * 1000;  // 수정·삭제 가능 시간: 보낸 뒤 5분
 
 //* 소켓 room 이름 - 회원마다 하나 (채팅방 room은 두지 않는다, features.md 8.1)

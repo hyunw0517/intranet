@@ -1,12 +1,12 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { Roles } from 'src/auth/decorator/roles.decorator';
 import { User } from 'src/auth/decorator/user.decorator';
 import { UserRole } from 'src/generated/prisma/client';
 import { ChatRoomsService } from './chat-rooms.service';
-import { CreateGroupChatDto, InviteChatMembersDto, LeaveChatDto, OpenDirectChatDto, ReadChatDto, RenameChatRoomDto, SetMyChatRoomNameDto } from './dto/chat-room.dto';
+import { ChatUserSearchQueryDto, CreateGroupChatDto, InviteChatMembersDto, LeaveChatDto, OpenDirectChatDto, ReadChatDto, RenameChatRoomDto, SetMyChatRoomNameDto } from './dto/chat-room.dto';
 
 //* 채팅방 (features.md 8.3, 8.5) - 모두 USER 이상, 내가 참여한 방만 다룬다(아니면 404)
-// 고정 경로(unread-count, direct, group)는 ':roomId'보다 먼저 선언한다.
+// 고정 경로(unread-count, users, direct, group)는 ':roomId'보다 먼저 선언한다.
 @Controller('chats')
 export class ChatRoomsController {
 
@@ -26,6 +26,16 @@ export class ChatRoomsController {
     @Roles(UserRole.USER)
     unreadTotal( @User('id') userId: number ) {
         return this.chatRoomsService.unreadTotal( userId );
+    }
+
+    //* 채팅 상대 검색 (새 채팅·초대 화면) → ChatUserView[], 최대 20명
+    @Get('users')
+    @Roles(UserRole.USER)
+    searchUsers(
+        @User('id') userId: number,
+        @Query() query: ChatUserSearchQueryDto,
+    ) {
+        return this.chatRoomsService.searchUsers( userId, query );
     }
 
     //* 1:1 채팅 열기 (있으면 그 방, 없으면 생성)

@@ -5,6 +5,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { ChatEvents } from './chat-events';
 import { ChatMessageView, ChatUserView, chatMessageSelect, chatUserSelect, toChatMessage, toChatUser } from './chat-view';
 import { CHAT_GROUP_MIN_MEMBERS, CHAT_USER_SEARCH_MAX, ChatAuditAction, directKeyOf } from './const/chat.const';
+import { defaultGroupName } from './util/chat-room-name.util';
 import { ChatUserSearchQueryDto, CreateGroupChatDto, InviteChatMembersDto, LeaveChatDto, OpenDirectChatDto, ReadChatDto, RenameChatRoomDto, SetMyChatRoomNameDto } from './dto/chat-room.dto';
 
 type Tx = Prisma.TransactionClient;
@@ -276,6 +277,7 @@ export class ChatRoomsService {
     //! 그룹
 
     //* 그룹 생성 - 본인 포함 3명 이상, 만든 사람이 OWNER
+    // 이름을 비우면 참여자(본인 포함) 이름으로 만든다. 만들 때 한 번만 정하고 이후 참여자가 바뀌어도 그대로 둔다(2026-11-13 사용자 결정).
     async createGroup( userId: number, dto: CreateGroupChatDto ) {
         const invitedIds = dto.userIds.filter( ( id ) => id !== userId );
 
@@ -284,13 +286,14 @@ export class ChatRoomsService {
         }
 
         const invited = await this.findChatUsers( this.prisma, invitedIds );
+        const name = dto.name ?? defaultGroupName( [ await this.userName( this.prisma, userId ), ...invited.map( ( u ) => u.name ) ] );
         const now = new Date();
 
         const { roomId, message } = await this.prisma.$transaction( async ( tx ) => {
             const room = await tx.chatRoom.create({
                 data: {
                     type: ChatRoomType.GROUP,
-                    name: dto.name,
+                    name,
                     createdId: userId,
                     members: {
                         create: [
@@ -306,7 +309,7 @@ export class ChatRoomsService {
             const message = await this.addSystemMessage( tx, room.id, userId,
                 `${actorName}님이 ${joinNames( invited )}님과 채팅방을 만들었습니다.`, now );
 
-            await this.audit.created( tx, room.id, `그룹 채팅방 생성: ${dto.name}`, { name: dto.name, userIds: [ userId, ...invitedIds ] } );
+            await this.audit.created( tx, room.id, `그룹 채팅방 생성: ${name}`, { name, userIds: [ userId, ...invitedIds ] } );
 
             return { roomId: room.id, message };
         });

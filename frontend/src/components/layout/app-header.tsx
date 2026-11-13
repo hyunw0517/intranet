@@ -8,8 +8,9 @@ import { isActivePath } from "./is-active-path";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
 import { NotificationBell } from "@/features/notification/components/notification-bell";
+import { ChatButton } from "@/features/chat/components/chat-button";
 
-// 오른쪽: 테마 선택 · 알림(승인 전 GUEST는 숨김) · 사용자 메뉴 (직원·관리자 화면 공용)
+// 오른쪽: 테마 선택 · 알림 · 채팅(애드온) · 사용자 메뉴 (직원·관리자 화면 공용, 알림·채팅은 승인 전 GUEST에게 숨김)
 export function AppHeader({ variant }: { variant: ShellVariant }) {
   const pathname = usePathname();
   const current = navByVariant[variant].flatMap((group) => group.items).find((item) => isActivePath(pathname, item.href));
@@ -24,6 +25,7 @@ export function AppHeader({ variant }: { variant: ShellVariant }) {
       <div className="ml-auto flex items-center gap-1">
         <ThemeToggle />
         <NotificationBell />
+        <ChatButton />
         <UserMenu />
       </div>
     </header>

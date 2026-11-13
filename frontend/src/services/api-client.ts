@@ -52,6 +52,11 @@ export function setAccessToken(token: string | null) {
   accessToken = token;
 }
 
+// 소켓 연결(services/chat-socket.ts)이 handshake에 넣을 토큰을 읽는다. fetch 밖에서 토큰이 필요한 유일한 곳이다.
+export function getAccessToken() {
+  return accessToken;
+}
+
 // 재발급까지 실패했을 때(로그인 만료) AuthProvider가 상태를 바꿀 수 있도록 등록하는 콜백
 let onSessionExpired: (() => void) | null = null;
 

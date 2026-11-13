@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Download, FileText, FolderArchive, Loader2, Video, X } from "lucide-react";
+import { Download, FileText, FolderArchive, Loader2, Video, X } from "lucide-react";
 import { toast } from "sonner";
-import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { FileDownloadConfirmDialog } from "@/components/common/file-download-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getErrorMessage } from "@/lib/error-message";
@@ -139,8 +139,7 @@ export function FileKindIcon({ file, className, strokeWidth }: { file: ChatFile;
 
 // 파일 내려받기 (줄·칸·원본 보기의 [내려받기] 공용) - 받기 전에 항상 한 번 묻는다 (2026-11-14 사용자 요청, 보안 차원)
 // 이미지도 묻는다: 확장자만 이미지인 가짜 파일도 "이미지"로 분류되므로, 이미지만 빼면 그 파일은 묻지 않고 받아진다.
-// 확인 창(confirmDialog)은 누르는 버튼 "바깥"에 그려야 한다. 버튼 안에 두면 portal로 그려져도 React 이벤트가
-// React 트리를 따라 바깥 버튼의 onClick까지 올라가서, [다운로드]를 누를 때 창이 다시 열린다.
+// 확인 창(confirmDialog)은 공용 FileDownloadConfirmDialog(게시판과 같은 문구·경고)이고, 누르는 버튼 "바깥"에 그려야 한다.
 export function useChatFileDownload(roomId: number, file: ChatFile) {
   const [pending, setPending] = useState(false);
   const [asking, setAsking] = useState(false);
@@ -161,21 +160,7 @@ export function useChatFileDownload(roomId: number, file: ChatFile) {
   const download = () => setAsking(true);
 
   const confirmDialog = (
-    <ConfirmDialog
-      open={asking}
-      onOpenChange={setAsking}
-      title={`"${file.name}" 파일을 다운로드 받으시겠습니까?`}
-      description={
-        // 보안 경고 - 주의 색 + 경고 아이콘 (시설 사용 불가 기간 창의 경고 박스와 같은 모양, 2026-11-14 사용자 요청)
-        <span className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-left text-amber-800 dark:text-amber-200">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-          <span>출처를 알 수 없는 파일은 악성 코드가 포함되어 있을 수 있습니다.</span>
-        </span>
-      }
-      confirmLabel="다운로드"
-      pending={pending}
-      onConfirm={() => void save()}
-    />
+    <FileDownloadConfirmDialog fileName={file.name} open={asking} onOpenChange={setAsking} pending={pending} onConfirm={() => void save()} />
   );
 
   return { download, pending, confirmDialog };

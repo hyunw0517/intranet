@@ -6,5 +6,5 @@ export const SCHEDULE_MAX_DAYS = 31;
 // 예약 관련 알림을 눌렀을 때 이동할 프론트 주소 (내 예약)
 export const MY_RESERVATIONS_LINK = '/reservations/me';
 
-// 일괄 취소 최대 건수
+// 일괄 처리(취소·삭제·시간 변경) 최대 건수
 export const MAX_BULK_RESERVATIONS = 100;

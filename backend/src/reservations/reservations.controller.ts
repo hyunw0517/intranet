@@ -3,6 +3,7 @@ import { Roles } from 'src/auth/decorator/roles.decorator';
 import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
 import { User } from 'src/auth/decorator/user.decorator';
 import { AdminPermission, UserRole, Users } from 'src/generated/prisma/client';
+import { BulkReservationTimeDto } from './dto/bulk-reservation-time.dto';
 import { CreateRecurringReservationDto } from './dto/create-recurring-reservation.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { AdminReservationListQueryDto, MyReservationListQueryDto } from './dto/reservation-list-query.dto';
@@ -14,7 +15,7 @@ import { ReservationsService } from './reservations.service';
 type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 
 //* 시설 예약 - 수정·취소·삭제 권한(본인·관리자, 시작 전/후)은 서비스에서 예약마다 확인한다.
-// 고정 경로(schedule, me, admin, recurring, bulk/cancel)는 ':id'보다 먼저 선언한다.
+// 고정 경로(schedule, me, admin, recurring, bulk/cancel, bulk/time, bulk)는 ':id'보다 먼저 선언한다.
 // 모듈의 controllers 배열에서도 이 컨트롤러를 마지막에 둔다. ('reservations/:id'가 'reservations/categories'를 먼저 잡지 않게)
 @Controller('reservations')
 export class ReservationsController {
@@ -83,6 +84,26 @@ export class ReservationsController {
         @Body() body: ReservationIdsDto,
     ) {
         return this.reservationsService.bulkCancel( user, body );
+    }
+
+    //* 일괄 시간 변경 - 날짜는 그대로, 시각만 같은 시간대로 맞춘다. 한 건이라도 바꿀 수 없으면 전체 실패
+    @Patch('bulk/time')
+    @Roles(UserRole.USER)
+    bulkChangeTime(
+        @User() user: Actor,
+        @Body() body: BulkReservationTimeDto,
+    ) {
+        return this.reservationsService.bulkChangeTime( user, body );
+    }
+
+    //* 일괄 삭제 ('bulk'는 ':id'보다 먼저 선언) - 한 건이라도 삭제할 수 없으면 전체 실패
+    @Delete('bulk')
+    @Roles(UserRole.USER)
+    bulkDelete(
+        @User() user: Actor,
+        @Body() body: ReservationIdsDto,
+    ) {
+        return this.reservationsService.deleteMany( user, body.ids );
     }
 
     @Patch(':id/cancel')

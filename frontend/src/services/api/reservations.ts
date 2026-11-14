@@ -83,7 +83,17 @@ export function cancelReservations(ids: number[]) {
   return apiFetch<boolean>("/reservations/bulk/cancel", { method: "PATCH", body: { ids } });
 }
 
+// 날짜는 예약마다 그대로, 시작·종료 시각만 같은 시간대("HH:mm")로 맞춘다. 하나라도 바꿀 수 없으면 전체 실패
+export function bulkChangeReservationTime(input: { ids: number[]; startTime: string; endTime: string }) {
+  return apiFetch<Reservation[]>("/reservations/bulk/time", { method: "PATCH", body: input });
+}
+
 // 본인은 시작 전만, 관리자는 언제나 (soft delete)
 export function deleteReservation(id: number) {
   return apiFetch<boolean>(`/reservations/${id}`, { method: "DELETE" });
+}
+
+// 하나라도 삭제할 수 없으면 전체 실패
+export function deleteReservations(ids: number[]) {
+  return apiFetch<boolean>("/reservations/bulk", { method: "DELETE", body: { ids } });
 }

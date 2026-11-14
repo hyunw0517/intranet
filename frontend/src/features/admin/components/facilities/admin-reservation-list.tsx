@@ -9,6 +9,7 @@ import { FormField } from "@/components/common/form-field";
 import { PaginationBar } from "@/components/common/pagination-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,12 +28,14 @@ import {
   useAdminReservations,
   useAllAdminFacilities,
 } from "../../hooks/use-admin-facilities";
+import { AdminReservationBulkActions } from "./admin-reservation-bulk-actions";
 
 const ALL = "all";
 
 // 전체 예약 관리 (관리자)
 // - 시설·상태·기간(시작 날짜)으로 거른다. 기본은 최신 시작 순
 // - 관리자: 시작 전이면 시간 변경·취소·삭제, 시작 후에는 삭제만. 남의 예약이면 서버가 예약자에게 알림을 보낸다.
+// - 왼쪽 체크박스로 고른 예약을 일괄 시간 변경·취소·삭제한다. 선택은 지금 페이지 안에서만 (페이지·필터를 바꾸면 해제)
 export function AdminReservationList() {
   const { user } = useAuth();
   const [facilityId, setFacilityId] = useState(ALL);
@@ -42,6 +45,7 @@ export function AdminReservationList() {
   const [page, setPage] = useState(1);
   const [confirm, setConfirm] = useState<{ kind: "cancel" | "delete"; reservation: Reservation } | null>(null);
   const [form, setForm] = useState<ReservationFormState>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const facilities = useAllAdminFacilities();
   const categories = useAdminFacilityCategories();
@@ -58,10 +62,28 @@ export function AdminReservationList() {
   const cancel = useAdminFacilityMutation(cancelReservation);
   const remove = useAdminFacilityMutation(deleteReservation);
 
+  const changePage = (p: number) => {
+    setPage(p);
+    setSelectedIds(new Set());
+  };
   const resetPage = <T,>(setter: (v: T) => void) => (v: T) => {
     setter(v);
-    setPage(1);
+    changePage(1);
   };
+
+  // 처리 후 목록이 다시 조회되면 사라진 예약(삭제)은 자연히 선택에서 빠진다.
+  const rows = data?.data ?? [];
+  const selected = rows.filter((r) => selectedIds.has(r.id));
+  const allSelected = rows.length > 0 && selected.length === rows.length;
+  const headerChecked = allSelected ? true : selected.length > 0 ? "indeterminate" : false;
+  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(rows.map((r) => r.id)));
+  const toggleOne = (id: number, checked: boolean) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const openEdit = (r: Reservation) => {
     const category = categories.data?.find((c) => c.id === r.facility.category.id);
@@ -137,6 +159,9 @@ export function AdminReservationList() {
             <Table className="min-w-[44rem]">
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox checked={headerChecked} onCheckedChange={toggleAll} aria-label="이 페이지 예약 전체 선택" />
+                  </TableHead>
                   <TableHead>시간</TableHead>
                   <TableHead>시설</TableHead>
                   <TableHead>제목</TableHead>
@@ -150,8 +175,16 @@ export function AdminReservationList() {
               <TableBody>
                 {data.data.map((r) => {
                   const actions = reservationActions(r, user);
+                  const checked = selectedIds.has(r.id);
                   return (
-                    <TableRow key={r.id}>
+                    <TableRow key={r.id} data-state={checked ? "selected" : undefined}>
+                      <TableCell>
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => toggleOne(r.id, v === true)}
+                          aria-label={`${r.facility.name} ${formatReservationRange(r.startAt, r.endAt)} 선택`}
+                        />
+                      </TableCell>
                       <TableCell className="tabular-nums">{formatReservationRange(r.startAt, r.endAt)}</TableCell>
                       <TableCell>
                         <span className="text-muted-foreground">{r.facility.category.name} · </span>
@@ -190,7 +223,8 @@ export function AdminReservationList() {
               </TableBody>
             </Table>
           </div>
-          <PaginationBar meta={data.meta} onPageChange={setPage} />
+          <AdminReservationBulkActions selected={selected} categories={categories.data ?? []} onDone={() => setSelectedIds(new Set())} />
+          <PaginationBar meta={data.meta} onPageChange={changePage} />
         </div>
       )}
 

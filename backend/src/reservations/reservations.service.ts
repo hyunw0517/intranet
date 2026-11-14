@@ -9,6 +9,7 @@ import { PrismaService } from "src/prisma/prisma.service";
 import { SCHEDULE_MAX_DAYS } from "./const/reservation.const";
 import { CreateRecurringReservationDto } from "./dto/create-recurring-reservation.dto";
 import { CreateReservationDto } from "./dto/create-reservation.dto";
+import { BulkReservationTimeDto } from "./dto/bulk-reservation-time.dto";
 import { AdminReservationListQueryDto, MyReservationListQueryDto } from "./dto/reservation-list-query.dto";
 import { ReservationIdsDto } from "./dto/reservation-ids.dto";
 import { ScheduleQueryDto } from "./dto/schedule-query.dto";
@@ -316,32 +317,155 @@ export class ReservationsService {
         return this.cancelMany( user, body.ids );
     }
 
+    //* 일괄 시간 변경 (2026-11-14 사용자 결정) - 날짜는 예약마다 그대로, 시작·종료 시각만 같은 시간대로 맞춘다.
+    // - 권한은 단건 수정과 같다(본인·관리자, 유효한 예약, 시작 전). 한 건이라도 바꿀 수 없으면 전체 실패.
+    // - 같은 시설·같은 날짜 예약이 둘 이상이면 같은 시간대가 되어 반드시 겹치므로 먼저 거부한다.
+    //   (그 밖의 선택 예약끼리는 시설이나 날짜가 달라 서로 겹칠 수 없다 → 예약마다 기존 예약과의 겹침만 보면 된다)
+    async bulkChangeTime( user: Actor, body: BulkReservationTimeDto ) {
+        const startMinute = parseHm( body.startTime );
+        const endMinute = parseHm( body.endTime );
+        if ( startMinute === null || endMinute === null ) {
+            throw new BadRequestException( '시간은 00:00 ~ 24:00 사이의 HH:mm 형식이어야 합니다.' );
+        }
+
+        const reservations = await this.findManyOrThrow( body.ids );
+        for ( const r of reservations ) {
+            this.assertCanChange( user, r, '시간 변경' );
+        }
+
+        const targets = reservations.map( ( r ) => {
+            const date = kstDateString( r.startAt );
+            return { before: r, date, startAt: kstDateAt( date, startMinute ), endAt: kstDateAt( date, endMinute ) };
+        });
+
+        const sameDay = new Set<string>();
+        for ( const t of targets ) {
+            const key = `${t.before.facilityId}:${t.date}`;
+            if ( sameDay.has( key ) ) {
+                throw new BadRequestException( `같은 시설의 같은 날짜 예약(${t.before.facility.name} ${t.date})은 함께 같은 시간대로 바꿀 수 없습니다.` );
+            }
+            sameDay.add( key );
+        }
+
+        // 규칙 검사 (시설마다 분류 규칙이 다르다) - 어느 예약이 문제인지 메시지에 붙인다.
+        const now = new Date();
+        const facilities = new Map<number, Awaited<ReturnType<ReservationsService['findBookableFacility']>>>();
+        for ( const t of targets ) {
+            const facilityId = t.before.facilityId;
+            if ( !facilities.has( facilityId ) ) {
+                facilities.set( facilityId, await this.findBookableFacility( facilityId ) );
+            }
+            const error = checkReservationTime( t.startAt, t.endAt, facilities.get( facilityId )!.category, now );
+            if ( error ) {
+                throw new BadRequestException( `${t.before.facility.name} ${t.date}: ${error.message}` );
+            }
+        }
+
+        const updated = await this.withOverlapGuard( () => this.prisma.$transaction( async ( tx ) => {
+            for ( const t of targets ) {
+                await this.assertNoConflict( tx, t.before.facilityId, t.startAt, t.endAt, t.before.id, `${t.before.facility.name} ${t.date}` );
+
+                // 검사한 상태(유효·시작 전)일 때만 바꾼다. (그 사이 취소·삭제되면 0건 → 전체 롤백)
+                const { count } = await tx.facilityReservation.updateMany({
+                    where: { id: t.before.id, deleted: false, status: FacilityReservationStatus.RESERVED, startAt: { gt: new Date() } },
+                    data: { startAt: t.startAt, endAt: t.endAt, updatedId: user.id },
+                });
+                if ( count === 0 ) {
+                    throw new ConflictException( '예약 상태가 바뀌었습니다. 새로고침 후 다시 시도하세요.' );
+                }
+            }
+
+            if ( targets.length === 1 ) {
+                const t = targets[0];
+                await this.audit.updated( tx, t.before.id,
+                    `시설 예약 수정: ${t.before.facility.name} ${formatReservationTime( t.startAt, t.endAt )}`,
+                    diffChanges( t.before, { startAt: t.startAt, endAt: t.endAt } ),
+                );
+            } else {
+                // 변경 전 값은 pk별 시각, 변경 후 값은 공통 시간대(HH:mm) - 날짜는 예약마다 그대로
+                const beforeOf = ( field: 'startAt' | 'endAt' ) => Object.fromEntries( reservations.map( ( r ) => [ String( r.id ), r[field] ] ) );
+                await this.audit.logBatch({
+                    targetIds: body.ids,
+                    actionType: AuditActionType.UPDATE,
+                    content: `시설 예약 일괄 시간 변경: ${body.startTime}~${body.endTime} (${targets.length}건)`,
+                    changes: {
+                        startAt: { before: beforeOf( 'startAt' ), after: body.startTime },
+                        endAt: { before: beforeOf( 'endAt' ), after: body.endTime },
+                    },
+                }, tx );
+            }
+
+            return tx.facilityReservation.findMany({
+                where: { id: { in: body.ids } },
+                include: reservationInclude,
+                orderBy: [ { startAt: 'asc' }, { id: 'asc' } ],
+            });
+        }) );
+
+        // 관리자가 남의 예약 시간을 바꿨으면 커밋 후 예약자에게 알림 (단건 수정과 같은 규칙, 시간이 실제로 바뀐 예약만)
+        if ( this.isAdmin( user ) ) {
+            for ( const t of targets ) {
+                if ( t.startAt.getTime() === t.before.startAt.getTime() && t.endAt.getTime() === t.before.endAt.getTime() ) continue;
+                await this.notifier.timeChangedByAdmin( t.before, t, user.id );
+            }
+        }
+
+        return updated;
+    }
+
     //* 예약 삭제 (soft delete) - 본인은 시작 전만, 관리자는 언제나
     async delete( user: Actor, id: number ) {
-        const reservation = await this.findOne( id );
-        const isAdmin = this.isAdmin( user );
+        return this.deleteMany( user, [ id ] );
+    }
 
-        if ( !isAdmin && reservation.userId !== user.id ) {
-            throw new ForbiddenException( '본인 예약만 삭제할 수 있습니다.' );
-        }
-        if ( !isAdmin && reservation.startAt <= new Date() ) {
-            throw new ForbiddenException( '시작된 예약은 삭제할 수 없습니다.' );
+    //* 단건·일괄 삭제 공통 - 한 건이라도 삭제할 수 없으면 전체 실패 (기존 일괄 처리 규칙)
+    async deleteMany( user: Actor, ids: number[] ) {
+        const reservations = await this.findManyOrThrow( ids );
+        const isAdmin = this.isAdmin( user );
+        const now = new Date();
+
+        for ( const r of reservations ) {
+            if ( !isAdmin && r.userId !== user.id ) {
+                throw new ForbiddenException( '본인 예약만 삭제할 수 있습니다.' );
+            }
+            if ( !isAdmin && r.startAt <= now ) {
+                throw new ForbiddenException( '시작된 예약은 삭제할 수 없습니다.' );
+            }
         }
 
         await this.prisma.$transaction( async ( tx ) => {
-            await tx.facilityReservation.update({
-                where: { id, deleted: false },
+            // 검사 조건을 WHERE에 다시 걸고, 바뀐 건수가 요청 수와 다르면 전체 롤백 (검사와 수정 사이 경쟁 상태 대비)
+            const { count } = await tx.facilityReservation.updateMany({
+                where: {
+                    id: { in: ids },
+                    deleted: false,
+                    ...( isAdmin ? {} : { userId: user.id, startAt: { gt: now } } ),
+                },
                 data: { deleted: true, deletedAt: new Date(), deletedId: user.id },
             });
+            if ( count !== ids.length ) {
+                throw new ConflictException( '예약 상태가 바뀌었습니다. 새로고침 후 다시 시도하세요.' );
+            }
 
-            await this.audit.deleted( tx, id,
-                `시설 예약 삭제: ${reservation.facility.name} ${formatReservationTime( reservation.startAt, reservation.endAt )}`,
-                { userId: reservation.userId, status: reservation.status },
-            );
+            if ( reservations.length === 1 ) {
+                const r = reservations[0];
+                await this.audit.deleted( tx, r.id,
+                    `시설 예약 삭제: ${r.facility.name} ${formatReservationTime( r.startAt, r.endAt )}`,
+                    { userId: r.userId, status: r.status },
+                );
+            } else {
+                await this.audit.logBatch({
+                    targetIds: ids,
+                    actionType: AuditActionType.DELETE,
+                    content: `시설 예약 일괄 삭제 (${ids.length}건)`,
+                    changes: batchChanges( reservations, 'deleted', true ),
+                    extra: { userIds: Object.fromEntries( reservations.map( ( r ) => [ String( r.id ), r.userId ] ) ) },
+                }, tx );
+            }
         });
 
         if ( isAdmin ) {
-            await this.notifier.deletedByAdmin( [ reservation ], user.id );
+            await this.notifier.deletedByAdmin( reservations, user.id );
         }
 
         return true;
@@ -367,14 +491,21 @@ export class ReservationsService {
         }
     }
 
-    private async cancelMany( user: Actor, ids: number[] ) {
+    //* 일괄 처리 대상 (삭제되지 않은 예약, 시작 순) - 하나라도 없으면 404
+    private async findManyOrThrow( ids: number[] ) {
         const reservations = await this.prisma.facilityReservation.findMany({
             where: { id: { in: ids }, deleted: false },
             include: reservationInclude,
+            orderBy: [ { startAt: 'asc' }, { id: 'asc' } ],
         });
         if ( reservations.length !== ids.length ) {
-            throw new NotFoundException( '존재하지 않는 예약이 있습니다.' );
+            throw new NotFoundException( ids.length === 1 ? '존재하지 않는 예약입니다.' : '존재하지 않는 예약이 있습니다.' );
         }
+        return reservations;
+    }
+
+    private async cancelMany( user: Actor, ids: number[] ) {
+        const reservations = await this.findManyOrThrow( ids );
         for ( const r of reservations ) {
             this.assertCanChange( user, r, '취소' );
         }
@@ -438,15 +569,17 @@ export class ReservationsService {
     }
 
     //* 트랜잭션 안의 겹침 검사 (사용자에게 보여 줄 메시지용, 동시 요청은 DB 제약이 최종 방어)
-    private async assertNoConflict( tx: Tx, facilityId: number, startAt: Date, endAt: Date, exceptId?: number ) {
+    // label: 일괄 처리에서 어느 예약이 겹쳤는지 메시지 앞에 붙인다.
+    private async assertNoConflict( tx: Tx, facilityId: number, startAt: Date, endAt: Date, exceptId?: number, label?: string ) {
         const overlap = { startAt: { lt: endAt }, endAt: { gt: startAt } };
+        const message = ( text: string ) => label ? `${label}: ${text}` : text;
 
         const reserved = await tx.facilityReservation.findFirst({
             where: { facilityId, status: FacilityReservationStatus.RESERVED, deleted: false, id: exceptId ? { not: exceptId } : undefined, ...overlap },
             select: { id: true },
         });
         if ( reserved ) {
-            throw new ConflictException( OVERLAP_MESSAGE );
+            throw new ConflictException( message( OVERLAP_MESSAGE ) );
         }
 
         const unavailable = await tx.facilityUnavailable.findFirst({
@@ -454,7 +587,7 @@ export class ReservationsService {
             select: { id: true },
         });
         if ( unavailable ) {
-            throw new ConflictException( UNAVAILABLE_MESSAGE );
+            throw new ConflictException( message( UNAVAILABLE_MESSAGE ) );
         }
     }
 

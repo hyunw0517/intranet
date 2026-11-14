@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { AuditActionType, AuditTargetType, FacilityReservation, FacilityReservationStatus, Prisma, UserRole, Users } from "src/generated/prisma/client";
+import { AdminPermission, AuditActionType, AuditTargetType, FacilityReservation, FacilityReservationStatus, Prisma, Users } from "src/generated/prisma/client";
+import { hasAdminPermission } from "src/auth/util/admin-permission.util";
 import { AuditService, TargetAudit } from "src/common/audit.service";
 import { batchChanges, diffChanges } from "src/common/util/audit-detail.util";
 import { kstDateAt, kstDateString } from "src/common/util/date.util";
@@ -16,7 +17,7 @@ import { ReservationNotifier } from "./reservation-notifier";
 import { isReservationOverlapError } from "./util/overlap-error.util";
 import { checkReservationTime, formatReservationTime, lastBookableDate, listRecurringDates, parseHm, ReservationRuleCode } from "./util/reservation-rules.util";
 
-type Actor = Pick<Users, 'id' | 'role'>;
+type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 type Tx = Prisma.TransactionClient;
 
 // 반복 예약에서 건너뛴 이유
@@ -348,8 +349,9 @@ export class ReservationsService {
 
     //! 내부
 
+    //* 예약 관리 기능을 가진 관리자(슈퍼관리자 포함)
     private isAdmin( user: Actor ) {
-        return user.role === UserRole.ADMIN;
+        return hasAdminPermission( user, AdminPermission.RESERVATIONS );
     }
 
     //* 수정·취소 공통 권한: 본인·관리자, 유효한 예약, 시작 전 (관리자도 시작 후에는 삭제만)

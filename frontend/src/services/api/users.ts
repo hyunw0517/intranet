@@ -2,7 +2,7 @@
 import { apiFetch } from "@/services/api-client";
 import type { NamedRef, UserDepartmentItem } from "@/types/organization";
 import type { PageResult } from "@/types/pagination";
-import type { CurrentUser, UserRole, UserStatus } from "@/types/user";
+import type { AdminPermission, CurrentUser, UserRole, UserStatus } from "@/types/user";
 
 // PATCH /users/me (UpdateUserDto) - 수정하려면 현재 비밀번호로 본인 확인
 export interface UpdateMeInput {
@@ -75,6 +75,7 @@ export interface AdminUserDetail {
   tel: string | null;
   joinAt: string | null;
   role: UserRole;
+  adminPermissions: AdminPermission[]; // ADMIN의 관리자 기능 (그 외 권한은 빈 배열)
   status: UserStatus;
   createdAt: string;
   position: NamedRef | null;
@@ -104,6 +105,8 @@ export interface AdminUpdateUserInput {
 }
 
 // PATCH /users/:id/role (UpdateUserRoleDto) - GUEST → USER/ADMIN이 가입 승인
+// - 회원 관리 기능을 가진 ADMIN: GUEST·USER → USER만 / ADMIN·SUPER_ADMIN 지정, 관리자 계정 변경, 기능 지정은 SUPER_ADMIN만 (서버 403)
+// - adminPermissions: role이 ADMIN일 때만. 생략하면 지금 값 유지
 // 입사일은 받지 않는다. 승인 대기 회원은 입사일이 먼저 등록되어 있어야 한다. (없으면 서버 400)
 export type ApprovedRole = Exclude<UserRole, "GUEST">;
 
@@ -122,9 +125,9 @@ export function adminUpdateUser(id: number, input: AdminUpdateUserInput) {
   return apiFetch<AdminUserDetail>(`/users/${id}`, { method: "PATCH", body: input });
 }
 
-// (관리자) 가입 승인 또는 권한 변경 (USER ↔ ADMIN)
-export function updateUserRole(id: number, role: ApprovedRole) {
-  return apiFetch<boolean>(`/users/${id}/role`, { method: "PATCH", body: { role } });
+// (관리자) 가입 승인 또는 권한 변경 (USER ↔ ADMIN ↔ SUPER_ADMIN, ADMIN이면 관리자 기능도)
+export function updateUserRole(id: number, role: ApprovedRole, adminPermissions?: AdminPermission[]) {
+  return apiFetch<boolean>(`/users/${id}/role`, { method: "PATCH", body: { role, adminPermissions } });
 }
 
 // (관리자) 계정 상태 변경 (재직·비활성·퇴사) → 재직이 아니면 다음 요청부터 차단

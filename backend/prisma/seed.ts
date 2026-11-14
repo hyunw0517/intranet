@@ -104,7 +104,7 @@ async function main(){
         }),
         prisma.users.findFirst({
             select: { id: true },
-            where: { role: UserRole.ADMIN, deleted: false },
+            where: { role: { in: [ UserRole.ADMIN, UserRole.SUPER_ADMIN ] }, deleted: false },
             orderBy: { id: 'asc' },
         }),
         // seed 밖의 회원이 이미 가진 직급 (핵심 인물 중복 방지)

@@ -16,7 +16,7 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { NotFoundException } from '@nestjs/common';
-import { BoardType, PrismaClient, UserRole, UserStatus } from '../src/generated/prisma/client';
+import { AdminPermission, BoardType, PrismaClient, UserRole, UserStatus } from '../src/generated/prisma/client';
 import { BoardAuthService } from '../src/boards/board-auth.service';
 import { BoardPermission } from '../src/boards/interface/board-permission.interface';
 import { OrganizationService } from '../src/organization/organization.service';
@@ -521,7 +521,7 @@ const TODAY_POSTS = 6; // 목록의 "오늘 HH:mm" 표시 확인용
 const SECRET_RATE = 0.8; // 비밀글 허용 게시판에서 비밀글 비율
 const QA_ANSWER_RATE = 0.85; // 질문 게시판에서 답변이 달린 글 비율
 
-interface Member { id: number; role: UserRole }
+interface Member { id: number; role: UserRole; adminPermissions: AdminPermission[] }
 interface PlannedPost { boardId: number; boardName: string; kind: Kind; template: Template; team: string }
 
 async function main(){
@@ -557,8 +557,8 @@ async function main(){
 
     // 2. 회원별 권한 (서비스의 판정 로직 그대로)
     const members: Member[] = await prisma.users.findMany({
-        select: { id: true, role: true },
-        where: { deleted: false, status: UserStatus.ACTIVE, role: { in: [ UserRole.USER, UserRole.ADMIN ] } },
+        select: { id: true, role: true, adminPermissions: true },
+        where: { deleted: false, status: UserStatus.ACTIVE, role: { in: [ UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN ] } },
         orderBy: { id: 'asc' },
     });
     const permOf = new Map<string, BoardPermission>(); // `${boardId}:${userId}`

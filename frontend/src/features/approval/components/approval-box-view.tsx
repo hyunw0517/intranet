@@ -7,6 +7,7 @@ import { PaginationBar } from "@/components/common/pagination-bar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDateTime, formatListDate } from "@/lib/format";
+import { hasAdminPermission } from "@/lib/admin-permission";
 import { useAuth } from "@/providers/auth-provider";
 import {
   APPROVAL_STATUS_LABEL,
@@ -49,7 +50,8 @@ export function ApprovalBoxView() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const isAdmin = user?.role === "ADMIN";
+  // 전체 문서함: 결재라인 관리 기능을 가진 관리자(슈퍼관리자 포함)만 (서버도 403)
+  const isAdmin = hasAdminPermission(user, "APPROVAL_LINES");
   const boxes = BOXES.filter((b) => !b.adminOnly || isAdmin);
   const box = (boxes.find((b) => b.box === params.get("box"))?.box ?? "pending") as ApprovalBox;
   const status = STATUS_FILTER_BOXES.includes(box) ? (params.get("status") as ApprovalStatus | null) ?? undefined : undefined;

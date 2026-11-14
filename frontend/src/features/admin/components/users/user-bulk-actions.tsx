@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/error-message";
+import { isAdminRole } from "@/lib/admin-permission";
+import { useAuth } from "@/providers/auth-provider";
 import {
   bulkDeleteUsers,
   bulkUpdateUsersRole,
@@ -37,6 +39,10 @@ interface Props {
 // 요청 하나가 동작 하나다. (권한과 상태를 한 요청에 섞지 않아 일부만 반영되는 경우가 없다)
 // 한 명이라도 처리할 수 없으면 서버가 전체를 거부하고(트랜잭션), 그 메시지를 모달에 보여 준다.
 export function UserBulkActions({ selectedUsers, onDone }: Props) {
+  const { user: me } = useAuth();
+  const isSuperAdmin = me?.role === "SUPER_ADMIN";
+  // 관리자 계정이 섞여 있으면 슈퍼관리자만 처리할 수 있다. (서버도 전체 403)
+  const hasAdminAccount = selectedUsers.some((u) => isAdminRole(u.role));
   const [dialog, setDialog] = useState<BulkDialog>(null);
   const count = selectedUsers.length;
   const ids = selectedUsers.map((u) => u.id);
@@ -69,12 +75,15 @@ export function UserBulkActions({ selectedUsers, onDone }: Props) {
         title="권한 일괄 변경"
         description={`${namesLabel(selectedUsers)} 회원의 권한을 변경합니다.`}
         label="권한"
-        options={(["USER", "ADMIN"] as const).map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
-        notice={
+        // 관리자 지정은 슈퍼관리자만, 관리자 기능은 회원별로 ⋯ 메뉴에서 지정한다.
+        options={((isSuperAdmin ? ["USER", "ADMIN", "SUPER_ADMIN"] : ["USER"]) as ApprovedRole[]).map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
+        notice={[
           selectedUsers.some((u) => u.role === "GUEST")
             ? "승인 대기 회원은 입사일이 등록되어 있어야 승인됩니다. 입사일이 없는 회원이 있으면 전체가 처리되지 않습니다."
-            : undefined
-        }
+            : null,
+          isSuperAdmin ? "관리자로 바꾼 회원의 관리자 기능은 회원별 ⋯ 메뉴에서 지정합니다. (새 관리자는 기능 없이 시작)" : null,
+          !isSuperAdmin && hasAdminAccount ? "관리자 계정이 포함되어 있어 처리할 수 없습니다. 관리자 계정은 슈퍼관리자만 변경합니다." : null,
+        ].filter(Boolean).join(" ") || undefined}
         mutationFn={(role) => bulkUpdateUsersRole(ids, role)}
         successMessage={(role) => `${count}명의 권한을 ${ROLE_LABEL[role]}(으)로 변경했습니다.`}
         onDone={onDone}

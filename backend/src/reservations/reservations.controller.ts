@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { Roles } from 'src/auth/decorator/roles.decorator';
+import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
 import { User } from 'src/auth/decorator/user.decorator';
-import { UserRole, Users } from 'src/generated/prisma/client';
+import { AdminPermission, UserRole, Users } from 'src/generated/prisma/client';
 import { CreateRecurringReservationDto } from './dto/create-recurring-reservation.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { AdminReservationListQueryDto, MyReservationListQueryDto } from './dto/reservation-list-query.dto';
@@ -10,7 +11,7 @@ import { ScheduleQueryDto } from './dto/schedule-query.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { ReservationsService } from './reservations.service';
 
-type Actor = Pick<Users, 'id' | 'role'>;
+type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 
 //* 시설 예약 - 수정·취소·삭제 권한(본인·관리자, 시작 전/후)은 서비스에서 예약마다 확인한다.
 // 고정 경로(schedule, me, admin, recurring, bulk/cancel)는 ':id'보다 먼저 선언한다.
@@ -44,7 +45,7 @@ export class ReservationsController {
 
     //* 전체 예약 (관리자)
     @Get('admin')
-    @Roles(UserRole.ADMIN)
+    @RequireAdmin(AdminPermission.RESERVATIONS)
     findAllForAdmin( @Query() query: AdminReservationListQueryDto ) {
         return this.reservationsService.findAllForAdmin( query );
     }

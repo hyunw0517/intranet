@@ -5,7 +5,7 @@ import { UserRole, Users } from 'src/generated/prisma/client';
 import { ApprovalLinesService } from './approval-lines.service';
 import { CreateApprovalLineDto, ManageApprovalLineQueryDto, UpdateApprovalLineDto } from './dto/approval-line.dto';
 
-type Actor = Pick<Users, 'id' | 'role'>;
+type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 
 //* 결재라인 템플릿 - 공용·부서는 결재라인 관리자(서비스에서 판정), 개인은 본인
 // 고정 경로(manage)는 ':id'보다 먼저 선언한다.

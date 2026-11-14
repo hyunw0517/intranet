@@ -1,12 +1,13 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { ApprovalLineManagerScope, AuditTargetType, UserRole, Users } from "src/generated/prisma/client";
+import { AdminPermission, ApprovalLineManagerScope, AuditTargetType, UserRole, Users } from "src/generated/prisma/client";
+import { hasAdminPermission } from "src/auth/util/admin-permission.util";
 import { AuditService, TargetAudit } from "src/common/audit.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { CreateLineManagerDto } from "./dto/line-manager.dto";
 import { toTreeList } from "src/common/util/tree.util";
 import { LineManageScope, resolveManageScope, withDescendants } from "./util/approval-rules.util";
 
-type Actor = Pick<Users, 'id' | 'role'>;
+type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 
 const SCOPE_LABEL: Record<ApprovalLineManagerScope, string> = {
     ALL: '전체',
@@ -33,7 +34,8 @@ export class LineManagersService {
 
     //* 내 관리 범위
     async manageScope( user: Actor ): Promise<LineManageScope> {
-        if ( user.role === UserRole.ADMIN ) {
+        // 결재라인 관리 기능을 가진 관리자(슈퍼관리자 포함)는 위임 없이 전체 범위
+        if ( hasAdminPermission( user, AdminPermission.APPROVAL_LINES ) ) {
             return { all: true, departmentIds: [] };
         }
 

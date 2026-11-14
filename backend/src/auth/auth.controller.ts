@@ -4,8 +4,8 @@ import { RegisterUserDto } from './dto/register-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { User } from './decorator/user.decorator';
 import { SessionId } from './decorator/session-id.decorator';
-import { Roles } from './decorator/roles.decorator';
-import { UserRole, type Users } from 'src/generated/prisma/client';
+import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
+import { AdminPermission, type Users } from 'src/generated/prisma/client';
 import { IsPublic } from 'src/common/decorator/is-public.decorator';
 import { RefreshTokenGuard } from './guard/bearer-token.guard';
 import { BasicTokenGuard } from './guard/basic-token.guard';
@@ -168,21 +168,23 @@ export class AuthController {
   //* (관리자) 회원 비밀번호 초기화
   //      - tokenVersion이 올라가 대상 회원의 모든 기기가 로그아웃된다.
   @Patch('reset/pw/:userId')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   patchResetPassword(
+    @User() user: Pick<Users, 'role'>,
     @Param('userId', ParseIntPipe) userId: number,
   ){
-    return this.authService.resetPassword(userId);
+    return this.authService.resetPassword(user, userId);
   }
 
   //* (관리자) 회원 로그인 잠금 해제 - 실패 횟수·잠금 단계 초기화
   //      - 잠긴 적이 없으면 { unlocked: false } (오류 아님)
   @Patch('unlock/:userId')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   patchUnlockLogin(
+    @User() user: Pick<Users, 'role'>,
     @Param('userId', ParseIntPipe) userId: number,
   ){
-    return this.authService.unlockLogin(userId);
+    return this.authService.unlockLogin(user, userId);
   }
 
 }

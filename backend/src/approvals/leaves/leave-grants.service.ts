@@ -53,7 +53,7 @@ export class LeaveGrantsService {
             where: {
                 deleted: false,
                 status: { in: [ UserStatus.ACTIVE, UserStatus.INACTIVE ] },
-                role: { in: [ UserRole.USER, UserRole.ADMIN ] },
+                role: { in: [ UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN ] },
                 joinAt: { not: null },
             },
             select: { id: true, joinAt: true, leaveSetting: { select: { permanentDays: true } } },

@@ -1,14 +1,15 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
 import type { Response } from 'express';
 import { Roles } from 'src/auth/decorator/roles.decorator';
+import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
 import { User } from 'src/auth/decorator/user.decorator';
-import { UserRole, Users } from 'src/generated/prisma/client';
+import { AdminPermission, UserRole, Users } from 'src/generated/prisma/client';
 import { ApprovalDocumentsService } from './approval-documents.service';
 import {
     ApprovalDocumentListQueryDto, ApproveDocumentDto, CreateApprovalDocumentDto, RejectDocumentDto, ReplaceApproverDto, UpdateApprovalDocumentDto,
 } from './dto/approval-document.dto';
 
-type Actor = Pick<Users, 'id' | 'role'>;
+type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 
 //* 전자결재 문서 - 열람·처리 권한(기안자·결재자·관리자, 상태)은 서비스에서 문서마다 확인한다.
 // 상태 변경은 PATCH :id/<동작> (시설 예약과 같은 형식)
@@ -112,7 +113,7 @@ export class ApprovalDocumentsController {
 
     //* 관리자 결재자 교체 (진행 중 문서의 남은 결재자 한 명) - 병렬 단계는 단계 번호로 한 사람을 정할 수 없어 단계 행 id를 쓴다
     @Patch('documents/:id/steps/:stepId')
-    @Roles(UserRole.ADMIN)
+    @RequireAdmin(AdminPermission.APPROVAL_LINES)
     replaceApprover(
         @User() user: Actor,
         @Param('id', ParseIntPipe) id: number,

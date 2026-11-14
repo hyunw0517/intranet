@@ -125,7 +125,7 @@ interface Member {
 async function loadOrganization(){
     const departments = await prisma.department.findMany({ where: { deleted: false }, select: { id: true, name: true, parentDepartmentId: true } });
     const leaders = await prisma.userDepartment.findMany({
-        where: { deleted: false, isPrimary: true, jobTitle: { name: { in: LEADER_TITLES }, deleted: false }, user: { deleted: false, status: UserStatus.ACTIVE, role: { in: [ UserRole.USER, UserRole.ADMIN ] } } },
+        where: { deleted: false, isPrimary: true, jobTitle: { name: { in: LEADER_TITLES }, deleted: false }, user: { deleted: false, status: UserStatus.ACTIVE, role: { in: [ UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN ] } } },
         select: { departmentId: true, userId: true, jobTitle: { select: { name: true } } },
     });
     // 부서 → 부서장 (한 부서에 여럿이면 직책 순서가 높은 사람: 대표이사실의 대표이사 > 부대표)
@@ -447,7 +447,7 @@ async function main(){
 
     const users = await prisma.users.findMany({
         where: {
-            deleted: false, status: UserStatus.ACTIVE, role: { in: [ UserRole.USER, UserRole.ADMIN ] },
+            deleted: false, status: UserStatus.ACTIVE, role: { in: [ UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN ] },
             joinAt: { not: null }, id: { notIn: excludedIds },
         },
         select: {

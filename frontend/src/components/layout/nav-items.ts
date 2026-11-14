@@ -15,13 +15,16 @@ import {
   Users,
 } from "lucide-react";
 import { isGuestAllowedPath } from "@/lib/guest-access";
+import { hasAdminPermission, type AdminPermissionUser } from "@/lib/admin-permission";
 import type { AddonName } from "@/services/api/addons";
+import type { AdminPermission } from "@/types/user";
 
 export interface NavItem {
   title: string;
   href: string;
   icon: LucideIcon;
   addon?: AddonName; // 애드온 메뉴: 그 애드온이 켜져 있을 때만 보인다. (GET /common/addons)
+  permission?: AdminPermission; // 관리자 메뉴: 그 기능을 가진 ADMIN·SUPER_ADMIN에게만 보인다.
 }
 
 export interface NavGroup {
@@ -53,13 +56,13 @@ export const adminNav: NavGroup[] = [
     label: "관리",
     items: [
       { title: "관리자 홈", href: "/admin", icon: Settings },
-      { title: "회원 관리", href: "/admin/users", icon: Users },
-      { title: "조직 관리", href: "/admin/organization", icon: Network },
-      { title: "게시판 관리", href: "/admin/boards", icon: LayoutList },
-      { title: "시설 관리", href: "/admin/facilities", icon: Building, addon: "reservations" },
-      { title: "예약 관리", href: "/admin/reservations", icon: CalendarRange, addon: "reservations" },
-      { title: "결재라인 관리자", href: "/admin/approval-managers", icon: UserCog, addon: "approvals" },
-      { title: "연차 관리", href: "/admin/leaves", icon: CalendarCheck, addon: "leaves" },
+      { title: "회원 관리", href: "/admin/users", icon: Users, permission: "USERS" },
+      { title: "조직 관리", href: "/admin/organization", icon: Network, permission: "ORGANIZATION" },
+      { title: "게시판 관리", href: "/admin/boards", icon: LayoutList, permission: "BOARDS" },
+      { title: "시설 관리", href: "/admin/facilities", icon: Building, addon: "reservations", permission: "FACILITIES" },
+      { title: "예약 관리", href: "/admin/reservations", icon: CalendarRange, addon: "reservations", permission: "RESERVATIONS" },
+      { title: "결재라인 권한 관리", href: "/admin/approval-managers", icon: UserCog, addon: "approvals", permission: "APPROVAL_LINES" },
+      { title: "연차 관리", href: "/admin/leaves", icon: CalendarCheck, addon: "leaves", permission: "LEAVES" },
     ],
   },
 ];
@@ -77,6 +80,13 @@ export const navByVariant: Record<ShellVariant, NavGroup[]> = {
 export function filterNavForAddons(nav: NavGroup[], enabled: AddonName[] | undefined): NavGroup[] {
   return nav
     .map((group) => ({ ...group, items: group.items.filter((item) => !item.addon || (enabled ?? []).includes(item.addon)) }))
+    .filter((group) => group.items.length > 0);
+}
+
+// 지정되지 않은 관리자 기능의 메뉴를 뺀다. (비어 버린 그룹은 제외)
+export function filterNavForAdminPermission(nav: NavGroup[], user: AdminPermissionUser | null | undefined): NavGroup[] {
+  return nav
+    .map((group) => ({ ...group, items: group.items.filter((item) => !item.permission || hasAdminPermission(user, item.permission)) }))
     .filter((group) => group.items.length > 0);
 }
 

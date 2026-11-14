@@ -16,7 +16,7 @@ type Db = PrismaService | Tx;
 const chatableUserWhere = {
     deleted: false,
     status: UserStatus.ACTIVE,
-    role: { in: [ UserRole.USER, UserRole.ADMIN ] },
+    role: { in: [ UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN ] },
 } satisfies Prisma.UsersWhereInput;
 
 //! 채팅방 (features.md 8.3, 8.5, 8.6)

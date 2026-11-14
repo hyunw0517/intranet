@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Clock, ShieldX } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { hasAdminPermission, isAdminRole } from "@/lib/admin-permission";
 import { isGuestAllowedPath } from "@/lib/guest-access";
+import { ADMIN_PERMISSION_LABEL, type AdminPermission } from "@/types/user";
 import { useAuth } from "@/providers/auth-provider";
 
 // 직원용 화면: GUEST는 승인 대기 안내만 보여 준다. (마이페이지는 허용)
@@ -31,11 +33,11 @@ export function PendingApprovalGate({ children }: { children: React.ReactNode })
   return <>{children}</>;
 }
 
-// 관리자 화면: ADMIN만 접근 가능. 최종 권한 검증은 백엔드 RolesGuard가 한다.
+// 관리자 화면: ADMIN·SUPER_ADMIN만 접근 가능. 최종 권한 검증은 백엔드 RolesGuard가 한다.
 export function AdminGate({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
-  if (user?.role !== "ADMIN") {
+  if (!isAdminRole(user?.role)) {
     return (
       <div className="flex min-h-svh items-center justify-center px-4">
         <GateMessage
@@ -49,6 +51,29 @@ export function AdminGate({ children }: { children: React.ReactNode }) {
           }
         />
       </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+// 관리자 기능별 화면: 그 기능을 가진 ADMIN 또는 SUPER_ADMIN만 (AdminGate 안에서 쓴다)
+// 기능이 없으면 관리자 레이아웃은 유지하고 본문만 안내로 바꾼다. 최종 검증은 백엔드 @RequireAdmin.
+export function AdminPermissionGate({ permission, children }: { permission: AdminPermission; children: React.ReactNode }) {
+  const { user } = useAuth();
+
+  if (!hasAdminPermission(user, permission)) {
+    return (
+      <GateMessage
+        icon={<ShieldX className="size-5" />}
+        title="접근 권한이 없습니다"
+        description={`${ADMIN_PERMISSION_LABEL[permission]} 기능이 지정되지 않았습니다. 슈퍼관리자에게 요청하세요.`}
+        action={
+          <Button asChild variant="outline">
+            <Link href="/admin">관리자 홈으로</Link>
+          </Button>
+        }
+      />
     );
   }
 

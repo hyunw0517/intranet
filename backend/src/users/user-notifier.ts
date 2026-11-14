@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { NotificationActionType, NotificationTargetType, UserRole, Users, UserStatus } from "src/generated/prisma/client";
+import { AdminPermission, NotificationActionType, NotificationTargetType, Users, UserStatus } from "src/generated/prisma/client";
+import { adminPermissionWhere } from "src/auth/util/admin-permission.util";
 import { NotificationsService } from "src/common/notifications.service";
 import { bestEffort } from "src/common/util/best-effort.util";
 import { PrismaService } from "src/prisma/prisma.service";
@@ -17,13 +18,13 @@ export class UserNotifier {
         private readonly notificationsService: NotificationsService,
     ){}
 
-    //* 신규 가입 → 재직 중인 관리자 전원에게 승인 대기 알림 (발신자 = 가입한 회원, 로그인 전 요청이라 명시)
+    //* 신규 가입 → 재직 중인 회원 관리 담당(슈퍼관리자 + 회원 관리 기능을 가진 관리자)에게 승인 대기 알림 (발신자 = 가입한 회원, 로그인 전 요청이라 명시)
     signupRequested( newUser: Pick<Users, 'id' | 'name' | 'empNo'> ){
         return bestEffort( this.logger, `가입 승인 대기 알림(user ${newUser.id})`, async () => {
             const admins = await this.prisma.users.findMany({
                 select: { id: true },
                 where: {
-                    role: UserRole.ADMIN,
+                    ...adminPermissionWhere( AdminPermission.USERS ),
                     status: UserStatus.ACTIVE,
                     deleted: false,
                 },

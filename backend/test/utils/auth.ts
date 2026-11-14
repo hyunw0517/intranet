@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { PrismaClient, UserRole } from 'src/generated/prisma/client';
+import { AdminPermission, PrismaClient, UserRole } from 'src/generated/prisma/client';
 
 export const TEST_PASSWORD = 'Test1234!';
 
@@ -10,7 +10,8 @@ let seq = 0;
 
 //* 테스트 회원 생성 (재직 중, 비밀번호는 TEST_PASSWORD)
 // 사번·이메일은 파일 안에서 겹치지 않게 순번을 붙인다. (resetDatabase 후 다시 1부터 써도 된다)
-export async function createTestUser( prisma: PrismaClient, role: UserRole = UserRole.USER ) {
+// - ADMIN은 adminPermissions를 생략하면 모든 관리자 기능을 준다. (기능별 권한 자체를 보는 테스트만 목록을 넘긴다)
+export async function createTestUser( prisma: PrismaClient, role: UserRole = UserRole.USER, adminPermissions?: AdminPermission[] ) {
     seq += 1;
     return prisma.users.create({
         data: {
@@ -19,6 +20,7 @@ export async function createTestUser( prisma: PrismaClient, role: UserRole = Use
             name: `테스트${seq}`,
             password: await bcrypt.hash( TEST_PASSWORD, 4 ),
             role,
+            adminPermissions: role === UserRole.ADMIN ? ( adminPermissions ?? Object.values( AdminPermission ) ) : [],
             joinAt: role === UserRole.GUEST ? null : new Date( '2026-01-01' ),
         },
     });

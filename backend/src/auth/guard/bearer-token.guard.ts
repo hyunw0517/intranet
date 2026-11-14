@@ -9,12 +9,12 @@ import { TokenUserPayload } from "../types/jwt-payload.type";
  * *[토큰 검증 두 갈래]
  *
  * 1) access token (일반 API, 전역 AccessTokenGuard) → authenticateAccess()
- *    서명·만료·type만 확인하고 req.user를 payload(id·empNo·role·ver)로 채운다. DB 조회 없음.
+ *    서명·만료·type만 확인하고 req.user를 payload(id·empNo·role·perms·ver)로 채운다. DB 조회 없음.
  *    → 권한 변경·퇴사·비밀번호 변경·모든 기기 로그아웃은 access 만료(최대 10분)까지 반영되지 않는다. (2026-11-07 결정)
  *
  * 2) refresh token (재발급 라우트, RefreshTokenGuard) → authenticate()
  *    서명·만료에 더해 회원 조회 → tokenVersion 일치 → 상태(ACTIVE) 확인.
- *    → 위 변경 사항은 늦어도 다음 재발급에서 막힌다. 새 access에는 DB의 최신 role이 들어간다.
+ *    → 위 변경 사항은 늦어도 다음 재발급에서 막힌다. 새 access에는 DB의 최신 role·adminPermissions가 들어간다.
  */
 @Injectable()
 export class BearerTokenGuard implements CanActivate {
@@ -94,6 +94,7 @@ export class BearerTokenGuard implements CanActivate {
             id: result.sub,
             empNo: result.empNo,
             role: result.role,
+            adminPermissions: result.perms ?? [],
             tokenVersion: result.ver,
         };
 

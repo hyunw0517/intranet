@@ -2,8 +2,8 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query 
 import { JobTitlesService } from './job-titles.service';
 import { User } from 'src/auth/decorator/user.decorator';
 import { PaginateJobTitleQueryDto } from './dto/paginate-job-title-query.dto';
-import { UserRole, Users } from 'src/generated/prisma/client';
-import { Roles } from 'src/auth/decorator/roles.decorator';
+import { AdminPermission, Users } from 'src/generated/prisma/client';
+import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
 import { CreateJobTitleDto } from './dto/create-job-title.dto';
 import { UpdateJobTitleDto } from './dto/update-job-title.dto';
 import { UpdateSortOrderDto } from './dto/update-sort-order.dto';
@@ -17,7 +17,7 @@ export class JobTitlesController {
 
   //* 직책 전체 조회
   @Get()
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin() // 여러 관리자 화면이 같이 쓰는 조회
   getListJobTitles(
     @Query() query: PaginateJobTitleQueryDto,
   ) {
@@ -26,7 +26,7 @@ export class JobTitlesController {
 
   //* 직책 생성
   @Post()
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.ORGANIZATION)
   postJobTitles(
     @User() user: Pick<Users, 'id'>,
     @Body() body: CreateJobTitleDto,
@@ -37,7 +37,7 @@ export class JobTitlesController {
   //* 직책 순서 변경 (드래그 정렬)
   // 'order'는 ':id'보다 먼저 선언해야 한다. (뒤에 두면 'order'가 :id로 매칭되어 ParseIntPipe 400)
   @Patch('order')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.ORGANIZATION)
   patchJobTitleOrder(
     @User() user: Pick<Users, 'id'>,
     @Body() body: UpdateSortOrderDto,
@@ -47,7 +47,7 @@ export class JobTitlesController {
 
   //* 직책 수정
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.ORGANIZATION)
   patchJobTitles(
     @User() user: Pick<Users, 'id'>,
     @Param('id', ParseIntPipe) id: number,
@@ -58,7 +58,7 @@ export class JobTitlesController {
 
   //* 직책 삭제
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.ORGANIZATION)
   deleteJobTitles(
     @User() user: Pick<Users, 'id'>,
     @Param('id', ParseIntPipe) id: number,

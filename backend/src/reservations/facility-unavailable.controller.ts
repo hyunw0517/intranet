@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
-import { Roles } from 'src/auth/decorator/roles.decorator';
+import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
 import { User } from 'src/auth/decorator/user.decorator';
-import { UserRole, Users } from 'src/generated/prisma/client';
+import { AdminPermission, Users } from 'src/generated/prisma/client';
 import { CreateUnavailableDto } from './dto/create-unavailable.dto';
 import { UnavailableListQueryDto } from './dto/unavailable-list-query.dto';
 import { UpdateUnavailableDto } from './dto/update-unavailable.dto';
@@ -17,7 +17,7 @@ export class FacilityUnavailableController {
     ){}
 
     @Get()
-    @Roles(UserRole.ADMIN)
+    @RequireAdmin(AdminPermission.FACILITIES)
     findAll(
         @Param('facilityId', ParseIntPipe) facilityId: number,
         @Query() query: UnavailableListQueryDto,
@@ -26,7 +26,7 @@ export class FacilityUnavailableController {
     }
 
     @Post()
-    @Roles(UserRole.ADMIN)
+    @RequireAdmin(AdminPermission.FACILITIES)
     create(
         @User() user: Pick<Users, 'id'>,
         @Param('facilityId', ParseIntPipe) facilityId: number,
@@ -36,7 +36,7 @@ export class FacilityUnavailableController {
     }
 
     @Patch(':id')
-    @Roles(UserRole.ADMIN)
+    @RequireAdmin(AdminPermission.FACILITIES)
     update(
         @User() user: Pick<Users, 'id'>,
         @Param('facilityId', ParseIntPipe) facilityId: number,
@@ -47,7 +47,7 @@ export class FacilityUnavailableController {
     }
 
     @Delete(':id')
-    @Roles(UserRole.ADMIN)
+    @RequireAdmin(AdminPermission.FACILITIES)
     delete(
         @User() user: Pick<Users, 'id'>,
         @Param('facilityId', ParseIntPipe) facilityId: number,

@@ -8,7 +8,7 @@ import { LeaveGrantsService } from "./leave-grants.service";
 import { daysInclusive, daysToQuarters, quartersToDays } from "./util/leave-grant.calc";
 import { buildLeavePeriod, findOverbookedDate, findTimeConflict, groupLeavesByDate, LEAVE_TYPE_LABEL, LeavePeriod, leaveTitle, periodLabel } from "./util/leave-request.util";
 
-type Actor = Pick<Users, 'id' | 'role'>;
+type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 type Tx = Prisma.TransactionClient;
 
 // 하루 합계·잔여 계산에 넣는 휴가: 결재 진행 중 + 승인 (임시저장·반려·회수·삭제는 제외)

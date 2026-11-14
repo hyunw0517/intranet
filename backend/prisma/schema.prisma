@@ -20,7 +20,20 @@ datasource db {
 enum UserRole {
   GUEST
   USER
-  ADMIN
+  ADMIN        // 관리자 - 슈퍼관리자가 지정한 기능(Users.adminPermissions)만 사용
+  SUPER_ADMIN  // 슈퍼관리자 - 모든 관리자 기능 + ADMIN 승격·기능 지정
+}
+
+//? 관리자 기능 구분 -> 모델: Users.adminPermissions (ADMIN만 사용, SUPER_ADMIN은 전부 가진 것으로 본다)
+//  - 애드온 기능 값(시설·예약·결재라인·연차)도 핵심 enum에 둔다. (AGENTS.md 10.1 허용한 타협)
+enum AdminPermission {
+  USERS           // 회원 관리 (가입 승인, 회원 정보·소속·상태, 비밀번호 초기화, 잠금 해제)
+  ORGANIZATION    // 조직 관리 (부서·직급·직책)
+  BOARDS          // 게시판 관리 (게시판·게시판 권한, 규칙 없는 게시판 열람)
+  FACILITIES      // 시설 관리 (분류·시설·사용 불가 기간)
+  RESERVATIONS    // 예약 관리 (전체 예약 조회, 남의 예약·지난 예약 수정·삭제)
+  APPROVAL_LINES  // 결재라인 관리자 (결재라인 관리자 지정, 모든 결재 문서 열람·결재자 교체)
+  LEAVES          // 연차 관리 (연차 부여·조정)
 }
 
 //? 상태 구분 -> 모델: Users
@@ -223,6 +236,7 @@ model Users {
 
   joinAt    DateTime? @db.Date // 입사일 (연차 계산에 사용)
   role      UserRole     @default(GUEST)  // 회원 권한
+  adminPermissions AdminPermission[] @default([]) @map("admin_permissions") // 관리자 기능 (ADMIN만 값이 있다, 다른 권한으로 바뀌면 비움)
   status     UserStatus @default(ACTIVE)  // 회원 상태
   tokenVersion Int    @default(0) @map("token_version") // 토큰 버전 (올리면 기존 로그인 발급 토큰 전부 무효화)
   positionId Int?   @map("position_id") // 직급 id (관리자 지정 전 신규 가입자는 NULL)

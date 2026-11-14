@@ -19,7 +19,7 @@ export class CalendarController {
     @Get('events')
     @Roles(UserRole.USER)
     getEvents(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Query() query: IntegratedCalendarEventsQueryDto,
     ){
         return this.postsService.findCalendarEvents( user, { boardIds: query.boardIds ?? null }, query.start, query.end );
@@ -29,7 +29,7 @@ export class CalendarController {
     @Get(':boardId/events')
     @Roles(UserRole.USER)
     getBoardEvents(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Query() query: CalendarEventsQueryDto,
     ){

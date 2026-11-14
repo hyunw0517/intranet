@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
 import { Roles } from 'src/auth/decorator/roles.decorator';
+import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
 import { User } from 'src/auth/decorator/user.decorator';
-import { UserRole, Users } from 'src/generated/prisma/client';
+import { AdminPermission, UserRole, Users } from 'src/generated/prisma/client';
 import { UpdateSortOrderDto } from 'src/organization/dto/update-sort-order.dto';
 import { CreateFacilityCategoryDto } from './dto/create-facility-category.dto';
 import { UpdateFacilityCategoryDto } from './dto/update-facility-category.dto';
@@ -22,7 +23,7 @@ export class FacilityCategoriesController {
     }
 
     @Post()
-    @Roles(UserRole.ADMIN)
+    @RequireAdmin(AdminPermission.FACILITIES)
     create(
         @User() user: Pick<Users, 'id'>,
         @Body() body: CreateFacilityCategoryDto,
@@ -32,7 +33,7 @@ export class FacilityCategoriesController {
 
     //* 순서 변경 ('order'는 ':id'보다 먼저 선언)
     @Patch('order')
-    @Roles(UserRole.ADMIN)
+    @RequireAdmin(AdminPermission.FACILITIES)
     updateOrder(
         @User() user: Pick<Users, 'id'>,
         @Body() body: UpdateSortOrderDto,
@@ -41,7 +42,7 @@ export class FacilityCategoriesController {
     }
 
     @Patch(':id')
-    @Roles(UserRole.ADMIN)
+    @RequireAdmin(AdminPermission.FACILITIES)
     update(
         @User() user: Pick<Users, 'id'>,
         @Param('id', ParseIntPipe) id: number,
@@ -51,7 +52,7 @@ export class FacilityCategoriesController {
     }
 
     @Delete(':id')
-    @Roles(UserRole.ADMIN)
+    @RequireAdmin(AdminPermission.FACILITIES)
     delete(
         @User() user: Pick<Users, 'id'>,
         @Param('id', ParseIntPipe) id: number,

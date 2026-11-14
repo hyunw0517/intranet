@@ -15,7 +15,7 @@ import { AuditService, TargetAudit } from 'src/common/audit.service';
 import { LoginHistoryService } from './login-history.service';
 import { LOGIN_FAILED_MESSAGE } from './const/login-lock.const';
 
-type TokenUser = Pick<Users, 'id' | 'empNo' | 'role' | 'tokenVersion'>;
+type TokenUser = Pick<Users, 'id' | 'empNo' | 'role' | 'adminPermissions' | 'tokenVersion'>;
 type SessionUser = Pick<Users, 'id' | 'tokenVersion'>;
 
 //* 로그인 실패 사유 (감사 로그 detail.reason)
@@ -117,7 +117,8 @@ export class AuthService {
     }
 
   //* Access Token 생성 - stateless (검증할 때 회원·세션 DB를 보지 않음)
-  //    - role: RolesGuard가 이 값으로 권한을 판단한다. 권한이 바뀌면 다음 재발급(최대 10분)부터 반영된다.
+  //    - role·perms: RolesGuard가 이 값으로 권한을 판단한다. 권한이 바뀌면 다음 재발급(최대 10분)부터 반영된다.
+  //      (관리자 권한 회수·강등은 UsersService가 tokenVersion을 올려 재발급을 막는다 → 다시 로그인해야 함)
   //    - sid는 "지금 기기" 표시(기기 목록)와 전체 로그아웃·비밀번호 변경 시 현재 기기 유지에 쓴다.
   private signAccessToken( user: TokenUser, sessionId: string ){
     return this.jwtService.sign({
@@ -126,6 +127,7 @@ export class AuthService {
         type: 'access',
         ver: user.tokenVersion, // 발급 당시 tokenVersion (access 검증에서는 비교하지 않음, 재발급 때 refresh로 비교)
         role: user.role,
+        perms: user.adminPermissions, // ADMIN이 아니면 빈 배열
         sid: sessionId,
     }, {
         secret: this.configService.get<string>(ENV_JWT_SECRET),
@@ -321,8 +323,11 @@ export class AuthService {
   }
 
   //* (관리자) 로그인 잠금 해제 - 실패 횟수·단계도 함께 초기화
-  async unlockLogin( userId: number ){
+  async unlockLogin( user: Pick<Users, 'role'>, userId: number ){
     const targetUser = await this.usersService.getUserDetail(userId);
+
+    // 관리자 계정은 슈퍼관리자만
+    this.usersService.assertCanManageAccount(user, targetUser);
 
     const unlocked = await this.loginHistoryService.reset( targetUser.empNo );
 
@@ -451,10 +456,14 @@ export class AuthService {
   //    - 서버가 임시 비밀번호를 생성해 저장하고, 평문은 응답으로 한 번만 돌려준다. (DB에는 해시만 저장)
   //    - updatePassword가 tokenVersion을 올리므로 대상 회원의 기존 토큰은 모두 무효가 된다.
   //    - 변경 대상이 관리자 본인이 아니므로 토큰을 발급하지 않는다.
-  async resetPassword( 
-    userId: number 
+  async resetPassword(
+    user: Pick<Users, 'role'>,
+    userId: number
   ){
     const targetUser = await this.usersService.getUserDetail(userId);
+
+    // 관리자 계정은 슈퍼관리자만
+    this.usersService.assertCanManageAccount(user, targetUser);
 
     const temporaryPassword = this.generateTemporaryPassword();
 

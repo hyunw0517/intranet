@@ -1,11 +1,11 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
-import { AuditActionType, AuditTargetType, Prisma, UserRole, Users } from 'src/generated/prisma/client';
+import { AdminPermission, AuditActionType, AuditTargetType, Prisma, UserRole, Users, UserStatus } from 'src/generated/prisma/client';
 import { PaginateUserQueryDto, UserSortBy } from './dto/paginate-user-query.dto';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
@@ -15,9 +15,13 @@ import { SortOrder } from 'src/common/dto/base-pagination.dto';
 import { AuditService, TargetAudit } from 'src/common/audit.service';
 import { batchChanges, diffChanges } from 'src/common/util/audit-detail.util';
 import { UserNotifier } from './user-notifier';
+import { isAdminRole } from 'src/auth/util/admin-permission.util';
 
 //* 감사 로그 요약에 쓰는 회원 표시 (이름(사번))
 const userLabel = ( user: Pick<Users, 'name' | 'empNo'> ) => `${user.name}(${user.empNo})`;
+
+//* 관리자 작업을 하는 회원 (access token payload의 id·role)
+type ActorUser = Pick<Users, 'id' | 'role'>;
 
 @Injectable()
 export class UsersService {
@@ -217,6 +221,7 @@ export class UsersService {
         tel: true,
         joinAt: true,
         role: true,
+        adminPermissions: true, // 관리자 기능 (ADMIN만 값이 있음)
         status: true,
         createdAt: true,
 
@@ -347,8 +352,13 @@ export class UsersService {
   //* (관리자) 가입 승인 및 권한 변경
   // - GUEST -> USER/ADMIN 변경이 가입 승인이다.
   // - 승인하는 회원은 입사일이 먼저 등록되어 있어야 한다. (연차 계산에 필요, 관리자 회원 정보 수정에서 등록)
+  // - 회원 관리 기능을 가진 ADMIN: GUEST·USER를 USER로만 바꿀 수 있다. (가입 승인)
+  //   ADMIN·SUPER_ADMIN으로 바꾸기, ADMIN·SUPER_ADMIN 회원 바꾸기, 관리자 기능 지정은 슈퍼관리자만.
+  // - ADMIN이 아닌 권한으로 바뀌면 관리자 기능(adminPermissions)을 비운다.
+  // - 관리자 권한이 줄어드는 회원(강등, 기능 해제)은 tokenVersion을 올려 다시 로그인하게 한다.
+  //   (access token은 stateless라 남은 유효시간(최대 10분)은 막지 못하고, 그 뒤 재발급이 거부된다)
   async updateUserRole(
-    user: Pick<Users, 'id'>,
+    user: ActorUser,
     userIds: number[],
     body: UpdateUserRoleDto,
   ) {
@@ -357,12 +367,36 @@ export class UsersService {
       throw new BadRequestException('GUEST 권한으로는 변경할 수 없습니다.');
     }
 
+    if( body.adminPermissions && body.role !== UserRole.ADMIN ){
+      throw new BadRequestException('관리자 기능은 ADMIN 권한에만 지정할 수 있습니다.');
+    }
+
+    if( user.role !== UserRole.SUPER_ADMIN && ( body.role !== UserRole.USER || body.adminPermissions ) ){
+      throw new ForbiddenException('관리자 지정과 관리자 기능 지정은 슈퍼관리자만 할 수 있습니다.');
+    }
+
+    // 관리자 계정(ADMIN·SUPER_ADMIN)이 대상에 있으면 슈퍼관리자만 (validateTargetUsers)
     const { ids, targetUsers } = await this.validateTargetUsers(user, userIds, { requireJoinAt: true });
 
     // 승인 대기(GUEST)였던 회원 = 이번에 가입 승인되는 회원
     const approvedUsers = targetUsers.filter( (u) => u.role === UserRole.GUEST );
 
+    // ADMIN: 보낸 목록으로 바꾸거나(생략하면 유지) / 그 외 권한: 비움
+    const nextPermissions = ( body.role === UserRole.ADMIN )
+      ? ( body.adminPermissions ? [ ...new Set(body.adminPermissions) ] : undefined )
+      : [];
+
+    // 이번 변경으로 관리자 권한이 줄어드는 회원 → 다시 로그인
+    const revokedIds = targetUsers
+      .filter( (u) => this.isAdminAccessReduced(u, body.role, nextPermissions) )
+      .map( (u) => u.id );
+
     await this.prisma.$transaction( async (tx) => {
+      // 슈퍼관리자가 SUPER_ADMIN이 아닌 권한으로 바뀌면 남는 슈퍼관리자가 있는지 확인
+      if( body.role !== UserRole.SUPER_ADMIN ){
+        await this.assertSuperAdminRemains( tx, targetUsers.filter( (u) => u.role === UserRole.SUPER_ADMIN ).map( (u) => u.id ) );
+      }
+
       const { count } = await tx.users.updateMany({
         where: {
           id: { in: ids },
@@ -372,6 +406,7 @@ export class UsersService {
         },
         data: {
           role: body.role,
+          adminPermissions: nextPermissions, // undefined면 바꾸지 않음
         }
       });
 
@@ -379,13 +414,27 @@ export class UsersService {
         throw new BadRequestException("작업 실패. 새로고침 후 다시 시도하세요.");
       }
 
+      if( revokedIds.length > 0 ){
+        await tx.users.updateMany({
+          where: { id: { in: revokedIds } },
+          data: { tokenVersion: { increment: 1 } },
+        });
+      }
+
+      const permissionText = ( body.role === UserRole.ADMIN && nextPermissions )
+        ? ` [기능: ${ nextPermissions.join(', ') || '없음' }]`
+        : '';
+
       await this.audit.logBatch({
         targetIds: ids,
         actionType: AuditActionType.ROLE_CHANGE,
         content: ( approvedUsers.length > 0 )
-          ? `권한 변경 → ${body.role} (가입 승인 ${approvedUsers.length}명): ${ targetUsers.map(userLabel).join(', ') }`
-          : `권한 변경 → ${body.role}: ${ targetUsers.map(userLabel).join(', ') }`,
-        changes: batchChanges( targetUsers, 'role', body.role ),
+          ? `권한 변경 → ${body.role}${permissionText} (가입 승인 ${approvedUsers.length}명): ${ targetUsers.map(userLabel).join(', ') }`
+          : `권한 변경 → ${body.role}${permissionText}: ${ targetUsers.map(userLabel).join(', ') }`,
+        changes: {
+          ...batchChanges( targetUsers, 'role', body.role ),
+          ...( nextPermissions ? batchChanges( targetUsers, 'adminPermissions', nextPermissions ) : {} ),
+        },
       }, tx);
 
     });
@@ -398,15 +447,20 @@ export class UsersService {
 
   //* (관리자) 회원 상태 변경
   // - 가드가 요청마다 status를 확인하므로 변경 즉시 로그인·API 접근이 막힌다.
+  // - 관리자 계정(ADMIN·SUPER_ADMIN)이 대상에 있으면 슈퍼관리자만, 마지막 재직 슈퍼관리자는 재직 외 상태로 바꿀 수 없다.
   async updateUserStatus(
-    user: Pick<Users, 'id'>,
+    user: ActorUser,
     userIds: number[],
     body: UpdateUserStatusDto,
   ) {
-    
+
     const { ids, targetUsers } = await this.validateTargetUsers(user, userIds);
 
     await this.prisma.$transaction( async (tx) => {
+      if( body.status !== UserStatus.ACTIVE ){
+        await this.assertSuperAdminRemains( tx, targetUsers.filter( (u) => u.role === UserRole.SUPER_ADMIN ).map( (u) => u.id ) );
+      }
+
       const { count } = await tx.users.updateMany({
         where: {
           id: { in: ids },
@@ -435,13 +489,16 @@ export class UsersService {
   //* (관리자) 회원 삭제(soft delete) - 단건은 [id], 일괄은 선택한 id 목록으로 호출한다.
   // - 모든 회원에게 같은 값을 넣으므로 updateMany 한 번으로 처리한다. (회원 수만큼 update하지 않음)
   async adminDeleteUser(
-    user: Pick<Users, 'id'>,
+    user: ActorUser,
     userIds: number[],
   ) {
-    //대상 회원 검증 (본인 제외, 존재하고 삭제되지 않은 회원만)
+    //대상 회원 검증 (본인 제외, 존재하고 삭제되지 않은 회원만, 관리자 계정은 슈퍼관리자만)
     const { ids, targetUsers } = await this.validateTargetUsers(user, userIds);
 
     await this.prisma.$transaction( async (tx) => {
+      // 마지막 슈퍼관리자는 삭제할 수 없다.
+      await this.assertSuperAdminRemains( tx, targetUsers.filter( (u) => u.role === UserRole.SUPER_ADMIN ).map( (u) => u.id ) );
+
       const { count } = await tx.users.updateMany({
         where: {
           id: { in: ids },
@@ -471,11 +528,11 @@ export class UsersService {
   }
 
   //* (관리자) 권한·상태 변경, 삭제 대상 회원 검증 (단건·일괄 공용)
-  // - 중복 id 제거 → 본인 포함 여부 → 모두 존재하고 삭제되지 않은 회원인지 확인
+  // - 중복 id 제거 → 본인 포함 여부 → 모두 존재하고 삭제되지 않은 회원인지 → 관리자 계정이면 슈퍼관리자인지 확인
   // - requireJoinAt: 입사일이 없는 승인 대기(GUEST) 회원이 있으면 거부한다. (가입 승인 시 사용, 메시지에 이름 표시)
   // - 검증을 통과한 id 목록(중복 제거)과 대상 회원(변경 전 값 - 감사 로그·가입 승인 알림에 사용)을 돌려준다.
   private async validateTargetUsers(
-    user: Pick<Users, 'id'>,
+    user: ActorUser,
     userIds: number[],
     options: { requireJoinAt?: boolean } = {},
   ) {
@@ -484,7 +541,7 @@ export class UsersService {
     this.checkNotSelf(user, ids);
 
     const targetUsers = await this.prisma.users.findMany({
-      select: { id: true, empNo: true, name: true, role: true, status: true, joinAt: true },
+      select: { id: true, empNo: true, name: true, role: true, adminPermissions: true, status: true, joinAt: true },
       where: {
         id: { in: ids },
         deleted: false,
@@ -496,6 +553,8 @@ export class UsersService {
         ( ids.length === 1 ) ? '존재하지 않는 회원입니다.' : '존재하지 않거나 삭제된 회원이 포함되어 있습니다.'
       );
     }
+
+    targetUsers.forEach( (target) => this.assertCanManageAccount(user, target) );
 
     if( options.requireJoinAt ){
       const noJoinAtUsers = targetUsers.filter( (u) => u.role === UserRole.GUEST && !u.joinAt );
@@ -513,7 +572,7 @@ export class UsersService {
   //* (관리자) 삭제 회원 복구
   // - 삭제된 동안 다른 회원이 같은 이메일·사번으로 가입했을 수 있으므로 중복을 확인한다.
   // - 삭제 전에 발급된 토큰이 다시 유효해지지 않도록 tokenVersion을 올린다.
-  async recoveryUser(userId: number) {
+  async recoveryUser(user: ActorUser, userId: number) {
     const deletedUser = await this.prisma.users.findFirst({
       where: {
         id: userId,
@@ -524,6 +583,9 @@ export class UsersService {
     if( !deletedUser ){
       throw new BadRequestException('삭제된 회원이 아닙니다.');
     }
+
+    // 삭제된 관리자 계정을 되살리는 것도 관리자 계정 작업이다.
+    this.assertCanManageAccount(user, deletedUser);
 
     const emailExists = await this.prisma.users.findFirst({
       where: {
@@ -575,6 +637,56 @@ export class UsersService {
     if( ids.includes(user.id) ){
       throw new BadRequestException('본인 계정의 권한·상태를 변경하거나 삭제할 수 없습니다.');
     }
+  }
+
+  //* 관리자 계정(ADMIN·SUPER_ADMIN) 보호 - 권한·상태 변경, 삭제·복구, 비밀번호 초기화, 잠금 해제는 슈퍼관리자만
+  //  - 회원 관리 기능만 받은 ADMIN이 다른 관리자(슈퍼관리자 포함)를 정지·삭제하거나 비밀번호를 바꾸는 것을 막는다.
+  //  - AuthService(비밀번호 초기화·잠금 해제)도 이 함수를 쓴다.
+  assertCanManageAccount( user: Pick<Users, 'role'>, target: Pick<Users, 'role' | 'name'> ){
+    if( isAdminRole(target.role) && user.role !== UserRole.SUPER_ADMIN ){
+      throw new ForbiddenException(`관리자 계정(${target.name})은 슈퍼관리자만 변경할 수 있습니다.`);
+    }
+  }
+
+  //* 마지막 슈퍼관리자 보호 - removingIds(강등·재직 외 상태·삭제될 슈퍼관리자)를 빼고 재직 중인 슈퍼관리자가 남는지 확인
+  //  - 두 슈퍼관리자가 동시에 서로를 강등하면 둘 다 "상대가 남는다"고 보고 0명이 될 수 있다.
+  //    그래서 슈퍼관리자 행을 FOR UPDATE로 잠근 뒤 센다. (나중 트랜잭션은 앞 트랜잭션 커밋을 기다렸다가 바뀐 값으로 센다)
+  private async assertSuperAdminRemains( tx: Prisma.TransactionClient, removingIds: number[] ){
+    if( removingIds.length === 0 ){
+      return;
+    }
+
+    const superAdmins = await tx.$queryRaw<{ id: number; status: UserStatus }[]>`
+      SELECT id, status FROM users_model
+      WHERE role = 'SUPER_ADMIN' AND deleted = false
+      FOR UPDATE
+    `;
+
+    const remaining = superAdmins.filter( (u) => u.status === UserStatus.ACTIVE && !removingIds.includes(u.id) );
+
+    if( remaining.length === 0 ){
+      throw new BadRequestException('마지막 슈퍼관리자는 강등·정지·삭제할 수 없습니다.');
+    }
+  }
+
+  //* 이번 권한 변경으로 관리자 권한이 줄어드는지 (true면 tokenVersion을 올려 다시 로그인하게 한다)
+  //  - SUPER_ADMIN → 그 아래 / ADMIN → USER / ADMIN의 기능이 하나라도 빠짐
+  private isAdminAccessReduced(
+    target: Pick<Users, 'role' | 'adminPermissions'>,
+    nextRole: UserRole,
+    nextPermissions: AdminPermission[] | undefined,
+  ): boolean {
+    if( target.role === UserRole.SUPER_ADMIN ){
+      return nextRole !== UserRole.SUPER_ADMIN;
+    }
+
+    if( target.role === UserRole.ADMIN ){
+      if( nextRole === UserRole.SUPER_ADMIN ) return false;
+      if( nextRole !== UserRole.ADMIN ) return true;
+      return !!nextPermissions && target.adminPermissions.some( (p) => !nextPermissions.includes(p) );
+    }
+
+    return false;
   }
 
   //* 회원 생성
@@ -770,6 +882,7 @@ export class UsersService {
         id: true,
         empNo: true,
         role: true, // 새 access token에 넣을 권한
+        adminPermissions: true,
         tokenVersion: true,
       },
     });
@@ -790,6 +903,7 @@ export class UsersService {
         id: true,
         empNo: true,
         role: true, // 새 access token에 넣을 권한
+        adminPermissions: true,
         tokenVersion: true,
       },
     });

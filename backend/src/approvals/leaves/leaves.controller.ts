@@ -5,7 +5,7 @@ import { UserRole, Users } from 'src/generated/prisma/client';
 import { CreateLeaveDto, LeaveCalendarQueryDto, LeaveYearQueryDto, UpdateLeaveDto } from './dto/leave.dto';
 import { LeaveRequestsService } from './leave-requests.service';
 
-type Actor = Pick<Users, 'id' | 'role'>;
+type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 
 //* 휴가 신청 (결재의 옵션 'leaves')
 // 상신·회수·승인·반려·삭제·다시 기안은 결재 문서 API(/approvals/documents/...)를 그대로 쓴다.

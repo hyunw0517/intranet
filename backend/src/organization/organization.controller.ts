@@ -1,8 +1,8 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
 import { OrganizationService } from './organization.service';
 import { User } from 'src/auth/decorator/user.decorator';
-import { Roles } from 'src/auth/decorator/roles.decorator';
-import { UserRole, Users } from 'src/generated/prisma/client';
+import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
+import { AdminPermission, Users } from 'src/generated/prisma/client';
 import { CreateUserDepartmentDto } from './dto/create-user-department.dto';
 import { UpdateUserDepartmentDto } from './dto/update-user-department.dto';
 import { UpdateUserPositionDto } from './dto/update-user-position.dto';
@@ -34,7 +34,7 @@ export class OrganizationController {
 
   //* (관리자) 회원 소속 조회
   @Get('users/:userId')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   getUserOrganization(
     @Param('userId', ParseIntPipe) userId: number,
   ){
@@ -43,7 +43,7 @@ export class OrganizationController {
 
   //* (관리자) 회원 직급 지정
   @Patch('users/:userId/position')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   patchUserPosition(
     @Param('userId', ParseIntPipe) userId: number,
     @Body() body: UpdateUserPositionDto,
@@ -53,7 +53,7 @@ export class OrganizationController {
 
   //* (관리자) 회원 소속 추가
   @Post('users/:userId/departments')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   postUserDepartment(
     @User() user: Pick<Users, 'id'>,
     @Param('userId', ParseIntPipe) userId: number,
@@ -64,7 +64,7 @@ export class OrganizationController {
 
   //* (관리자) 회원 소속 수정
   @Patch('users/:userId/departments/:id')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   patchUserDepartment(
     @User() user: Pick<Users, 'id'>,
     @Param('userId', ParseIntPipe) userId: number,
@@ -76,7 +76,7 @@ export class OrganizationController {
 
   //* (관리자) 회원 대표 소속 변경
   @Patch('users/:userId/departments/:id/primary')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   patchUserPrimaryDepartment(
     @User() user: Pick<Users, 'id'>,
     @Param('userId', ParseIntPipe) userId: number,
@@ -87,7 +87,7 @@ export class OrganizationController {
 
   //* (관리자) 회원 소속 삭제
   @Delete('users/:userId/departments/:id')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   deleteUserDepartment(
     @User() user: Pick<Users, 'id'>,
     @Param('userId', ParseIntPipe) userId: number,

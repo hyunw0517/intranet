@@ -1,8 +1,8 @@
 import { Controller, Get, Body, Patch, Param, Delete, Query, ParseIntPipe, Res } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from 'src/auth/decorator/user.decorator';
-import { UserRole, type Users } from 'src/generated/prisma/client';
-import { Roles } from 'src/auth/decorator/roles.decorator';
+import { AdminPermission, type Users } from 'src/generated/prisma/client';
+import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import { PaginateUserQueryDto } from './dto/paginate-user-query.dto';
@@ -58,7 +58,7 @@ export class UsersController {
 
   //* (관리자) 회원 전체 조회
   @Get()
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   getAllUsers(
       @Query() query: PaginateUserQueryDto,
   ) {
@@ -67,7 +67,7 @@ export class UsersController {
 
   //* (관리자) 회원 상세 조회
   @Get(':id')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   getUserDetail(
     @Param('id', ParseIntPipe) id: number,
   ) {
@@ -76,7 +76,7 @@ export class UsersController {
 
   //* (관리자) 회원 정보 수정
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   patchUser(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: AdminUpdateUserDto,
@@ -86,9 +86,9 @@ export class UsersController {
   
   //* (관리자) 권한 변경 -> 다수
   @Patch('/bulk/role')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   patchBulkUsersRole(
-    @User() user: Pick<Users, 'id'>,
+    @User() user: Pick<Users, 'id' | 'role'>,
     @Body() body: BulkUpdateUsersRoleDto,
   ) {
     return this.usersService.updateUserRole(user, body.ids, body);
@@ -96,9 +96,9 @@ export class UsersController {
 
   //* (관리자) 권한 변경 -> 단일
   @Patch(':id/role')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   patchUserRole(
-    @User() user: Pick<Users, 'id'>,
+    @User() user: Pick<Users, 'id' | 'role'>,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateUserRoleDto,
   ) {
@@ -107,9 +107,9 @@ export class UsersController {
   
   //* (관리자) 회원 상태 변경 -> 다수
   @Patch('/bulk/status')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   patchBulkUsersStatus(
-    @User() user: Pick<Users, 'id'>,
+    @User() user: Pick<Users, 'id' | 'role'>,
     @Body() body: BulkUpdateUsersStatusDto,
   ) {
     return this.usersService.updateUserStatus(user, body.ids, body);
@@ -117,9 +117,9 @@ export class UsersController {
 
   //* (관리자) 회원 상태 변경 -> 단일
   @Patch(':id/status')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   patchUserStatus(
-    @User() user: Pick<Users, 'id'>,
+    @User() user: Pick<Users, 'id' | 'role'>,
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateUserStatusDto,
   ) {
@@ -128,9 +128,9 @@ export class UsersController {
   
   //* (관리자) 회원 삭제(soft delete) -> 다수
   @Delete('/bulk')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   bulkDeleteUsers(
-    @User() user: Pick<Users, 'id'>,
+    @User() user: Pick<Users, 'id' | 'role'>,
     @Body() body: BulkDeleteUsersDto,
   ) {
     return this.usersService.adminDeleteUser(user, body.ids);
@@ -138,9 +138,9 @@ export class UsersController {
   
   //* (관리자) 회원 삭제(soft delete) -> 단일
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   deleteUser(
-    @User() user: Pick<Users, 'id'>,
+    @User() user: Pick<Users, 'id' | 'role'>,
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.usersService.adminDeleteUser(user, [id]);
@@ -148,11 +148,12 @@ export class UsersController {
 
   //* (관리자) 삭제 회원 복구
   @Patch(':id/delete_recovery')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.USERS)
   patchRestoreUser(
+    @User() user: Pick<Users, 'id' | 'role'>,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.usersService.recoveryUser(id);
+    return this.usersService.recoveryUser(user, id);
   }
 
 }

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { ApprovalStatus, ApprovalStepStatus, AuditActionType, AuditTargetType, FileTargetType, Prisma, UserRole, Users } from "src/generated/prisma/client";
+import { AdminPermission, ApprovalStatus, ApprovalStepStatus, AuditActionType, AuditTargetType, FileTargetType, Prisma, UserRole, Users } from "src/generated/prisma/client";
+import { hasAdminPermission } from "src/auth/util/admin-permission.util";
 import { AuditService, TargetAudit } from "src/common/audit.service";
 import { FileKind } from "src/common/const/file.const";
 import { FilesService } from "src/common/files.service";
@@ -17,7 +18,7 @@ import {
 } from "./dto/approval-document.dto";
 import { checkApproverIds, checkStepGroups, groupSteps, IN_PROGRESS_STATUSES, nextAfterApprove } from "./util/approval-rules.util";
 
-type Actor = Pick<Users, 'id' | 'role'>;
+type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 type Tx = Prisma.TransactionClient;
 
 // 단계 정렬: 단계 번호 → 같은 단계 안은 입력 순서(id)
@@ -113,8 +114,8 @@ export class ApprovalDocumentsService {
                 orderBy = [ { requestedAt: 'asc' }, { id: 'asc' } ];
                 break;
             case ApprovalBox.ALL:
-                if ( user.role !== UserRole.ADMIN ) {
-                    throw new ForbiddenException( '관리자만 전체 문서를 볼 수 있습니다.' );
+                if ( !hasAdminPermission( user, AdminPermission.APPROVAL_LINES ) ) {
+                    throw new ForbiddenException( '결재라인 관리 권한이 있는 관리자만 전체 문서를 볼 수 있습니다.' );
                 }
                 where = { status: notDraft, deleted: false }; // 남의 임시저장은 기안자만 본다
                 orderBy = [ { requestedAt: 'desc' }, { id: 'desc' } ];
@@ -223,7 +224,7 @@ export class ApprovalDocumentsService {
                 canCancel: isRequester && doc.status === ApprovalStatus.REQUESTED,
                 canApprove: myTurn,                                                 // 승인·반려
                 canCopy: isRequester && ( doc.status === ApprovalStatus.REJECTED || doc.status === ApprovalStatus.CANCELLED ),
-                canReplaceApprover: user.role === UserRole.ADMIN && inProgress,
+                canReplaceApprover: hasAdminPermission( user, AdminPermission.APPROVAL_LINES ) && inProgress,
             },
         };
     }
@@ -690,13 +691,13 @@ export class ApprovalDocumentsService {
         return { id: doc.id, documentType: doc.documentType, status: doc.status, requesterId: doc.requesterId };
     }
 
-    //* 볼 수 있는 문서 (기안자 + 결재라인 전원 + 관리자, DRAFT는 기안자만) - 아니면 404
+    //* 볼 수 있는 문서 (기안자 + 결재라인 전원 + 결재라인 관리 기능을 가진 관리자, DRAFT는 기안자만) - 아니면 404
     private async findVisible( user: Actor, id: number ): Promise<DocumentRow> {
         const doc = await this.findDocument( id );
         const isRequester = doc.requesterId === user.id;
         const visible = doc.status === ApprovalStatus.DRAFT
             ? isRequester
-            : isRequester || user.role === UserRole.ADMIN || doc.steps.some( ( s ) => s.approverId === user.id );
+            : isRequester || hasAdminPermission( user, AdminPermission.APPROVAL_LINES ) || doc.steps.some( ( s ) => s.approverId === user.id );
 
         if ( !visible ) {
             throw new NotFoundException( '존재하지 않는 결재 문서입니다.' );

@@ -8,7 +8,7 @@ import { ApprovalStepInputDto, CreateApprovalLineDto, ManageApprovalLineQueryDto
 import { LineManagersService } from "./line-managers.service";
 import { canManageLine, checkStepGroups, flattenSteps, groupSteps } from "./util/approval-rules.util";
 
-type Actor = Pick<Users, 'id' | 'role'>;
+type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 
 const lineSelect = {
     id: true, name: true, scope: true, departmentId: true, ownerUserId: true, updatedAt: true,

@@ -7,15 +7,23 @@ import { toast } from "sonner";
 import { FormError, FormField } from "@/components/common/form-field";
 import { InfoItem } from "@/components/common/section";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { isAdminRole } from "@/lib/admin-permission";
 import { getErrorMessage } from "@/lib/error-message";
 import { formatDate } from "@/lib/format";
 import { updateUserRole, updateUserStatus, type AdminUserDetail, type ApprovedRole } from "@/services/api/users";
-import { ROLE_LABEL, STATUS_LABEL, type UserStatus } from "@/types/user";
+import { useAuth } from "@/providers/auth-provider";
+import { ADMIN_PERMISSION_LABEL, ADMIN_PERMISSIONS, ROLE_LABEL, STATUS_LABEL, type AdminPermission, type UserStatus } from "@/types/user";
 import { useAdminUserMutation } from "../../hooks/use-admin-users";
-import { RoleBadge, StatusBadge } from "./user-badges";
+import { AdminPermissionsText, RoleBadge, StatusBadge } from "./user-badges";
 
-const APPROVED_ROLES: ApprovedRole[] = ["USER", "ADMIN"]; // GUEST로 되돌리기는 서버가 막는다.
+// 고를 수 있는 권한 (GUEST로 되돌리기는 서버가 막는다)
+// - 슈퍼관리자: 직원·관리자·슈퍼관리자 / 회원 관리 기능만 가진 관리자: 직원(가입 승인)만 (서버도 403)
+function approvedRolesFor(isSuperAdmin: boolean): ApprovedRole[] {
+  return isSuperAdmin ? ["USER", "ADMIN", "SUPER_ADMIN"] : ["USER"];
+}
 
 interface Props {
   user: AdminUserDetail;
@@ -23,6 +31,11 @@ interface Props {
 }
 
 export function UserAccountSection({ user, isSelf }: Props) {
+  const { user: me } = useAuth();
+  const isSuperAdmin = me?.role === "SUPER_ADMIN";
+  // 관리자 계정(ADMIN·SUPER_ADMIN)의 권한·상태는 슈퍼관리자만 바꾼다. (서버 assertCanManageAccount)
+  const lockedAdminAccount = isAdminRole(user.role) && !isSuperAdmin;
+
   return (
     <div className="grid gap-6">
       <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -30,19 +43,30 @@ export function UserAccountSection({ user, isSelf }: Props) {
         <InfoItem label="상태" value={<StatusBadge status={user.status} />} />
         <InfoItem label="입사일" value={formatDate(user.joinAt)} />
         <InfoItem label="가입일" value={formatDate(user.createdAt)} />
+        {isAdminRole(user.role) && (
+          <div className="sm:col-span-2 lg:col-span-4">
+            <InfoItem label="관리자 기능" value={<AdminPermissionsText role={user.role} permissions={user.adminPermissions} />} />
+          </div>
+        )}
       </dl>
 
       {isSelf ? (
         <p className="rounded-md border bg-muted/50 px-4 py-3 text-muted-foreground">
           본인 계정의 권한·상태는 변경할 수 없습니다.
         </p>
+      ) : lockedAdminAccount ? (
+        <p className="rounded-md border bg-muted/50 px-4 py-3 text-muted-foreground">
+          관리자 계정의 권한·상태는 슈퍼관리자만 변경할 수 있습니다.
+        </p>
       ) : (
         <>
           {/* key: 저장 후 서버 값이 바뀌면 입력 상태를 새로 맞춘다. */}
           {user.role === "GUEST" ? (
-            <ApproveForm user={user} />
+            <ApproveForm user={user} roles={approvedRolesFor(isSuperAdmin)} />
+          ) : isSuperAdmin ? (
+            <RoleForm key={`${user.role}:${user.adminPermissions.join(",")}`} user={user} />
           ) : (
-            <RoleForm key={user.role} user={user} />
+            <p className="text-sm text-muted-foreground">관리자 지정과 관리자 기능 지정은 슈퍼관리자만 할 수 있습니다.</p>
           )}
           <StatusForm key={user.status} user={user} />
         </>
@@ -51,9 +75,9 @@ export function UserAccountSection({ user, isSelf }: Props) {
   );
 }
 
-// 가입 승인: GUEST → USER/ADMIN
+// 가입 승인: GUEST → USER (슈퍼관리자는 ADMIN·SUPER_ADMIN도, 관리자 기능은 승인 후 권한 변경에서 지정)
 // 입사일(연차 계산에 필요)이 먼저 등록되어 있어야 승인할 수 있다. 입사일은 회원 상세의 기본 정보에서 등록한다. (서버도 400으로 검사)
-function ApproveForm({ user }: { user: AdminUserDetail }) {
+function ApproveForm({ user, roles }: { user: AdminUserDetail; roles: ApprovedRole[] }) {
   const [role, setRole] = useState<ApprovedRole>("USER");
   const mutation = useAdminUserMutation((next: ApprovedRole) => updateUserRole(user.id, next));
   const hasJoinAt = !!user.joinAt;
@@ -87,7 +111,7 @@ function ApproveForm({ user }: { user: AdminUserDetail }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {APPROVED_ROLES.map((r) => (
+              {roles.map((r) => (
                 <SelectItem key={r} value={r}>
                   {ROLE_LABEL[r]}
                 </SelectItem>
@@ -104,27 +128,74 @@ function ApproveForm({ user }: { user: AdminUserDetail }) {
   );
 }
 
+// 권한 변경 (슈퍼관리자만): 권한 + ADMIN이면 관리자 기능 체크
+// - 관리자 → 직원이면 서버가 관리자 기능을 비운다.
+// - 관리자 권한이 줄어드는 회원(강등·기능 해제)은 서버가 tokenVersion을 올려 다시 로그인하게 한다.
 function RoleForm({ user }: { user: AdminUserDetail }) {
-  const [role, setRole] = useState<ApprovedRole>(user.role === "ADMIN" ? "ADMIN" : "USER");
-  const mutation = useAdminUserMutation((next: ApprovedRole) => updateUserRole(user.id, next));
+  const [role, setRole] = useState<ApprovedRole>(user.role === "GUEST" ? "USER" : user.role);
+  const [permissions, setPermissions] = useState<AdminPermission[]>(user.adminPermissions);
+  const mutation = useAdminUserMutation((next: { role: ApprovedRole; permissions?: AdminPermission[] }) =>
+    updateUserRole(user.id, next.role, next.permissions),
+  );
+
+  const permissionsChanged =
+    role === "ADMIN" &&
+    (permissions.length !== user.adminPermissions.length || permissions.some((p) => !user.adminPermissions.includes(p)));
+  const changed = role !== user.role || permissionsChanged;
+  const reduced =
+    (user.role === "SUPER_ADMIN" && role !== "SUPER_ADMIN") ||
+    (user.role === "ADMIN" && role !== "SUPER_ADMIN" && (role !== "ADMIN" || user.adminPermissions.some((p) => !permissions.includes(p))));
+
+  const togglePermission = (permission: AdminPermission, checked: boolean) =>
+    setPermissions((prev) => (checked ? [...prev, permission] : prev.filter((p) => p !== permission)));
 
   const handleSave = () =>
-    mutation.mutate(role, {
-      onSuccess: () => toast.success(`권한을 ${ROLE_LABEL[role]}(으)로 변경했습니다.`),
-      onError: (error) => toast.error(getErrorMessage(error)),
-    });
+    mutation.mutate(
+      // 저장 순서를 화면 순서와 맞춘다.
+      { role, permissions: role === "ADMIN" ? ADMIN_PERMISSIONS.filter((p) => permissions.includes(p)) : undefined },
+      {
+        onSuccess: () => toast.success(`권한을 ${ROLE_LABEL[role]}(으)로 변경했습니다.`),
+        onError: (error) => toast.error(getErrorMessage(error)),
+      },
+    );
 
   return (
-    <InlineSelectRow
-      id="user-role"
-      label="권한"
-      value={role}
-      options={APPROVED_ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
-      onValueChange={(v) => setRole(v as ApprovedRole)}
-      changed={role !== user.role}
-      pending={mutation.isPending}
-      onSave={handleSave}
-    />
+    <div className="grid gap-3">
+      <InlineSelectRow
+        id="user-role"
+        label="권한"
+        hint={reduced ? "관리자 권한이 줄어들어 이 회원은 다시 로그인해야 합니다." : undefined}
+        value={role}
+        options={approvedRolesFor(true).map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
+        onValueChange={(v) => setRole(v as ApprovedRole)}
+        changed={changed}
+        pending={mutation.isPending}
+        onSave={handleSave}
+      />
+      {role === "ADMIN" && (
+        <fieldset className="grid gap-2 rounded-lg border p-4">
+          <legend className="px-1 text-sm font-medium">관리자 기능</legend>
+          <p className="text-sm text-muted-foreground">체크한 관리 화면만 사용할 수 있습니다. 바꾼 뒤 [변경]을 눌러 저장하세요.</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {ADMIN_PERMISSIONS.map((permission) => (
+              <div key={permission} className="flex items-center gap-2">
+                <Checkbox
+                  id={`admin-permission-${permission}`}
+                  checked={permissions.includes(permission)}
+                  onCheckedChange={(v) => togglePermission(permission, v === true)}
+                />
+                <Label htmlFor={`admin-permission-${permission}`} className="font-normal">
+                  {ADMIN_PERMISSION_LABEL[permission]}
+                </Label>
+              </div>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      {role === "SUPER_ADMIN" && (
+        <p className="text-sm text-muted-foreground">슈퍼관리자는 모든 관리자 기능을 쓰고, 다른 회원의 관리자 권한을 지정할 수 있습니다.</p>
+      )}
+    </div>
   );
 }
 

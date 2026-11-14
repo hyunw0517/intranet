@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { AuditTargetType, BoardType, Prisma, UserRole, Users, UserStatus } from "src/generated/prisma/client";
+import { AdminPermission, AuditTargetType, BoardType, Prisma, UserRole, Users, UserStatus } from "src/generated/prisma/client";
+import { hasAdminPermission } from "src/auth/util/admin-permission.util";
 import { PrismaService } from "src/prisma/prisma.service";
 import { AuditService, TargetAudit } from "src/common/audit.service";
 import { diffChanges } from "src/common/util/audit-detail.util";
@@ -317,14 +318,15 @@ export class BoardAuthService {
     //* 게시판 내비게이션 (읽기 권한이 있는 게시판만 트리 순서로 반환)
     // 회원 정보와 전체 게시판·규칙을 한 번씩만 조회하고, 게시판별 판정은 메모리에서 한다.
     async getUserBoardNavigate(
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
     ){
         // 가입 승인 전 회원은 볼 수 있는 게시판이 없다.
         if( user.role === UserRole.GUEST ){
             return [];
         }
 
-        const isAdmin = user.role === UserRole.ADMIN;
+        // 게시판 관리 기능을 가진 관리자(슈퍼관리자 포함)는 규칙과 관계없이 모든 게시판
+        const isAdmin = hasAdminPermission( user, AdminPermission.BOARDS );
 
         const [boards, userInfo] = await Promise.all([
             this.prisma.board.findMany({
@@ -382,7 +384,7 @@ export class BoardAuthService {
     // - 게시판 정보(비밀글 허용·타입 등)도 함께 반환해 호출한 쪽이 다시 조회하지 않게 한다.
     async assertBoardPermission(
         boardId: number,
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         action: BoardAction,
     ): Promise<BoardAccess> {
         const board = await this.prisma.board.findFirst({
@@ -400,8 +402,8 @@ export class BoardAuthService {
 
         let perm: BoardPermission = { ...ALL_PERMISSION };
 
-        // 시스템 관리자가 아니면 규칙과 회원 정보를 비교한다. (서로 관계없는 조회라 동시에 실행)
-        if( user.role !== UserRole.ADMIN ){
+        // 게시판 관리 기능을 가진 관리자가 아니면 규칙과 회원 정보를 비교한다. (서로 관계없는 조회라 동시에 실행)
+        if( !hasAdminPermission( user, AdminPermission.BOARDS ) ){
             const [boardRules, userInfo] = await Promise.all([
                 this.prisma.boardAuth.findMany({
                     select: boardRuleSelect,
@@ -509,6 +511,7 @@ export class BoardAuthService {
                 select: {
                     id: true,
                     role: true,
+                    adminPermissions: true, // 게시판 관리 기능을 가진 관리자는 규칙과 관계없이 읽을 수 있다
                     position: { select: { sortOrder: true } },
                     departments: {
                         select: { departmentId: true, jobTitleId: true },
@@ -533,7 +536,7 @@ export class BoardAuthService {
         const parentOf = new Map( departments.map( ( d ) => [ d.id, d.parentDepartmentId ] ) );
 
         return users
-            .filter( ( u ) => u.role === UserRole.ADMIN || evaluateBoardPermission( boardRules, this.toUserAccessInfo( u, parentOf ) ).read )
+            .filter( ( u ) => hasAdminPermission( u, AdminPermission.BOARDS ) || evaluateBoardPermission( boardRules, this.toUserAccessInfo( u, parentOf ) ).read )
             .map( ( u ) => u.id );
     }
 

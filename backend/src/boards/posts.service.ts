@@ -37,7 +37,7 @@ export class PostsService {
     }
 
     async paginatePost( 
-        user: Pick<Users, 'id' | 'role'>, 
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>, 
         boardId: number, 
         query: PaginatePostQueryDto 
     ) {
@@ -143,7 +143,7 @@ export class PostsService {
     //   게시글 상세는 기존 규칙(작성자 + 게시판 관리자)을 따른다.
     // - 익명 캘린더 게시판은 본인 일정이 아니면 작성자를 가린다.
     async findCalendarEvents(
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         target: { boardId: number } | { boardIds: number[] | null },
         start: Date,
         end: Date,
@@ -197,7 +197,7 @@ export class PostsService {
 
     //* 일정을 조회할 캘린더 게시판 (id·이름·익명 여부)
     private async resolveCalendarBoards(
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         target: { boardId: number } | { boardIds: number[] | null },
     ){
         if( 'boardId' in target ){
@@ -367,7 +367,7 @@ export class PostsService {
 
     //* 게시글 작성
     async createPost(
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         boardId: number,
         body: CreatePostDto
     ) {
@@ -434,7 +434,7 @@ export class PostsService {
 
     //* 게시글 단일 조회
     async readPost(
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         boardId: number,
         postId: number
     ) {
@@ -488,7 +488,7 @@ export class PostsService {
 
     //* 게시글 수정
     async updatePost(
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         boardId: number,
         postId: number,
         body: UpdatePostDto
@@ -543,7 +543,7 @@ export class PostsService {
 
     //* 게시글 삭제
     async deletePost(
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         boardId: number,
         postId: number,
     ) {
@@ -578,7 +578,7 @@ export class PostsService {
 
     //* 첨부파일 다운로드 (게시글 읽기 권한 확인 후 스트림)
     async openAttachment(
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         boardId: number,
         postId: number,
         fileId: number,
@@ -673,7 +673,7 @@ export class PostsService {
 
     //* 게시글 고정·해제 (게시판 관리 권한, 작성자 여부 무관)
     async pinPost(
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         boardId: number,
         postId: number,
         isPinned: boolean,
@@ -730,7 +730,7 @@ export class PostsService {
 
     //* 게시글 좋아요
     async likePost(
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         boardId: number,
         postId: number,
     ) {
@@ -767,7 +767,7 @@ export class PostsService {
 
     //* 게시글 좋아요 취소
     async unlikePost(
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         boardId: number,
         postId: number,
     ) {
@@ -809,7 +809,7 @@ export class PostsService {
     async checkPost(
         boardId: number,
         postId: number,
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         action: 'read' | 'update' | 'delete' | 'comment',
     ){
         const actionByType = { read: 'read', update: 'write', delete: 'write', comment: 'comment' } as const;

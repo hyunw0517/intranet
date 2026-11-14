@@ -29,7 +29,7 @@ export class CommentsService {
 
     //* 댓글 조회
     async paginateComment(
-        user: Pick<Users, 'id' | 'role'>, 
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>, 
         boardId: number, 
         postId: number
     ) {
@@ -133,7 +133,7 @@ export class CommentsService {
 
     //* 댓글 작성
     async createComment(
-        user: Pick<Users, 'id' | 'role'>, 
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>, 
         boardId: number, 
         postId: number, 
         body: CreateCommentDto
@@ -200,7 +200,7 @@ export class CommentsService {
 
     //* 댓글 수정
     async updateComment(
-        user: Pick<Users, 'id' | 'role'>, 
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>, 
         boardId: number, 
         postId: number, 
         commentId: number,
@@ -241,7 +241,7 @@ export class CommentsService {
 
     //* 댓글 삭제
     async deleteComment(
-        user: Pick<Users, 'id' | 'role'>, 
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>, 
         boardId: number, 
         postId: number,
         commentId: number
@@ -278,7 +278,7 @@ export class CommentsService {
         boardId: number,
         postId: number,
         commentId: number,
-        user: Pick<Users, 'id' | 'role'>,
+        user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         action: 'update' | 'delete',
     ){
         const { perm, post } = await this.postsService.checkPost( boardId, postId, user, 'comment' );

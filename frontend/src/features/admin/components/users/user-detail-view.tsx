@@ -10,11 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/format";
 import type { AdminUserDetail } from "@/services/api/users";
+import { isAdminRole } from "@/lib/admin-permission";
 import { useAuth } from "@/providers/auth-provider";
 import { useEnabledAddons } from "@/features/addon/hooks/use-addons";
 import { JoinAtLeaveDialog } from "./join-at-leave-dialog";
 import { useAdminUser } from "../../hooks/use-admin-users";
-import { RoleBadge, StatusBadge } from "./user-badges";
+import { AdminPermissionsText, RoleBadge, StatusBadge } from "./user-badges";
 import { UserDangerZone } from "./user-danger-zone";
 import { toFormValues, UserInfoForm } from "./user-info-form";
 
@@ -42,6 +43,8 @@ export function UserDetailView({ userId }: { userId: number }) {
 
   // 본인 계정 삭제는 서버도 막지만(checkNotSelf), 화면에서도 미리 비활성화한다.
   const isSelf = me?.id === user.id;
+  // 관리자 계정(ADMIN·SUPER_ADMIN)의 잠금 해제·비밀번호 초기화·삭제는 슈퍼관리자만 (서버 assertCanManageAccount)
+  const lockedAdminAccount = isAdminRole(user.role) && me?.role !== "SUPER_ADMIN";
 
   return (
     <>
@@ -62,7 +65,13 @@ export function UserDetailView({ userId }: { userId: number }) {
         </Section>
 
         <Section title="계정 관리" description="로그인 잠금 해제, 비밀번호 초기화, 회원 삭제. 초기화와 삭제는 되돌리기 어려우니 확인 후 진행하세요.">
-          <UserDangerZone user={user} isSelf={isSelf} />
+          {lockedAdminAccount ? (
+            <p className="rounded-md border bg-muted/50 px-4 py-3 text-muted-foreground">
+              관리자 계정의 잠금 해제·비밀번호 초기화·삭제는 슈퍼관리자만 할 수 있습니다.
+            </p>
+          ) : (
+            <UserDangerZone user={user} isSelf={isSelf} />
+          )}
         </Section>
       </div>
 
@@ -79,6 +88,11 @@ function UserSummary({ user }: { user: AdminUserDetail }) {
       <InfoItem label="상태" value={<StatusBadge status={user.status} />} />
       <InfoItem label="가입일" value={formatDate(user.createdAt)} />
       <InfoItem label="직급" value={user.position?.name ?? "-"} />
+      {isAdminRole(user.role) && (
+        <div className="sm:col-span-2 lg:col-span-4">
+          <InfoItem label="관리자 기능" value={<AdminPermissionsText role={user.role} permissions={user.adminPermissions} />} />
+        </div>
+      )}
       <div className="sm:col-span-2 lg:col-span-4">
         <InfoItem
           label="소속"

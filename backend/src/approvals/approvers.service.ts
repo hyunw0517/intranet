@@ -48,7 +48,7 @@ export class ApproversService {
                 departmentName: primary?.department.name ?? null,
                 positionName: u.position?.name ?? null,
                 jobTitleName: primary?.jobTitle && !primary.jobTitle.deleted ? primary.jobTitle.name : null,
-                usable: !u.deleted && u.status === UserStatus.ACTIVE && ( u.role === UserRole.USER || u.role === UserRole.ADMIN ),
+                usable: !u.deleted && u.status === UserStatus.ACTIVE && u.role !== UserRole.GUEST,
             } ];
         }) );
     }
@@ -62,7 +62,7 @@ export class ApproversService {
             where: {
                 deleted: false,
                 status: UserStatus.ACTIVE,
-                role: { in: [ UserRole.USER, UserRole.ADMIN ] },
+                role: { in: [ UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN ] },
                 ...( keyword && {
                     OR: [
                         { name: { contains: keyword, mode: 'insensitive' } },

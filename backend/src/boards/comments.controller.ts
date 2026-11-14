@@ -17,7 +17,7 @@ export class CommentsController {
     @Get()
     @Roles(UserRole.USER)
     getComments(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Param('postId', ParseIntPipe) postId: number,
     ) {
@@ -28,7 +28,7 @@ export class CommentsController {
     @Post()
     @Roles(UserRole.USER)
     postComment(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Param('postId', ParseIntPipe) postId: number,
         @Body() body: CreateCommentDto,
@@ -40,7 +40,7 @@ export class CommentsController {
     @Patch(':commentId')
     @Roles(UserRole.USER)
     patchComment(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Param('postId', ParseIntPipe) postId: number,
         @Param('commentId', ParseIntPipe) commentId: number,
@@ -53,7 +53,7 @@ export class CommentsController {
     @Delete(':commentId')
     @Roles(UserRole.USER)
     deleteComment(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Param('postId', ParseIntPipe) postId: number,
         @Param('commentId', ParseIntPipe) commentId: number,

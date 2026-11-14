@@ -2,8 +2,9 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from 
 import { BoardsService } from './boards.service';
 import { BoardAuthService } from './board-auth.service';
 import { Roles } from 'src/auth/decorator/roles.decorator';
+import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
 import { User } from 'src/auth/decorator/user.decorator';
-import { UserRole, Users } from 'src/generated/prisma/client';
+import { AdminPermission, UserRole, Users } from 'src/generated/prisma/client';
 import { CreateBoardDto } from './dto/create-board.dto';
 import { UpdateBoardDto } from './dto/update-board.dto';
 import { UpdateBoardOrderDto } from './dto/update-board-order.dto';
@@ -19,7 +20,7 @@ export class BoardsController {
   //* 관리자 전체 게시판 조회 (트리 순서, 페이지네이션 없음)
   // 'admin'은 ':id'보다 먼저 선언해야 한다. (뒤에 두면 'admin'이 :id로 매칭되어 ParseIntPipe 400)
   @Get('admin')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.BOARDS)
   getAdminBoards() {
     return this.boardsService.getAdminBoards();
   }
@@ -28,7 +29,7 @@ export class BoardsController {
   @Get(':boardId')
   @Roles(UserRole.USER)
   getBoard(
-    @User() user: Pick<Users, 'id' | 'role'>,
+    @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
     @Param('boardId', ParseIntPipe) boardId: number,
   ){
     return this.boardAuthService.assertBoardPermission( boardId, user, 'read' );
@@ -36,7 +37,7 @@ export class BoardsController {
 
   //* 게시판 생성
   @Post()
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.BOARDS)
   postBoard(
     @User() user: Pick<Users, 'id'>,
     @Body() body: CreateBoardDto,
@@ -47,7 +48,7 @@ export class BoardsController {
   //* 게시판 순서 변경 (드래그 정렬, 같은 상위 게시판의 형제끼리)
   // 'order'는 ':id'보다 먼저 선언해야 한다.
   @Patch('order')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.BOARDS)
   patchBoardOrder(
     @User() user: Pick<Users, 'id'>,
     @Body() body: UpdateBoardOrderDto,
@@ -57,7 +58,7 @@ export class BoardsController {
 
   //* 게시판 수정
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.BOARDS)
   patchBoard(
     @User() user: Pick<Users, 'id'>,
     @Param('id', ParseIntPipe) id: number,
@@ -68,7 +69,7 @@ export class BoardsController {
 
   //* 게시판 삭제
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.BOARDS)
   deleteBoard(
     @User() user: Pick<Users, 'id'>,
     @Param('id', ParseIntPipe) id: number,

@@ -18,8 +18,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useEnabledAddons } from "@/features/addon/hooks/use-addons";
+import { isAdminRole } from "@/lib/admin-permission";
 import { useAuth } from "@/providers/auth-provider";
-import { filterNavForAddons, filterNavForRole, navByVariant, type ShellVariant } from "./nav-items";
+import { filterNavForAddons, filterNavForAdminPermission, filterNavForRole, navByVariant, type ShellVariant } from "./nav-items";
 import { isActivePath } from "./is-active-path";
 
 interface AppSidebarProps {
@@ -31,7 +32,7 @@ export function AppSidebar({ variant, extraNav }: AppSidebarProps) {
   const { user } = useAuth();
   // 애드온 목록은 GUEST에게 403이라 승인된 회원만 조회한다. (GUEST 메뉴에는 애드온이 없다)
   const { data: addons } = useEnabledAddons(!!user && user.role !== "GUEST");
-  const nav = filterNavForAddons(filterNavForRole(navByVariant[variant], user?.role), addons?.enabled);
+  const nav = filterNavForAdminPermission(filterNavForAddons(filterNavForRole(navByVariant[variant], user?.role), addons?.enabled), user);
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
   const isAdmin = variant === "admin";
@@ -90,8 +91,8 @@ export function AppSidebar({ variant, extraNav }: AppSidebarProps) {
         ))}
       </SidebarContent>
 
-      {/* 관리자 화면 ↔ 직원 화면 이동은 ADMIN에게만 보여 준다. */}
-      {user?.role === "ADMIN" && (
+      {/* 관리자 화면 ↔ 직원 화면 이동은 ADMIN·SUPER_ADMIN에게만 보여 준다. */}
+      {isAdminRole(user?.role) && (
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>

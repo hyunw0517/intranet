@@ -20,7 +20,7 @@ export class PostsController {
     @Get()
     @Roles(UserRole.USER)
     getPosts(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Query() query: PaginatePostQueryDto,
     ) {
@@ -31,7 +31,7 @@ export class PostsController {
     @Post()
     @Roles(UserRole.USER)
     postPost(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Body() createPostDto: CreatePostDto,
     ) {
@@ -42,7 +42,7 @@ export class PostsController {
     @Get(':postId')
     @Roles(UserRole.USER)
     getPost(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Param('postId', ParseIntPipe) postId: number,
     ) {
@@ -53,7 +53,7 @@ export class PostsController {
     @Patch(':postId')
     @Roles(UserRole.USER)
     patchPost(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Param('postId', ParseIntPipe) postId: number,
         @Body() updatePostDto: UpdatePostDto,
@@ -66,7 +66,7 @@ export class PostsController {
     @Patch(':postId/pin')
     @Roles(UserRole.USER)
     pinPost(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Param('postId', ParseIntPipe) postId: number,
         @Body() pinPostDto: PinPostDto,
@@ -78,7 +78,7 @@ export class PostsController {
     @Delete(':postId')
     @Roles(UserRole.USER)
     deletePost(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Param('postId', ParseIntPipe) postId: number,
     ) {
@@ -89,7 +89,7 @@ export class PostsController {
     @Patch(':postId/like')
     @Roles(UserRole.USER)
     likePost(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Param('postId', ParseIntPipe) postId: number,
 
@@ -102,7 +102,7 @@ export class PostsController {
     @Get(':postId/files/:fileId')
     @Roles(UserRole.USER)
     async downloadFile(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Param('postId', ParseIntPipe) postId: number,
         @Param('fileId', ParseIntPipe) fileId: number,
@@ -125,7 +125,7 @@ export class PostsController {
     @Delete(':postId/unlike')
     @Roles(UserRole.USER)
     unlikePost(
-        @User() user: Pick<Users, 'id' | 'role'>,
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         @Param('boardId', ParseIntPipe) boardId: number,
         @Param('postId', ParseIntPipe) postId: number,
     ) {

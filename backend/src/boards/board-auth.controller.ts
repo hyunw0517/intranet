@@ -1,8 +1,9 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from "@nestjs/common";
 import { BoardAuthService } from "./board-auth.service";
 import { Roles } from "src/auth/decorator/roles.decorator";
+import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
 import { User } from "src/auth/decorator/user.decorator";
-import { UserRole, Users } from "src/generated/prisma/client";
+import { AdminPermission, UserRole, Users } from "src/generated/prisma/client";
 import { CreateBoardAuthDto } from "./dto/create-board-auth.dto";
 import { UpdateBoardAuthDto } from "./dto/update-board-auth.dto";
 
@@ -18,14 +19,14 @@ export class BoardAuthController {
   @Get('navigation')
   @Roles(UserRole.USER)   // GUEST 차단 (서비스에도 방어 코드 있음)
   getUserBoardNavigate(
-    @User() user: Pick<Users, 'id' | 'role'>,
+    @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
   ){
     return this.boardAuthService.getUserBoardNavigate(user);
   }
 
   //* 게시판 권한 규칙 목록
   @Get(':boardId/auths')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.BOARDS)
   getBoardAuths(
     @Param('boardId', ParseIntPipe) boardId: number,
   ){
@@ -34,7 +35,7 @@ export class BoardAuthController {
 
   //* 게시판 권한 규칙 생성
   @Post(':boardId/auths')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.BOARDS)
   postBoardAuth(
     @User() user: Pick<Users, 'id'>,
     @Param('boardId', ParseIntPipe) boardId: number,
@@ -45,7 +46,7 @@ export class BoardAuthController {
 
   //* 게시판 권한 규칙 수정
   @Patch(':boardId/auths/:id')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.BOARDS)
   patchBoardAuth(
     @User() user: Pick<Users, 'id'>,
     @Param('boardId', ParseIntPipe) boardId: number,
@@ -57,7 +58,7 @@ export class BoardAuthController {
 
   //* 게시판 권한 규칙 삭제
   @Delete(':boardId/auths/:id')
-  @Roles(UserRole.ADMIN)
+  @RequireAdmin(AdminPermission.BOARDS)
   deleteBoardAuth(
     @User() user: Pick<Users, 'id'>,
     @Param('boardId', ParseIntPipe) boardId: number,

@@ -54,7 +54,8 @@ export function BoardPanel() {
       },
     });
 
-  // 하위 게시판이 있는 카테고리, 게시글이 있는 게시판은 서버가 거부하고 그 메시지를 보여 준다.
+  // 하위 게시판이 있는 카테고리는 서버가 거부하고 그 메시지를 보여 준다.
+  // 게시글이 있는 게시판은 확인 창에서 경고만 하고 삭제한다. (게시글은 서버에 남는다)
   const handleDelete = () => {
     if (!deleteTarget) return;
     deleteMutation.mutate(deleteTarget.id, {
@@ -168,7 +169,9 @@ export function BoardPanel() {
         description={
           deleteTarget?.type === "CATEGORY"
             ? `${deleteTarget.name} 카테고리를 삭제합니다. 하위 게시판이 있으면 삭제할 수 없습니다.`
-            : `${deleteTarget?.path ?? ""} 게시판을 삭제합니다. 게시글이 있으면 삭제할 수 없으며, 권한 규칙도 함께 삭제됩니다.`
+            : deleteTarget && deleteTarget.postCount > 0
+              ? `⚠ ${deleteTarget.path} 게시판에 게시글 ${deleteTarget.postCount.toLocaleString()}개가 있습니다. 삭제하면 회원이 이 게시글들을 볼 수 없게 됩니다. (게시글은 지우지 않고 보관하며, 게시판을 복구하면 다시 보입니다) 권한 규칙도 함께 삭제됩니다. 삭제할까요?`
+              : `${deleteTarget?.path ?? ""} 게시판을 삭제합니다. 권한 규칙도 함께 삭제됩니다.`
         }
         confirmLabel="삭제"
         destructive

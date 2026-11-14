@@ -34,7 +34,7 @@ export function updateBoard(id: number, input: BoardInput) {
   return apiFetch<AdminBoard>(`/boards/${id}`, { method: "PATCH", body: input });
 }
 
-// 하위 게시판이 있는 카테고리, 게시글이 있는 게시판은 서버가 400으로 거부한다.
+// 하위 게시판이 있는 카테고리는 서버가 400으로 거부한다. 게시글이 있어도 삭제된다(글은 보관).
 export function deleteBoard(id: number) {
   return apiFetch<boolean>(`/boards/${id}`, { method: "DELETE" });
 }

@@ -293,10 +293,9 @@ export class BoardsService {
             throw new BadRequestException('하위 게시판이 있는 카테고리는 삭제할 수 없습니다.');
         }
 
-        // 게시글 확인 -> 삭제하면 글에 접근할 경로가 사라지므로 막는다.
-        if( await this.countPosts( thisBoard.id ) > 0 ){
-            throw new BadRequestException('게시글이 있는 게시판은 삭제할 수 없습니다.');
-        }
+        // 게시글은 막지 않는다. (경고·확인은 관리자 화면에서)
+        // 게시글은 지우지 않고 그대로 둔다 → 게시판을 복구하면 다시 보인다.
+        // 게시글 접근은 모두 게시판 권한 검사를 거치므로 삭제된 게시판의 글은 볼 수 없다.
 
         // DELETE (트랜잭션: 삭제+권한 규칙 삭제+재정렬+감사 로그)
         await this.prisma.$transaction( async (tx) => {

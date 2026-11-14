@@ -151,42 +151,50 @@ function SortableItem<T extends SortableItemData>({
   );
 }
 
+// 임시 순서를 지금 서버 목록에 맞춘다. (저장 전에 항목이 추가·삭제·이동되어도 드래그한 순서를 지키기 위함)
+// - 남아 있는 항목은 드래그한 순서 그대로, 사라진 항목은 빼고, 새 항목은 서버 순서대로 끝에 붙인다.
+// - 결과는 항상 지금 서버 목록과 id 구성이 같으므로 순서 저장 API의 "전체 일치" 검사를 통과한다.
+function mergeDraft(draft: number[], serverIds: number[]) {
+  const server = new Set(serverIds);
+  const kept = draft.filter((id) => server.has(id));
+  const keptSet = new Set(kept);
+  return [...kept, ...serverIds.filter((id) => !keptSet.has(id))];
+}
+
+const isSameOrder = (a: number[], b: number[]) => a.length === b.length && a.every((id, i) => id === b[i]);
+
 // 드래그로 바꾼 "저장 전 순서" 상태
 // - 서버 순서(serverIds)와 다를 때만 changed = true → [순서 저장] 표시
-// - 그 사이 항목이 추가·삭제되어 id 구성이 달라지면 임시 순서를 버리고 서버 순서를 보여 준다.
 export function useSortDraft(serverIds: number[]) {
   const [draft, setDraft] = useState<number[] | null>(null);
 
-  const valid =
-    draft !== null && draft.length === serverIds.length && serverIds.every((id) => draft.includes(id));
-  const orderedIds = valid ? draft : serverIds;
-  const changed = valid && draft.some((id, index) => id !== serverIds[index]);
+  const orderedIds = draft ? mergeDraft(draft, serverIds) : serverIds;
+  const changed = !isSameOrder(orderedIds, serverIds);
 
   return { orderedIds, changed, setDraft, reset: () => setDraft(null) };
 }
 
 // 트리(부서·게시판)의 상위별 "저장 전 순서" - 형제 그룹마다 따로 정렬하므로 그룹별로 보관한다.
 // childrenOf: 상위 id(null이면 최상위) → 서버 순서의 하위 목록
-// 그 사이 항목이 추가·삭제·이동되어 그룹 구성이 달라지면 해당 그룹의 임시 순서는 버린다.
+// 다른 그룹으로 옮겨진 항목은 원래 그룹에서 빠지고, 옮겨 간 그룹에서는 끝에 붙는다. (mergeDraft)
 export function useGroupedSortDrafts<T extends { id: number }>(childrenOf: Map<number | null, T[]>) {
   const [drafts, setDrafts] = useState<Map<number | null, number[]>>(new Map());
 
-  const validDraft = (parentId: number | null) => {
+  const serverIdsOf = (parentId: number | null) => (childrenOf.get(parentId) ?? []).map((item) => item.id);
+  const mergedDraft = (parentId: number | null) => {
     const draft = drafts.get(parentId);
-    const serverIds = (childrenOf.get(parentId) ?? []).map((item) => item.id);
-    if (!draft || draft.length !== serverIds.length || !serverIds.every((id) => draft.includes(id))) return null;
-    return { draft, serverIds };
+    return draft ? mergeDraft(draft, serverIdsOf(parentId)) : null;
   };
 
   // 서버 순서와 달라진 그룹만 저장 대상
   const changedGroups = [...drafts.keys()].flatMap((parentId) => {
-    const valid = validDraft(parentId);
-    return valid && valid.draft.some((id, i) => id !== valid.serverIds[i]) ? [{ parentId, ids: valid.draft }] : [];
+    const ids = mergedDraft(parentId);
+    return ids && !isSameOrder(ids, serverIdsOf(parentId)) ? [{ parentId, ids }] : [];
   });
 
   const ordered = (parentId: number | null) => {
     const siblings = childrenOf.get(parentId) ?? [];
-    const draft = validDraft(parentId)?.draft;
+    const draft = mergedDraft(parentId);
     if (!draft) return siblings;
     const byId = new Map(siblings.map((item) => [item.id, item]));
     return draft.flatMap((id) => byId.get(id) ?? []);

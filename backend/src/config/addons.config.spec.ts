@@ -3,7 +3,7 @@
 // 서버 시작 시 AddonsService가 이 함수를 호출하므로, 여기서 오류가 나면 서버가 뜨지 않는다. (설정 실수가 조용히 "꺼짐"으로 넘어가지 않게)
 // DB를 쓰지 않는다. 문자열을 넣고 결과 목록·오류를 비교한다.
 
-import { parseAddons } from './addons.config';
+import { isAddonsEnabled, parseAddons } from './addons.config';
 
 //* 정상 입력
 describe('parseAddons - 켜진 애드온 목록', () => {
@@ -47,5 +47,17 @@ describe('parseAddons - 설정 오류', () => {
     // AGENTS.md 10.1: 결재를 끄고 휴가 옵션만 켜면 서버가 시작 단계에서 오류를 낸다.
     it('본체 없이 켠 옵션은 오류 (휴가만 켜고 결재는 끔)', () => {
         expect( () => parseAddons( 'reservations,leaves' ) ).toThrow( 'approvals이(가) 켜져 있어야 합니다' );
+    });
+});
+
+//* 연결 모듈 조건: 이름 여러 개가 모두 켜져 있어야 등록 (과제 관리 + 결재 → 견적서 결재 처리기)
+describe('isAddonsEnabled - 모두 켜져 있는지', () => {
+    it.each([
+        [ '둘 다 켬', 'projects,approvals', true ],
+        [ '과제 관리만', 'projects', false ],
+        [ '결재만', 'approvals', false ],
+        [ '전부 꺼짐', undefined, false ],
+    ])( '%s (ADDONS=%s) → %s', ( _label, value, expected ) => {
+        expect( isAddonsEnabled( value, [ 'projects', 'approvals' ] ) ).toBe( expected );
     });
 });

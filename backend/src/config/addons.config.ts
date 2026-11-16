@@ -15,6 +15,7 @@ export const ADDONS = {
     approvals: { requires: [] },                // 전자결재
     leaves: { requires: [ 'approvals' ] },      // 휴가(연차) - 결재의 옵션
     chats: { requires: [] },                    // 채팅
+    projects: { requires: [] },                 // 과제 관리 (프로젝트·과제·거래처·견적·매출·예산, docs/design/projects.md)
 } as const satisfies Record<string, { requires: readonly string[] }>;
 
 export type AddonName = keyof typeof ADDONS;
@@ -46,10 +47,19 @@ export function parseAddons( value: string | undefined ): AddonName[] {
     return enabled;
 }
 
+//* ADDONS 값에서 names가 모두 켜져 있는지
+export function isAddonsEnabled( value: string | undefined, names: readonly AddonName[] ): boolean {
+    const enabled = parseAddons( value );
+    return names.every( ( name ) => enabled.includes( name ) );
+}
+
 //* AppModule imports에서 사용: ADDONS에 name이 있을 때만 module을 등록한다.
 // - ConfigModule.forRoot()는 .env를 비동기로 읽어서, imports 배열을 만드는 시점에는 process.env.ADDONS가 아직 없을 수 있다.
 //   ConditionalModule.registerWhen은 .env 로드가 끝난 뒤 조건을 판단한다. (@nestjs/config 공식 기능)
-// ex) imports: [ ..., addonModule( 'reservations', ReservationsModule ) ]
-export function addonModule( name: AddonName, module: Type ): Promise<DynamicModule> {
-    return ConditionalModule.registerWhen( module, ( env ) => parseAddons( env.ADDONS ).includes( name ), { debug: false } );
+// - 이름을 배열로 주면 모두 켜져 있을 때만 등록한다. 서로 필수가 아닌 두 애드온을 잇는 연결 모듈에 쓴다.
+//   ex) 과제 관리 + 결재가 둘 다 켜졌을 때만 견적서 결재 처리기를 등록 (docs/design/projects.md)
+// ex) imports: [ ..., addonModule( 'reservations', ReservationsModule ), addonModule( [ 'projects', 'approvals' ], ProjectsApprovalModule ) ]
+export function addonModule( name: AddonName | readonly AddonName[], module: Type ): Promise<DynamicModule> {
+    const names: readonly AddonName[] = typeof name === 'string' ? [ name ] : name;
+    return ConditionalModule.registerWhen( module, ( env ) => isAddonsEnabled( env.ADDONS, names ), { debug: false } );
 }

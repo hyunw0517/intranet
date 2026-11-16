@@ -21,6 +21,8 @@ import { ReservationsModule } from './reservations/reservations.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { LeavesModule } from './approvals/leaves/leaves.module';
 import { ChatsModule } from './chats/chats.module';
+import { ProjectsModule } from './projects/projects.module';
+import { ProjectsApprovalModule } from './projects/projects-approval.module';
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { ChatsModule } from './chats/chats.module';
     addonModule( 'approvals', ApprovalsModule ),       // 전자결재
     addonModule( 'leaves', LeavesModule ),             // 휴가 (결재의 옵션)
     addonModule( 'chats', ChatsModule ),               // 채팅
+    addonModule( 'projects', ProjectsModule ),         // 과제 관리
+    addonModule( [ 'projects', 'approvals' ], ProjectsApprovalModule ), // 과제 관리 ↔ 결재 연결 (둘 다 켜졌을 때만, 견적서 결재)
   ],
   controllers: [AppController],
   providers: [

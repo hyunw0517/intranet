@@ -18,11 +18,11 @@ export const ADMIN_PERMISSION_LABEL: Record<AdminPermission, string> = {
   USERS: "회원 관리",
   ORGANIZATION: "조직 관리",
   BOARDS: "게시판 관리",
-  FACILITIES: "시설 관리",
-  RESERVATIONS: "예약 관리",
   APPROVAL_LINES: "결재라인 권한 관리",
   LEAVES: "연차 관리",
   PROJECTS: "과제 관리",
+  FACILITIES: "시설 관리",
+  RESERVATIONS: "예약 관리",
 };
 export const ADMIN_PERMISSIONS = Object.keys(ADMIN_PERMISSION_LABEL) as AdminPermission[];
 export type UserStatus = "ACTIVE" | "INACTIVE" | "RESIGNED";

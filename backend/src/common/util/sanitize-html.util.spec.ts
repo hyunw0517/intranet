@@ -28,6 +28,14 @@ describe('sanitizeEditorHtml - 기본 정제 (저장형 XSS 방지)', () => {
         expect( html ).toBe( '<p>본문</p>' );
     });
 
+    // 표는 서버가 만드는 결재 본문(견적서 품목표)용으로 허용한다. 구조 태그만 남기고 속성(style·onclick 등)은 지운다. (2026-11-17)
+    it('표 태그는 남기고 속성은 지우며, 검색 텍스트는 칸 사이를 띄운다', () => {
+        const { html, text } = sanitizeEditorHtml( '<table style="x" onclick="y()"><tbody><tr><td class="a">품목</td><td>1,000원</td></tr></tbody></table>' );
+
+        expect( html ).toBe( '<table><tbody><tr><td>품목</td><td>1,000원</td></tr></tbody></table>' );
+        expect( text ).toBe( '품목 1,000원' );
+    });
+
     // ① href="javascript:..."는 누르면 스크립트가 실행된다 → 링크 주소를 지운다.
     // ② 모든 링크는 새 탭 + noopener로 고정: 열린 외부 페이지가 window.opener로 우리 페이지를 조작하지 못하게. (요청의 target="_self"는 무시)
     it('javascript: 링크는 href를 제거하고, 링크는 새 탭 + noopener로 고정한다', () => {

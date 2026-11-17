@@ -9,9 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { hasAdminPermission } from "@/lib/admin-permission";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/providers/auth-provider";
 import type { ProjectListQuery } from "@/services/api/projects";
 import { PROJECT_STATUS_LABEL, PROJECT_STATUSES, type ProjectStatus } from "@/types/project";
 import { useProjects } from "../hooks/use-projects";
@@ -20,12 +18,11 @@ import { ProjectFormDialog, type ProjectFormState } from "./project-form-dialog"
 
 type StatusTab = ProjectStatus | "ALL";
 
-// 프로젝트 목록 - 상태 탭 + 검색, 과제 관리 관리자는 "전체 프로젝트" 범위를 고를 수 있다.
+// 프로젝트 목록 - 상태 탭 + 검색 + 범위(내 프로젝트 / 전체 프로젝트)
+// 전체 목록은 누구나 본다(2026-11-17 사용자 결정: 목록만 공개). 상세는 참여자·과제 관리 관리자만 들어갈 수 있어서(canOpen)
+// 들어갈 수 없는 행은 이름에 링크를 걸지 않는다. 서버도 상세에서 403을 낸다.
 // 표는 PC, 좁은 화면에서는 카드 목록으로 바꾼다.
 export function ProjectListView() {
-  const { user } = useAuth();
-  const isAdmin = hasAdminPermission(user, "PROJECTS");
-
   const [scope, setScope] = useState<"mine" | "all">("mine");
   const [status, setStatus] = useState<StatusTab>("ALL");
   const [searchInput, setSearchInput] = useState("");
@@ -64,14 +61,12 @@ export function ProjectListView() {
         </Tabs>
 
         <div className="flex flex-wrap items-center gap-2">
-          {isAdmin && (
-            <Tabs value={scope} onValueChange={(v) => { setScope(v as "mine" | "all"); setPage(1); }}>
-              <TabsList>
-                <TabsTrigger value="mine">내 프로젝트</TabsTrigger>
-                <TabsTrigger value="all">전체 프로젝트</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          )}
+          <Tabs value={scope} onValueChange={(v) => { setScope(v as "mine" | "all"); setPage(1); }}>
+            <TabsList>
+              <TabsTrigger value="mine">내 프로젝트</TabsTrigger>
+              <TabsTrigger value="all">전체 프로젝트</TabsTrigger>
+            </TabsList>
+          </Tabs>
           <form onSubmit={submitSearch} className="flex items-center gap-2" role="search">
             <Input
               value={searchInput}
@@ -115,10 +110,18 @@ export function ProjectListView() {
                 {rows.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="max-w-72">
-                      <Link href={`/projects/${p.id}`} className="block truncate font-medium hover:underline">
-                        {p.name}
-                      </Link>
-                      <span className="text-xs text-muted-foreground">참여자 {p.memberCount}명</span>
+                      {p.canOpen ? (
+                        <Link href={`/projects/${p.id}`} className="block truncate font-medium hover:underline">
+                          {p.name}
+                        </Link>
+                      ) : (
+                        <span className="block truncate font-medium" title="참여한 프로젝트만 열어 볼 수 있습니다">
+                          {p.name}
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        참여자 {p.memberCount}명{scope === "all" && p.isMember && " · 참여 중"}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <ProjectStatusBadge status={p.status} />
@@ -137,21 +140,34 @@ export function ProjectListView() {
 
           {/* 모바일: 카드 */}
           <ul className="grid gap-2 md:hidden">
-            {rows.map((p) => (
-              <li key={p.id}>
-                <Link href={`/projects/${p.id}`} className="grid gap-2 rounded-lg border p-4 hover:bg-muted/50">
+            {rows.map((p) => {
+              const body = (
+                <>
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-medium">{p.name}</span>
                     <ProjectStatusBadge status={p.status} />
                   </div>
                   <span className="text-xs text-muted-foreground">
                     {p.client?.name ?? "거래처 없음"} · 책임자 {p.managers.map((m) => m.name).join(", ") || "-"}
+                    {scope === "all" && p.isMember && " · 참여 중"}
                   </span>
                   <span className="text-xs tabular-nums text-muted-foreground">{formatPeriod(p.startDate, p.endDate)}</span>
                   <ProgressBar progress={p.progress} />
-                </Link>
-              </li>
-            ))}
+                </>
+              );
+              return (
+                <li key={p.id}>
+                  {/* 들어갈 수 없는 프로젝트는 링크 없이 요약만 */}
+                  {p.canOpen ? (
+                    <Link href={`/projects/${p.id}`} className="grid gap-2 rounded-lg border p-4 hover:bg-muted/50">
+                      {body}
+                    </Link>
+                  ) : (
+                    <div className="grid gap-2 rounded-lg border p-4">{body}</div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
 
           {data && <PaginationBar meta={data.meta} onPageChange={setPage} />}

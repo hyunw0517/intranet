@@ -12,6 +12,7 @@ import type {
   ProjectStatus,
   ProjectTask,
   ProjectTaskStatus,
+  QuoteTaxType,
 } from "@/types/project";
 
 export interface ProjectListQuery {
@@ -84,12 +85,13 @@ export function fetchProjectPartners(projectId: number) {
 export interface ProjectPartnerInput {
   clientId: number;
   workScope?: string | null;
-  contractAmount?: number | null; // 원 단위 정수 (최대 999조)
+  contractAmount?: number | null; // 원 단위 정수, 공급가액 (최대 999조) - 부가세·합계는 서버가 계산
+  taxType?: QuoteTaxType;
+  vatRate?: number; // % (0~100, 소수 둘째 자리까지, 없으면 10)
   startDate?: string | null;
   endDate?: string | null;
-  contactName?: string | null;
-  contactHp?: string | null;
-  contactEmail?: string | null;
+  // 담당자 (최대 20명, 이름 필수) - 보내면 목록 전체 교체, 보낸 순서가 표시 순서
+  contacts?: { name: string; role?: string | null; hp?: string | null; email?: string | null }[];
 }
 
 export function createProjectPartner(projectId: number, input: ProjectPartnerInput) {

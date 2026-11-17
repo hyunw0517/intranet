@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { AuditActionType, AuditTargetType, Prisma, ProjectMemberRole, ProjectTaskStatus } from "src/generated/prisma/client";
 import { AuditService, TargetAudit } from "src/common/audit.service";
 import { diffChanges } from "src/common/util/audit-detail.util";
@@ -31,12 +31,10 @@ export class ProjectsService {
         this.audit = auditService.target( AuditTargetType.PROJECT );
     }
 
-    //* 목록 (scope=mine: 참여한 프로젝트, scope=all: 전체 - 관리자만) + 책임자·진척도
+    //* 목록 (scope=mine: 참여한 프로젝트, scope=all: 전체) + 책임자·진척도 + 내 참여 여부
+    // 전체 목록은 USER 누구나 본다(2026-11-17 사용자 결정: 목록만 공개). 상세·과제·견적·매출 등은 여전히 참여자·관리자만(ProjectAccessService).
+    // 그래서 목록에는 공개해도 되는 요약만 담는다 - 설명(description)은 빼고, 금액은 처음부터 넣지 않는다.
     async findAll( user: ProjectActor, query: ProjectListQueryDto ) {
-        if ( query.scope === 'all' && !this.access.isProjectAdmin( user ) ) {
-            throw new ForbiddenException( '전체 프로젝트는 과제 관리 관리자만 볼 수 있습니다.' );
-        }
-
         const keyword = query.search?.trim();
         const where: Prisma.ProjectWhereInput = {
             deleted: false,
@@ -49,6 +47,7 @@ export class ProjectsService {
         const result = await PaginatePage( query,
             ( page ) => this.prisma.project.findMany({
                 where,
+                omit: { description: true }, // 공개 목록에 설명은 넣지 않는다 (상세에서만)
                 include: {
                     client: { select: clientSelect },
                     members: {
@@ -64,7 +63,14 @@ export class ProjectsService {
             () => this.prisma.project.count({ where }),
         );
 
-        const progress = await this.progressOf( result.data.map( ( p ) => p.id ) );
+        const ids = result.data.map( ( p ) => p.id );
+        const [ progress, mine ] = await Promise.all([
+            this.progressOf( ids ),
+            this.prisma.projectMember.findMany({ where: { projectId: { in: ids }, userId: user.id, deleted: false }, select: { projectId: true } }),
+        ]);
+        const memberOf = new Set( mine.map( ( m ) => m.projectId ) );
+        const isAdmin = this.access.isProjectAdmin( user );
+
         return {
             ...result,
             data: result.data.map( ( { members, _count, ...p } ) => ({
@@ -72,6 +78,8 @@ export class ProjectsService {
                 managers: members.map( ( m ) => m.user ),
                 memberCount: _count.members,
                 progress: progress.get( p.id ) ?? { done: 0, total: 0, percent: 0 },
+                isMember: memberOf.has( p.id ),
+                canOpen: memberOf.has( p.id ) || isAdmin, // 상세에 들어갈 수 있는지 (화면이 링크를 걸지 정한다)
             }) ),
         };
     }

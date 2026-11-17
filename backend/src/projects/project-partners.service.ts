@@ -1,18 +1,30 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { AuditTargetType, Prisma } from "src/generated/prisma/client";
+import { AuditTargetType, Prisma, ProjectQuoteTaxType } from "src/generated/prisma/client";
 import { AuditService, TargetAudit } from "src/common/audit.service";
 import { diffChanges } from "src/common/util/audit-detail.util";
 import { PrismaService } from "src/prisma/prisma.service";
 import { ProjectClientsService } from "./clients/project-clients.service";
 import { toDateOnly } from "./dto/project.dto";
-import { CreateProjectPartnerDto, UpdateProjectPartnerDto } from "./dto/project-partner.dto";
+import { CreateProjectPartnerDto, PartnerContactDto, UpdateProjectPartnerDto } from "./dto/project-partner.dto";
 import { ProjectAccessService, ProjectActor } from "./project-access.service";
+import { DEFAULT_VAT_RATE } from "./quotes/quote-rules.util";
+import { calcSaleAmounts } from "./sales/sale-rules.util";
 
 const PERIOD_ERROR = '계약 시작일은 종료일보다 늦을 수 없습니다.';
 
 const partnerInclude = {
     client: { select: { id: true, name: true, businessNo: true, deleted: true } },
+    contacts: { select: { id: true, name: true, role: true, hp: true, email: true }, orderBy: { sortOrder: 'asc' } },
 } satisfies Prisma.ProjectPartnerInclude;
+
+// 담당자 입력 → 저장할 행 (보낸 순서 = 표시 순서)
+const contactRows = ( contacts: PartnerContactDto[] ) => contacts.map( ( c, i ) => ({
+    sortOrder: i,
+    name: c.name.trim(),
+    role: c.role?.trim() || null,
+    hp: c.hp?.trim() || null,
+    email: c.email ?? null,
+}) );
 
 //! 프로젝트 협력사 (하청기업, docs/design/projects.md "협력사", 2026-11-17 사용자 결정)
 // - 발주처(Project.clientId, 돈을 받는 쪽)와 반대로 우리가 돈을 주는 쪽. 한 프로젝트에 여러 개.
@@ -47,6 +59,7 @@ export class ProjectPartnersService {
         const access = await this.access.check( user, projectId );
         const client = await this.clientsService.findActive( body.clientId );
         this.assertPeriod( body.startDate, body.endDate );
+        const money = this.money( body.contractAmount ?? null, body.taxType ?? ProjectQuoteTaxType.TAXABLE, body.vatRate ?? DEFAULT_VAT_RATE );
 
         return this.withDuplicateGuard( () => this.prisma.$transaction( async ( tx ) => {
             const partner = await tx.projectPartner.create({
@@ -54,19 +67,17 @@ export class ProjectPartnersService {
                     projectId,
                     clientId: client.id,
                     workScope: body.workScope,
-                    contractAmount: body.contractAmount,
+                    ...money,
                     startDate: toDateOnly( body.startDate ),
                     endDate: toDateOnly( body.endDate ),
-                    contactName: body.contactName,
-                    contactHp: body.contactHp,
-                    contactEmail: body.contactEmail,
+                    contacts: body.contacts?.length ? { create: contactRows( body.contacts ) } : undefined,
                     createdId: user.id,
                     updatedId: user.id,
                 },
                 include: partnerInclude,
             });
             await this.audit.created( tx, partner.id, `협력사 추가: [${access.projectName}] ${client.name}`,
-                { projectId, clientId: client.id, contractAmount: body.contractAmount ?? null } );
+                { projectId, clientId: client.id, contractAmount: body.contractAmount ?? null, totalAmount: money.totalAmount?.toString() ?? null } );
             return partner;
         }) );
     }
@@ -80,24 +91,43 @@ export class ProjectPartnersService {
         const endDate = body.endDate !== undefined ? body.endDate : before.endDate?.toISOString().slice( 0, 10 ) ?? null;
         this.assertPeriod( startDate, endDate );
 
+        // 금액·과세·부가세율 중 하나라도 바뀌면 저장된 나머지 값과 합쳐 부가세·합계를 다시 계산한다
+        const moneyChanged = body.contractAmount !== undefined || body.taxType !== undefined || body.vatRate !== undefined;
+        const money = moneyChanged
+            ? this.money(
+                body.contractAmount !== undefined ? body.contractAmount : before.contractAmount,
+                body.taxType ?? before.taxType,
+                body.vatRate ?? before.vatRate,
+            )
+            : {};
+
         const data = {
             workScope: body.workScope,
-            contractAmount: body.contractAmount,
+            ...money,
             startDate: toDateOnly( body.startDate ),
             endDate: toDateOnly( body.endDate ),
-            contactName: body.contactName,
-            contactHp: body.contactHp,
-            contactEmail: body.contactEmail,
         };
+        // 담당자는 보냈을 때만 전체 교체 (견적 품목과 같은 방식)
+        const contacts = body.contacts ? contactRows( body.contacts ) : undefined;
 
         return this.prisma.$transaction( async ( tx ) => {
             const partner = await tx.projectPartner.update({
                 where: { id: partnerId, deleted: false },
-                data: { ...data, updatedId: user.id },
+                data: {
+                    ...data,
+                    contacts: contacts ? { deleteMany: {}, create: contacts } : undefined,
+                    updatedId: user.id,
+                },
                 include: partnerInclude,
             });
+            // 감사 로그: 담당자는 "이름(역할) 연락처 이메일" 목록 한 줄로 비교한다
+            const contactSummary = ( list: { name: string; role: string | null; hp: string | null; email: string | null }[] ) =>
+                list.map( ( c ) => [ c.role ? `${c.name}(${c.role})` : c.name, c.hp, c.email ].filter( Boolean ).join( ' ' ) ).join( ', ' );
             await this.audit.updated( tx, partnerId, `협력사 수정: [${access.projectName}] ${partner.client.name}`,
-                diffChanges( { ...before, contractAmount: before.contractAmount?.toString() ?? null }, { ...data, contractAmount: data.contractAmount === undefined ? undefined : data.contractAmount?.toString() ?? null } ),
+                diffChanges(
+                    { ...this.forAudit( before ), contacts: contactSummary( before.contacts ) },
+                    { ...this.forAudit( data ), ...( contacts ? { contacts: contactSummary( contacts ) } : {} ) },
+                ),
                 { projectId } );
             return partner;
         });
@@ -128,6 +158,21 @@ export class ProjectPartnersService {
             throw new NotFoundException( '이 프로젝트의 협력사가 아닙니다.' );
         }
         return partner;
+    }
+
+    //* 외주 금액(공급가액) + 과세 구분 + 부가세율 → 저장할 금액 칸 (금액이 없으면 부가세·합계도 NULL)
+    private money( contractAmount: number | Prisma.Decimal | null, taxType: ProjectQuoteTaxType, vatRate: number | Prisma.Decimal ) {
+        if ( contractAmount === null ) {
+            return { contractAmount: null, taxType, vatRate, vatAmount: null, totalAmount: null };
+        }
+        const amounts = calcSaleAmounts( contractAmount, taxType, vatRate );
+        if ( !amounts ) throw new BadRequestException( '금액이 너무 큽니다. (최대 999,999,999,999,999원)' );
+        return { contractAmount: amounts.supplyAmount, taxType, vatRate, vatAmount: amounts.vatAmount, totalAmount: amounts.totalAmount };
+    }
+
+    // 감사 로그 비교용: Decimal은 문자열로 (diffChanges가 값으로 비교하도록)
+    private forAudit( row: object ) {
+        return Object.fromEntries( Object.entries( row ).map( ( [ k, v ] ) => [ k, v instanceof Prisma.Decimal ? v.toString() : v ] ) );
     }
 
     // DB CHECK 제약 project_partner_model_period_check와 같은 규칙 (친절한 400 메시지용)

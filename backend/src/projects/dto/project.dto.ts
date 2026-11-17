@@ -1,5 +1,6 @@
+import { applyDecorators } from '@nestjs/common';
 import { PartialType } from '@nestjs/mapped-types';
-import { IsDateString, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator';
+import { IsDateString, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Length, Matches, Max, MaxLength, Min } from 'class-validator';
 import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
 import { StringToNumber } from 'src/common/decorator/string-to-number.decorator';
 import { PagePaginationDto } from 'src/common/dto/page-pagination.dto';
@@ -9,6 +10,15 @@ import { sanitizeEditorHtml } from 'src/common/util/sanitize-html.util';
 // 날짜만 받는다 ("2026-11-17"). @db.Date 컬럼에 저장
 export const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 export const DATE_ONLY_MESSAGE = '날짜는 YYYY-MM-DD 형식입니다.';
+
+// 부가세율(%) 검사 - 견적·매출·협력사 DTO 공용 (0 ~ 100, 소수 둘째 자리까지, 2026-11-17 사용자 결정: 직접 입력, 기본 10)
+export const VatRateField = () => applyDecorators(
+    StringToNumber(),
+    IsNumber( { maxDecimalPlaces: 2 }, { message: '부가세율은 소수 둘째 자리까지 입력합니다.' } ),
+    Min( 0 ),
+    Max( 100 ),
+    IsOptional(),
+);
 
 // 에디터 본문(HTML) 최대 길이 - 서식 태그까지 세므로 일반 텍스트보다 넉넉하게 (프로젝트 설명·과제 내용)
 export const EDITOR_HTML_MAX_LENGTH = 50_000;

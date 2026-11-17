@@ -41,11 +41,10 @@ export interface ProjectProgress {
   percent: number; // 소수점 버림
 }
 
-// GET /projects 한 행
+// GET /projects 한 행 - 전체 목록은 누구나 보므로 설명은 오지 않는다(상세에서만)
 export interface ProjectListItem {
   id: number;
   name: string;
-  description: string | null;
   status: ProjectStatus;
   startDate: string | null;
   endDate: string | null;
@@ -54,6 +53,8 @@ export interface ProjectListItem {
   managers: { id: number; name: string }[];
   memberCount: number;
   progress: ProjectProgress;
+  isMember?: boolean; // 내가 참여 중인지 (목록에만)
+  canOpen?: boolean; // 상세에 들어갈 수 있는지 = 참여자 또는 과제 관리 관리자 (목록에만)
   createdAt: string;
   deletedAt?: string | null;
 }
@@ -80,13 +81,23 @@ export interface ProjectPartner {
   clientId: number;
   client: { id: number; name: string; businessNo: string | null; deleted: boolean };
   workScope: string | null;
-  contractAmount: string | null; // 원, 부가세 별도
+  contractAmount: string | null; // 원, 공급가액(부가세 별도)
+  taxType: QuoteTaxType;
+  vatRate: string; // % ("10", "3.3")
+  vatAmount: string | null; // 서버 계산 (금액이 없으면 null)
+  totalAmount: string | null;
   startDate: string | null;
   endDate: string | null;
-  contactName: string | null;
-  contactHp: string | null;
-  contactEmail: string | null;
+  contacts: ProjectPartnerContact[]; // 직접 기재한 담당자 (여러 명, 입력 순서)
   createdAt: string;
+}
+
+export interface ProjectPartnerContact {
+  id: number;
+  name: string;
+  role: string | null; // 예: PM, 실무, 정산
+  hp: string | null;
+  email: string | null;
 }
 
 // "12000000" → "12,000,000원" (문자열 그대로 자릿수만 끊는다 - 큰 금액도 정밀도 손실 없음)
@@ -168,4 +179,150 @@ export interface ProjectClient {
 export function formatBusinessNo(value: string | null | undefined) {
   if (!value) return "-";
   return value.length === 10 ? `${value.slice(0, 3)}-${value.slice(3, 5)}-${value.slice(5)}` : value;
+}
+
+// ── 견적서 (docs/design/projects.md 5-1장) ───────────────────────────
+// 금액은 Decimal(15,0)이라 문자열로 온다. 표시 상태는 서버가 결재 문서 상태로 계산한다.
+export type QuoteTaxType = "TAXABLE" | "EXEMPT";
+export type QuoteDisplayStatus = "DRAFT" | "IN_APPROVAL" | "REJECTED" | "CONFIRMED" | "CANCELLED";
+
+export const QUOTE_TAX_LABEL: Record<QuoteTaxType, string> = { TAXABLE: "과세", EXEMPT: "면세" };
+
+// "과세 (부가세 10%)" / "면세" - 부가세율은 직접 입력(기본 10%)
+export function formatTax(taxType: QuoteTaxType, vatRate: string) {
+  return taxType === "TAXABLE" ? `과세 (부가세 ${vatRate}%)` : "면세";
+}
+export const QUOTE_STATUS_LABEL: Record<QuoteDisplayStatus, string> = {
+  DRAFT: "작성 중",
+  IN_APPROVAL: "결재 중",
+  REJECTED: "반려",
+  CONFIRMED: "확정",
+  CANCELLED: "확정 취소",
+};
+
+// GET /projects/:id/quotes
+export interface QuoteListResult {
+  approvalEnabled: boolean; // 켜져 있으면 확정은 결재로 ([결재 요청]), 꺼져 있으면 [확정]
+  contractAmount: string; // 확정 버전 합계 = 프로젝트 계약 금액
+  quotes: {
+    id: number;
+    quoteNo: string;
+    title: string;
+    versionCount: number;
+    latest: { id: number; version: number; status: QuoteDisplayStatus; taxType: QuoteTaxType; quoteDate: string; totalAmount: string };
+    createdAt: string;
+  }[];
+}
+
+export interface QuoteItem {
+  id: number;
+  sortOrder: number;
+  name: string;
+  spec: string | null;
+  quantity: number;
+  unitPrice: string;
+  amount: string;
+  note: string | null;
+}
+
+export interface QuoteVersion {
+  id: number;
+  version: number;
+  isLatest: boolean;
+  displayStatus: QuoteDisplayStatus;
+  taxType: QuoteTaxType;
+  vatRate: string; // %
+  quoteDate: string;
+  validUntil: string | null;
+  clientId: number | null;
+  clientName: string;
+  clientBusinessNo: string | null;
+  clientCeoName: string | null;
+  clientAddress: string | null;
+  clientTel: string | null;
+  contactId: number | null;
+  contactName: string | null;
+  contactDepartment: string | null;
+  contactJobTitle: string | null;
+  contactHp: string | null;
+  contactEmail: string | null;
+  supplyAmount: string;
+  vatAmount: string;
+  totalAmount: string;
+  note: string | null;
+  approvalDocument: { id: number; status: string | null } | null;
+  confirmedAt: string | null;
+  cancelledAt: string | null;
+  items: QuoteItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /projects/:id/quotes/:quoteId (버전은 최신 순)
+export interface QuoteDetail {
+  id: number;
+  quoteNo: string;
+  title: string;
+  projectId: number;
+  projectName: string;
+  approvalEnabled: boolean;
+  versions: QuoteVersion[];
+  createdAt: string;
+}
+
+// ── 매출 (docs/design/projects.md 5-2장) ───────────────────────────
+// 청구 상태는 저장값, 수금 상태는 서버가 수금 합계로 계산한다. 금액은 문자열(Decimal).
+export type SaleStatus = "PLANNED" | "BILLED" | "CANCELLED";
+export type SalePaymentStatus = "UNPAID" | "PARTIAL" | "PAID";
+
+export const SALE_STATUS_LABEL: Record<SaleStatus, string> = { PLANNED: "청구 예정", BILLED: "청구", CANCELLED: "취소" };
+export const PAYMENT_STATUS_LABEL: Record<SalePaymentStatus, string> = { UNPAID: "미수", PARTIAL: "부분 수금", PAID: "수금 완료" };
+
+export interface SalePayment {
+  id: number;
+  paidDate: string;
+  amount: string;
+  memo: string | null;
+  createdAt: string;
+}
+
+export interface ProjectSale {
+  id: number;
+  projectId: number;
+  quoteVersionId: number | null;
+  quoteVersion: { id: number; version: number; quote: { id: number; quoteNo: string; title: string } } | null;
+  title: string;
+  status: SaleStatus;
+  taxType: QuoteTaxType;
+  vatRate: string; // %
+  supplyAmount: string;
+  vatAmount: string;
+  totalAmount: string;
+  plannedDate: string | null;
+  billedDate: string | null; // 매출 기준일
+  taxInvoiceNo: string | null;
+  memo: string | null;
+  paidAmount: string;
+  paymentStatus: SalePaymentStatus;
+  payments: SalePayment[];
+  files: import("./file").FileInfo[]; // 세금계산서 파일
+  createdAt: string;
+}
+
+// 청구할 수 있는 확정 견적 (청구 잔액 포함)
+export interface ConfirmedQuoteBalance {
+  id: number; // 견적 버전 id
+  version: number;
+  taxType: QuoteTaxType;
+  vatRate: string; // %
+  totalAmount: string;
+  billedAmount: string;
+  remaining: string;
+  quote: { id: number; quoteNo: string; title: string };
+}
+
+export interface SaleListResult {
+  summary: { billedTotal: string; plannedTotal: string; paidTotal: string; outstanding: string };
+  confirmedQuotes: ConfirmedQuoteBalance[];
+  sales: ProjectSale[];
 }

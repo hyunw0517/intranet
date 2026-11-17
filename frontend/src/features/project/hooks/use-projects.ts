@@ -16,6 +16,8 @@ import {
   fetchProjects,
   type ProjectListQuery,
 } from "@/services/api/projects";
+import { fetchQuote, fetchQuotes } from "@/services/api/project-quotes";
+import { fetchSales } from "@/services/api/project-sales";
 import { searchUsers } from "@/services/api/users";
 
 // 과제 관리 queryKey - 프로젝트·참여자·과제를 바꾸면 all 접두사로 목록·상세·칸반·내 할 일을 함께 다시 조회한다.
@@ -27,6 +29,9 @@ export const projectKeys = {
   detail: (id: number) => [...projectKeys.all, "detail", id] as const,
   tasks: (id: number) => [...projectKeys.all, "tasks", id] as const,
   partners: (id: number) => [...projectKeys.all, "partners", id] as const,
+  quotes: (id: number) => [...projectKeys.all, "quotes", id] as const,
+  quote: (id: number, quoteId: number) => [...projectKeys.all, "quotes", id, quoteId] as const,
+  sales: (id: number) => [...projectKeys.all, "sales", id] as const,
   myTasks: () => [...projectKeys.all, "my-tasks"] as const,
 };
 
@@ -56,6 +61,19 @@ export function useProjectTasks(id: number) {
 
 export function useProjectPartners(id: number) {
   return useQuery({ queryKey: projectKeys.partners(id), queryFn: () => fetchProjectPartners(id) });
+}
+
+export function useQuotes(projectId: number) {
+  return useQuery({ queryKey: projectKeys.quotes(projectId), queryFn: () => fetchQuotes(projectId) });
+}
+
+export function useQuote(projectId: number, quoteId: number) {
+  return useQuery({ queryKey: projectKeys.quote(projectId, quoteId), queryFn: () => fetchQuote(projectId, quoteId) });
+}
+
+// 매출 목록 + 요약 + 확정 견적별 청구 잔액 (projectKeys.all 무효화로 견적 확정·취소 후에도 다시 조회된다)
+export function useSales(projectId: number) {
+  return useQuery({ queryKey: projectKeys.sales(projectId), queryFn: () => fetchSales(projectId) });
 }
 
 export function useMyTasks() {

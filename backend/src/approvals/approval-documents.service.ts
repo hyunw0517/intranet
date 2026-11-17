@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { AdminPermission, ApprovalStatus, ApprovalStepStatus, AuditActionType, AuditTargetType, FileTargetType, Prisma, UserRole, Users } from "src/generated/prisma/client";
+import { AdminPermission, ApprovalStatus, ApprovalStepStatus, AuditActionType, AuditTargetType, FileTargetType, Prisma, Users } from "src/generated/prisma/client";
 import { hasAdminPermission } from "src/auth/util/admin-permission.util";
 import { AuditService, TargetAudit } from "src/common/audit.service";
 import { FileKind } from "src/common/const/file.const";

@@ -5,6 +5,8 @@ import {
   CalendarClock,
   CalendarRange,
   FileCheck,
+  FolderCog,
+  FolderKanban,
   LayoutDashboard,
   LayoutList,
   Network,
@@ -40,6 +42,7 @@ export const mainNav: NavGroup[] = [
       { title: "대시보드", href: "/", icon: LayoutDashboard },
       { title: "시설 예약", href: "/reservations", icon: CalendarClock, addon: "reservations" },
       { title: "전자결재", href: "/approvals", icon: FileCheck, addon: "approvals" },
+      { title: "과제 관리", href: "/projects", icon: FolderKanban, addon: "projects" }, // 하위 탭: 프로젝트 / 내 할 일 / 거래처
     ],
   },
   {
@@ -63,6 +66,7 @@ export const adminNav: NavGroup[] = [
       { title: "예약 관리", href: "/admin/reservations", icon: CalendarRange, addon: "reservations", permission: "RESERVATIONS" },
       { title: "결재라인 권한 관리", href: "/admin/approval-managers", icon: UserCog, addon: "approvals", permission: "APPROVAL_LINES" },
       { title: "연차 관리", href: "/admin/leaves", icon: CalendarCheck, addon: "leaves", permission: "LEAVES" },
+      { title: "프로젝트 관리", href: "/admin/projects", icon: FolderCog, addon: "projects", permission: "PROJECTS" }, // 삭제된 프로젝트 복구
     ],
   },
 ];

@@ -16,7 +16,7 @@ import { EVENT_COLOR_OPTIONS } from "../calendar-colors";
 import { EMPTY_EVENT, toEventPayload, validateEvent, type EventInput } from "../event-date";
 import type { FileInfo } from "@/types/file";
 import { AttachmentField } from "./attachment-field";
-import { RichTextEditor } from "./rich-text-editor";
+import { RichTextEditor } from "@/components/editor/rich-text-editor";
 
 const TITLE_MAX = 100; // CreatePostDto @Length(1, 100)
 

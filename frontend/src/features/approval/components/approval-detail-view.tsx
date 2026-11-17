@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { ErrorState, LoadingState } from "@/components/common/data-state";
 import { FormError } from "@/components/common/form-field";
-import { RichTextContent } from "@/features/board/components/rich-text-content";
+import { RichTextContent } from "@/components/editor/rich-text-content";
 import { useEnabledAddons } from "@/features/addon/hooks/use-addons";
 import { LeaveInfoPanel } from "@/features/leave/components/leave-info-panel";
 import { Button } from "@/components/ui/button";

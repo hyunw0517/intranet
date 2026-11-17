@@ -1,7 +1,10 @@
 import { Controller, Get, Body, Patch, Param, Delete, Query, ParseIntPipe, Res } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from 'src/auth/decorator/user.decorator';
-import { AdminPermission, type Users } from 'src/generated/prisma/client';
+import { AdminPermission, UserRole, type Users } from 'src/generated/prisma/client';
+import { Roles } from 'src/auth/decorator/roles.decorator';
+import { UserSearchQueryDto } from './dto/user-search-query.dto';
+import { UserSearchService } from './user-search.service';
 import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
@@ -18,7 +21,10 @@ import { BulkUpdateUsersStatusDto } from './dto/bulk-update-users-status.dto';
 @Controller('users')
 export class UsersController {
 
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly userSearchService: UserSearchService,
+  ) {}
 
   //* (개인) 회원 개인정보 조회
   @Get('me')
@@ -52,6 +58,15 @@ export class UsersController {
     return true;
   }
 
+
+  //* (공용) 회원 검색 - 회원을 고르는 화면용, 재직 중인 승인 회원만 (UserSearchService) - ':id'보다 먼저 선언
+  @Get('search')
+  @Roles(UserRole.USER)
+  searchUsers(
+    @Query() query: UserSearchQueryDto,
+  ) {
+    return this.userSearchService.search( query.search );
+  }
 
   //! ========== 관리자 서비스 로직 ==========
   // 'me', 'bulk'는 ':id' 라우트 아래에 둔다. (':id'가 먼저 선언되면 'me' 요청이 ':id'로 매칭됨)

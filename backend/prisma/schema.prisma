@@ -69,6 +69,8 @@ enum NotificationTargetType {
   COMMENT             // 댓글
   APPROVAL            // 전자결재 문서
   FACILITY_RESERVATION // 시설 예약
+  PROJECT             // 프로젝트 (참여자로 추가됨)
+  PROJECT_TASK        // 과제 (담당 지정·마감 임박)
 }
 
 //? 알림 이벤트 구분 -> 모델: Notification (받는 사람 입장에서 무슨 일이 생겼는지)
@@ -88,6 +90,9 @@ enum NotificationActionType {
   RESERVATION_CANCELLED_BY_ADMIN // 관리자가 내 시설 예약을 취소함
   RESERVATION_UPDATED_BY_ADMIN   // 관리자가 내 시설 예약 시간을 변경함
   RESERVATION_DELETED_BY_ADMIN   // 관리자가 내 시설 예약을 삭제함
+  PROJECT_MEMBER_ADDED   // 프로젝트 참여자로 추가됨
+  PROJECT_TASK_ASSIGNED  // 과제 담당자로 지정됨
+  PROJECT_TASK_DUE_SOON  // 담당 과제 마감 임박 (마감 전날 배치)
   // 채팅은 알림 행을 만들지 않는다(헤더 채팅 배지 + 소켓 푸시, 2026-11-13 사용자 결정)
 }
 
@@ -117,6 +122,7 @@ enum AuditTargetType {
   PROJECT             // 프로젝트
   PROJECT_MEMBER      // 프로젝트 참여자
   PROJECT_TASK        // 과제
+  PROJECT_PARTNER     // 프로젝트 협력사 (하청기업)
 }
 
 //? 감사 로그 이벤트 구분 -> 모델: Audit (작업자가 무엇을 했는지)
@@ -1159,7 +1165,8 @@ model ProjectClient {
   memo       String? // 메모
 
   contacts ProjectClientContact[] // 담당자 목록
-  projects Project[]              // 이 거래처의 프로젝트
+  projects Project[]              // 발주처로 연결된 프로젝트
+  partners ProjectPartner[]       // 협력사(하청)로 참여한 프로젝트
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -1215,6 +1222,7 @@ model Project {
   client  ProjectClient?  @relation(fields: [clientId], references: [id])
   members ProjectMember[] // 참여자 (책임자 포함)
   tasks   ProjectTask[]   // 과제
+  partners ProjectPartner[] // 협력사 (하청기업, 여러 개)
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -1237,7 +1245,6 @@ model ProjectMember {
   projectId     Int               @map("project_id")
   userId        Int               @map("user_id")
   role          ProjectMemberRole @default(MEMBER)
-  canViewAmount Boolean           @default(false) @map("can_view_amount") // 금액 열람 허용 (책임자는 값과 관계없이 열람)
 
   project Project @relation(fields: [projectId], references: [id])
   user    Users   @relation(fields: [userId], references: [id])
@@ -1253,6 +1260,40 @@ model ProjectMember {
   @@unique([projectId, userId], where: { deleted: false }) // 활성 참여자는 한 명당 한 행 (동시 추가도 DB가 막음)
   @@index([userId, deleted])
   @@map("project_member_model")
+}
+
+//* 프로젝트 협력사 (하청기업) -> 모듈: Projects (애드온, docs/design/projects.md "협력사")
+// 발주처(Project.clientId, 돈을 받는 쪽)와 달리 우리가 돈을 주는 쪽. 한 프로젝트에 여러 개. 회사 정보는 거래처(ProjectClient)를 참조한다.
+// 참여자 누구나 등록·수정·빼기, 금액도 참여자 전원이 본다(2026-11-17 사용자 결정 - 금액 열람 규칙 없앰).
+// 빼면 soft delete(나중에 예산 집행·매입 세금계산서가 연결되므로 기록 유지), 같은 회사를 다시 넣으면 새 행.
+// 담당자는 거래처 담당자를 고르지 않고 직접 적는다(사용자 결정).
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): 계약 금액 >= 0, 계약 기간이 둘 다 있으면 시작 <= 종료
+model ProjectPartner {
+  id             Int       @id @default(autoincrement())
+  projectId      Int       @map("project_id")
+  clientId       Int       @map("client_id") // 거래처 id (삭제된 거래처도 연결 유지)
+  workScope      String?   @map("work_scope") // 업무 범위
+  contractAmount Decimal?  @db.Decimal(15, 0) @map("contract_amount") // 외주 계약 금액 (원, 부가세 별도)
+  startDate      DateTime? @db.Date @map("start_date") // 계약 기간
+  endDate        DateTime? @db.Date @map("end_date")
+  contactName    String?   @map("contact_name") // 협력사 담당자 (직접 기재)
+  contactHp      String?   @db.VarChar(20) @map("contact_hp")
+  contactEmail   String?   @map("contact_email")
+
+  project Project       @relation(fields: [projectId], references: [id])
+  client  ProjectClient @relation(fields: [clientId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdId Int      @map("created_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedId Int      @map("updated_id")
+  deleted   Boolean  @default(false)
+  deletedAt DateTime? @map("deleted_at")
+  deletedId Int?     @map("deleted_id")
+
+  @@unique([projectId, clientId], where: { deleted: false }) // 같은 프로젝트에 같은 회사는 활성 한 행
+  @@index([clientId, deleted])
+  @@map("project_partner_model")
 }
 
 //* 과제 (칸반 카드) -> 모듈: Projects (애드온)

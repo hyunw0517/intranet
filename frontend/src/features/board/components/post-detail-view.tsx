@@ -23,7 +23,7 @@ import { readBoardListHref, useBoardListHref } from "../board-list-href";
 import { CommentSection } from "./comment-section";
 import { PostAttachments } from "./post-attachments";
 import { PostAuthorLabel } from "./post-author";
-import { RichTextContent } from "./rich-text-content";
+import { RichTextContent } from "@/components/editor/rich-text-content";
 
 // 게시글 상세: 본문 + 좋아요·고정·수정·삭제 + 댓글
 // 버튼 표시는 서버가 계산한 can을 따른다. (실제 차단은 각 API가 다시 검사)

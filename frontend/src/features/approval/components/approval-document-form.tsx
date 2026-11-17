@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { FormError, FormField } from "@/components/common/form-field";
 import { AttachmentField } from "@/features/board/components/attachment-field";
-import { RichTextEditor } from "@/features/board/components/rich-text-editor";
+import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

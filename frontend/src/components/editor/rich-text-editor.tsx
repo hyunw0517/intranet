@@ -41,7 +41,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/error-message";
 import { checkUploadFile, IMAGE_EXTENSIONS, MAX_IMAGE_SIZE, uploadImage } from "@/services/api/files";
-import { toVideoEmbedSrc, VideoEmbed } from "../video-embed";
+import { toVideoEmbedSrc, VideoEmbed } from "./video-embed";
 
 interface RichTextEditorProps {
   id: string;

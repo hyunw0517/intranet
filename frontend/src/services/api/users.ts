@@ -25,6 +25,21 @@ export function updateMe(input: UpdateMeInput) {
   return apiFetch<CurrentUser>("/users/me", { method: "PATCH", body: input });
 }
 
+// GET /users/search - 회원을 고르는 화면용 공용 검색 (USER 이상, 재직 중인 승인 회원만, 최대 20명)
+// 이메일·연락처 등 개인정보는 오지 않는다.
+export interface UserSearchItem {
+  id: number;
+  name: string;
+  empNo: string;
+  departmentName: string | null;
+  positionName: string | null;
+  jobTitleName: string | null;
+}
+
+export function searchUsers(search: string) {
+  return apiFetch<UserSearchItem[]>("/users/search", { query: { search } });
+}
+
 // ── 관리자 ────────────────────────────────────────────────────────
 
 // GET /users 정렬 기준 (UserSortBy) - 소속은 대표 소속 부서명, 직급은 순위(sortOrder) 기준

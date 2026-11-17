@@ -81,14 +81,17 @@ describe('전자결재', () => {
         expect( res.body[0] ).toEqual({ type: 'GENERAL', directCreate: true }); // 등록 순서 = 결재 본체가 먼저
     });
 
-    it('결재자 검색: 지정할 수 있는 회원만, 부서명으로도 찾고 이메일은 내보내지 않는다', async () => {
-        const res = await http().get( '/approvals/approvers?search=영업' ).set( auth( token.a ) ).expect( 200 );
+    // 결재자 선택 화면은 핵심의 공용 회원 검색(GET /users/search)을 쓴다 (2026-11-17, 결재 전용 /approvals/approvers는 없앰)
+    it('결재자 검색(공용 회원 검색): 지정할 수 있는 회원만, 부서명으로도 찾고 이메일은 내보내지 않는다', async () => {
+        await http().get( '/approvals/approvers' ).set( auth( token.a ) ).expect( 404 ); // 없앤 API
+
+        const res = await http().get( '/users/search?search=영업' ).set( auth( token.a ) ).expect( 200 );
         expect( res.body.map( ( u: { id: number } ) => u.id ).sort() ).toEqual([ ids.b, ids.c ].sort());
         expect( res.body[0] ).not.toHaveProperty( 'email' );
 
         await prisma.users.update({ where: { id: ids.d }, data: { status: UserStatus.RESIGNED } });
         try {
-            const all = await http().get( '/approvals/approvers' ).set( auth( token.a ) ).expect( 200 );
+            const all = await http().get( '/users/search' ).set( auth( token.a ) ).expect( 200 );
             expect( all.body.map( ( u: { id: number } ) => u.id ) ).not.toContain( ids.d );
         } finally {
             await prisma.users.update({ where: { id: ids.d }, data: { status: UserStatus.ACTIVE } });

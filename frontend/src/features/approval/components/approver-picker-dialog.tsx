@@ -23,8 +23,8 @@ export function approverMeta(a: Pick<Approver, "departmentName" | "positionName"
   return [a.departmentName, a.positionName, a.jobTitleName].filter(Boolean).join(" · ") || "소속 없음";
 }
 
-// 결재자 검색 창 (GET /approvals/approvers - 지정할 수 있는 회원만, 최대 20명)
-// 입력이 멈추고 0.3초 뒤에 검색한다. 검색어가 없으면 이름순 앞 20명.
+// 결재자 검색 창 (공용 회원 검색 GET /users/search - 재직 중인 승인 회원만, 최대 20명)
+// 입력이 멈추고 0.3초 뒤에 검색한다. 검색어를 입력하기 전에는 목록을 보여 주지 않는다.
 export function ApproverPickerDialog({
   open,
   onOpenChange,
@@ -72,8 +72,9 @@ export function ApproverPickerDialog({
           )}
         </div>
 
-        <div className="max-h-80 overflow-y-auto">
-          {isPending ? null : isError ? (
+        {/* 결과 수에 따라 창 크기가 바뀌지 않도록 높이를 고정한다 */}
+        <div className="h-80 overflow-y-auto">
+          {search === "" || isPending ? null : isError ? (
             <ErrorState error={error} onRetry={() => refetch()} />
           ) : data.length === 0 ? (
             <EmptyState message="검색 결과가 없습니다." />

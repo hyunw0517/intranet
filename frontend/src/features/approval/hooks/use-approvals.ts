@@ -9,8 +9,9 @@ import {
   type ApprovalListQuery,
 } from "@/services/api/approval-documents";
 import { fetchManageableLines, fetchUsableLines } from "@/services/api/approval-lines";
-import { searchApprovers } from "@/services/api/approvers";
 import { fetchMyLineScope } from "@/services/api/line-managers";
+import { searchUsers } from "@/services/api/users";
+import type { Approver } from "@/types/approval";
 
 // 전자결재 queryKey - 문서·결재라인을 바꾸면 all 접두사로 결재함·상세·결재라인을 함께 다시 조회한다.
 // (승인 한 번에 내 결재 대기함·결재 완료함·상세가 모두 바뀌므로 범위를 나누지 않는다)
@@ -63,11 +64,13 @@ export function useManageableLines(enabled: boolean) {
 }
 
 // 결재자 검색 (검색어가 바뀌는 동안 이전 결과 유지)
+// 핵심의 공용 회원 검색 GET /users/search를 쓴다(2026-11-17 사용자 결정). 대상(재직 승인 회원)이 결재자 지정 조건과 같아
+// 결과는 모두 지정할 수 있으므로 usable: true로 채워 결재 화면의 Approver 모양에 맞춘다.
 export function useApproverSearch(search: string, enabled = true) {
   return useQuery({
     queryKey: approvalKeys.approvers(search),
-    queryFn: () => searchApprovers(search),
-    enabled,
+    queryFn: async (): Promise<Approver[]> => (await searchUsers(search)).map((u) => ({ ...u, usable: true })),
+    enabled: enabled && search.length > 0, // 검색어를 입력하기 전에는 조회하지 않는다
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });

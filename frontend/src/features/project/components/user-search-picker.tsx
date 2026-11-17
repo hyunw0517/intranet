@@ -44,37 +44,40 @@ export function UserSearchPicker({
         {isFetching && <Loader2 className="absolute right-2.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" aria-hidden />}
       </div>
 
-      {search.trim() === "" ? null : isError ? (
-        <ErrorState error={error} onRetry={() => refetch()} />
-      ) : users.length === 0 && !isFetching ? (
-        <p className="py-3 text-center text-sm text-muted-foreground">검색 결과가 없습니다.</p>
-      ) : (
-        <ul className="max-h-56 overflow-y-auto rounded-md border" role="listbox" aria-label="검색 결과">
-          {users.map((u) => {
-            const joined = excludeIds.includes(u.id);
-            const selected = selectedId === u.id;
-            return (
-              <li key={u.id} role="option" aria-selected={selected} aria-disabled={joined}>
-                <button
-                  type="button"
-                  disabled={joined}
-                  onClick={() => onSelect(u)}
-                  className={cn(
-                    "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50",
-                    selected && "bg-muted",
-                  )}
-                >
-                  <span>
-                    <span className="font-medium">{u.name}</span>
-                    {u.positionName && <span className="text-muted-foreground"> {u.positionName}</span>}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{joined ? "참여 중" : [u.departmentName, u.empNo].filter(Boolean).join(" · ")}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {/* 결과 수에 따라 창 크기가 바뀌지 않도록 높이를 고정한다 */}
+      <div className="h-56 overflow-y-auto">
+        {search.trim() === "" ? null : isError ? (
+          <ErrorState error={error} onRetry={() => refetch()} />
+        ) : users.length === 0 && !isFetching ? (
+          <p className="py-3 text-center text-sm text-muted-foreground">검색 결과가 없습니다.</p>
+        ) : (
+          <ul className="rounded-md border" role="listbox" aria-label="검색 결과">
+            {users.map((u) => {
+              const joined = excludeIds.includes(u.id);
+              const selected = selectedId === u.id;
+              return (
+                <li key={u.id} role="option" aria-selected={selected} aria-disabled={joined}>
+                  <button
+                    type="button"
+                    disabled={joined}
+                    onClick={() => onSelect(u)}
+                    className={cn(
+                      "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50",
+                      selected && "bg-muted",
+                    )}
+                  >
+                    <span>
+                      <span className="font-medium">{u.name}</span>
+                      {u.positionName && <span className="text-muted-foreground"> {u.positionName}</span>}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{joined ? "참여 중" : [u.departmentName, u.empNo].filter(Boolean).join(" · ")}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

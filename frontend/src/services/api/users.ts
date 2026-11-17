@@ -26,7 +26,8 @@ export function updateMe(input: UpdateMeInput) {
 }
 
 // GET /users/search - 회원을 고르는 화면용 공용 검색 (USER 이상, 재직 중인 승인 회원만, 최대 20명)
-// 이메일·연락처 등 개인정보는 오지 않는다.
+// 이메일·연락처 등 개인정보는 오지 않는다. 검색어가 없으면 이름순 앞 20명.
+// 사용처: 과제 관리 참여자 추가, 결재자 선택 (결재 전용 /approvals/approvers는 2026-11-17에 이것으로 합침)
 export interface UserSearchItem {
   id: number;
   name: string;
@@ -37,7 +38,7 @@ export interface UserSearchItem {
 }
 
 export function searchUsers(search: string) {
-  return apiFetch<UserSearchItem[]>("/users/search", { query: { search } });
+  return apiFetch<UserSearchItem[]>("/users/search", { query: { search: search.trim() || undefined } });
 }
 
 // ── 관리자 ────────────────────────────────────────────────────────

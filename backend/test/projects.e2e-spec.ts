@@ -208,12 +208,21 @@ describe('과제 관리', () => {
             expect( res.body.myAccess ).toMatchObject({ memberRole: null, isAdmin: true, canManage: true });
         });
 
-        it('전체 목록(scope=all)은 관리자만, 내 목록은 참여한 것만', async () => {
-            const project = await createProject( ownerToken, { name: '목록 확인용' } );
-            await http().get( '/projects' ).set( auth( ownerToken ) ).query({ scope: 'all' }).expect( 403 );
+        // 2026-11-17 사용자 결정: 전체 목록은 누구나(목록만 공개), 상세는 여전히 참여자·관리자만
+        it('전체 목록(scope=all)은 누구나 보되 설명은 빠지고, 참여하지 않은 프로젝트의 상세는 403', async () => {
+            const project = await createProject( ownerToken, { name: '목록 확인용', description: '<p>내부 설명</p>' } );
 
-            const all = await http().get( '/projects' ).set( auth( adminToken ) ).query({ scope: 'all', search: '목록 확인용' }).expect( 200 );
-            expect( all.body.data.map( ( p: { id: number } ) => p.id ) ).toContain( project.id );
+            const all = await http().get( '/projects' ).set( auth( outsiderToken ) ).query({ scope: 'all', search: '목록 확인용' }).expect( 200 );
+            const row = all.body.data.find( ( p: { id: number } ) => p.id === project.id );
+            expect( row ).toMatchObject({ isMember: false, canOpen: false });
+            expect( row ).not.toHaveProperty( 'description' );
+            await http().get( `/projects/${project.id}` ).set( auth( outsiderToken ) ).expect( 403 );
+            await http().get( `/projects/${project.id}/quotes` ).set( auth( outsiderToken ) ).expect( 403 );
+
+            const owner = await http().get( '/projects' ).set( auth( ownerToken ) ).query({ scope: 'all', search: '목록 확인용' }).expect( 200 );
+            expect( owner.body.data.find( ( p: { id: number } ) => p.id === project.id ) ).toMatchObject({ isMember: true, canOpen: true });
+            const admin = await http().get( '/projects' ).set( auth( adminToken ) ).query({ scope: 'all', search: '목록 확인용' }).expect( 200 );
+            expect( admin.body.data.find( ( p: { id: number } ) => p.id === project.id ) ).toMatchObject({ isMember: false, canOpen: true });
 
             const mine = await http().get( '/projects' ).set( auth( outsiderToken ) ).query({ search: '목록 확인용' }).expect( 200 );
             expect( mine.body.data ).toHaveLength( 0 );
@@ -302,6 +311,11 @@ describe('과제 관리', () => {
             const project = await quoteProject();
             const exempt = await newQuote( project.id, { taxType: 'EXEMPT' } );
             expect( ( await detail( project.id, exempt.id ) ).versions[0] ).toMatchObject({ vatAmount: '0', totalAmount: '1033333' });
+
+            // 부가세율 직접 입력: 1,033,333 × 5% = 51,666.65 → 51,666
+            const rated = await newQuote( project.id, { vatRate: 5 } );
+            expect( ( await detail( project.id, rated.id ) ).versions[0] ).toMatchObject({ vatRate: '5', vatAmount: '51666', totalAmount: '1084999' });
+            await http().post( `/projects/${project.id}/quotes` ).set( auth( memberToken ) ).send({ title: 'x', vatRate: 100.01 }).expect( 400 );
 
             await http().post( `/projects/${project.id}/quotes` ).set( auth( memberToken ) ).send({ title: 'x', quoteDate: '2026-11-17', validUntil: '2026-11-01' }).expect( 400 );
             const other = ( await http().post( '/projects/clients' ).set( auth( ownerToken ) ).send({ name: '남의상사' }).expect( 201 ) ).body;
@@ -413,6 +427,131 @@ describe('과제 관리', () => {
         });
     });
 
+    //* 매출 (docs/design/projects.md 5-2장)
+    describe('매출', () => {
+        let approverToken: string;
+        let approverId: number;
+        let clientId: number;
+
+        beforeAll( async () => {
+            const approver = await createTestUser( prisma, UserRole.USER );
+            approverId = approver.id;
+            approverToken = await loginAs( app, approver.empNo );
+            clientId = ( await http().post( '/projects/clients' ).set( auth( ownerToken ) ).send({ name: '매출상사' }).expect( 201 ) ).body.id;
+        });
+
+        const salesUrl = ( projectId: number ) => `/projects/${projectId}/sales`;
+        const list = async ( projectId: number ) => ( await http().get( salesUrl( projectId ) ).set( auth( memberToken ) ).expect( 200 ) ).body;
+        const createSale = async ( projectId: number, body: Record<string, unknown> ) =>
+            ( await http().post( salesUrl( projectId ) ).set( auth( memberToken ) ).send({ title: '청구', ...body }).expect( 201 ) ).body;
+
+        // 확정 견적 하나 (공급가액 1,000,000 → 합계 1,100,000) 를 가진 프로젝트
+        const projectWithConfirmedQuote = async () => {
+            const project = await createProject( ownerToken, { clientId } );
+            await addMember( project.id, memberId );
+            const quote = ( await http().post( `/projects/${project.id}/quotes` ).set( auth( memberToken ) )
+                .send({ title: '견적', items: [ { name: '개발', quantity: 1, unitPrice: 1_000_000 } ] }).expect( 201 ) ).body;
+            const versionId = ( await http().get( `/projects/${project.id}/quotes/${quote.id}` ).set( auth( memberToken ) ).expect( 200 ) ).body.versions[0].id;
+            const docId = ( await http().post( `/projects/${project.id}/quotes/${quote.id}/versions/${versionId}/submit` ).set( auth( memberToken ) )
+                .send({ steps: [ { approverIds: [ approverId ] } ] }).expect( 201 ) ).body.approvalDocumentId;
+            await http().patch( `/approvals/documents/${docId}/approve` ).set( auth( approverToken ) ).send({}).expect( 200 );
+            return { project, quoteId: quote.id, versionId };
+        };
+
+        it('견적 없이도 등록, 공급가액 → 부가세 자동(과세 버림·면세 0), 청구일이 있으면 바로 청구', async () => {
+            const project = await createProject( ownerToken );
+            await addMember( project.id, memberId );
+            const planned = await createSale( project.id, { supplyAmount: 33_333, plannedDate: '2026-12-01' } );
+            expect( planned ).toMatchObject({ status: 'PLANNED', vatAmount: '3333', totalAmount: '36666', quoteVersionId: null });
+
+            const billed = await createSale( project.id, { supplyAmount: 1000, taxType: 'EXEMPT', billedDate: '2026-11-17' } );
+            expect( billed ).toMatchObject({ status: 'BILLED', vatAmount: '0', totalAmount: '1000' });
+
+            // 부가세율 직접 입력 (기본 10%)
+            const rated = await createSale( project.id, { supplyAmount: 1000, vatRate: 5, plannedDate: '2026-12-01' } );
+            expect( rated ).toMatchObject({ vatRate: '5', vatAmount: '50', totalAmount: '1050' });
+            await http().patch( `${salesUrl( project.id )}/${rated.id}` ).set( auth( memberToken ) ).send({ vatRate: 0 }).expect( 200 );
+            await http().delete( `${salesUrl( project.id )}/${rated.id}` ).set( auth( memberToken ) ).expect( 200 );
+
+            const body = await list( project.id );
+            expect( body.summary ).toMatchObject({ billedTotal: '1000', plannedTotal: '36666', paidTotal: '0', outstanding: '1000' });
+        });
+
+        it('⭐ 분할 청구: 견적에 연결한 청구 합계는 견적 금액 이하 (같으면 허용, 넘으면 400, 취소된 청구는 빠진다)', async () => {
+            const { project, versionId } = await projectWithConfirmedQuote();
+            await createSale( project.id, { title: '계약금', quoteVersionId: versionId, supplyAmount: 300_000 } );   // 330,000
+            await http().post( salesUrl( project.id ) ).set( auth( memberToken ) )
+                .send({ title: '잔금', quoteVersionId: versionId, supplyAmount: 700_001 }).expect( 400 );            // 770,001 → 초과
+            const rest = await createSale( project.id, { title: '잔금', quoteVersionId: versionId, supplyAmount: 700_000, billedDate: '2026-11-17' } ); // 딱 맞음
+
+            let body = await list( project.id );
+            expect( body.confirmedQuotes[0] ).toMatchObject({ id: versionId, totalAmount: '1100000', billedAmount: '1100000', remaining: '0' });
+
+            await http().patch( `${salesUrl( project.id )}/${rest.id}/cancel` ).set( auth( memberToken ) ).expect( 200 );
+            body = await list( project.id );
+            expect( body.confirmedQuotes[0].remaining ).toBe( '770000' );
+        });
+
+        it('⭐ 동시에 같은 견적으로 청구해도 합계가 넘지 않는다 (견적 행 잠금)', async () => {
+            const { project, versionId } = await projectWithConfirmedQuote();
+            const results = await Promise.all( Array.from({ length: 3 }, () =>
+                http().post( salesUrl( project.id ) ).set( auth( memberToken ) ).send({ title: '동시', quoteVersionId: versionId, supplyAmount: 500_000 }) ) );
+            expect( results.filter( ( r ) => r.status === 201 ) ).toHaveLength( 2 ); // 550,000 × 2 = 1,100,000
+            expect( ( await list( project.id ) ).confirmedQuotes[0].remaining ).toBe( '0' );
+        });
+
+        it('확정 견적이 아니면 연결 불가, 매출이 연결된 견적은 확정 취소 불가', async () => {
+            const { project, quoteId, versionId } = await projectWithConfirmedQuote();
+            const sale = await createSale( project.id, { quoteVersionId: versionId, supplyAmount: 100 } );
+            await http().patch( `/projects/${project.id}/quotes/${quoteId}/versions/${versionId}/cancel` ).set( auth( memberToken ) ).expect( 400 );
+
+            await http().delete( `${salesUrl( project.id )}/${sale.id}` ).set( auth( memberToken ) ).expect( 200 );
+            await http().patch( `/projects/${project.id}/quotes/${quoteId}/versions/${versionId}/cancel` ).set( auth( memberToken ) ).expect( 200 );
+            await http().post( salesUrl( project.id ) ).set( auth( memberToken ) ).send({ title: 'x', quoteVersionId: versionId, supplyAmount: 1 }).expect( 400 );
+        });
+
+        it('청구 → 부분 수금 → 완료, 수금 합계가 청구 금액을 넘으면 400, 수금이 있으면 취소 불가', async () => {
+            const project = await createProject( ownerToken );
+            await addMember( project.id, memberId );
+            const sale = await createSale( project.id, { supplyAmount: 100_000, plannedDate: '2026-12-01' } );        // 110,000
+            await http().post( `${salesUrl( project.id )}/${sale.id}/payments` ).set( auth( memberToken ) ).send({ paidDate: '2026-12-02', amount: 1 }).expect( 400 ); // 청구 전
+
+            await http().patch( `${salesUrl( project.id )}/${sale.id}/bill` ).set( auth( memberToken ) ).send({ billedDate: '2026-12-01', taxInvoiceNo: '20261201-41000000-12345678' }).expect( 200 );
+            await http().patch( `${salesUrl( project.id )}/${sale.id}` ).set( auth( memberToken ) ).send({ supplyAmount: 1 }).expect( 400 ); // 청구 후 금액 잠금
+
+            const p1 = ( await http().post( `${salesUrl( project.id )}/${sale.id}/payments` ).set( auth( memberToken ) ).send({ paidDate: '2026-12-05', amount: 60_000 }).expect( 201 ) ).body;
+            let row = ( await list( project.id ) ).sales[0];
+            expect( row ).toMatchObject({ status: 'BILLED', paidAmount: '60000', paymentStatus: 'PARTIAL', taxInvoiceNo: '20261201-41000000-12345678' });
+
+            await http().post( `${salesUrl( project.id )}/${sale.id}/payments` ).set( auth( memberToken ) ).send({ paidDate: '2026-12-06', amount: 50_001 }).expect( 400 );
+            await http().post( `${salesUrl( project.id )}/${sale.id}/payments` ).set( auth( memberToken ) ).send({ paidDate: '2026-12-06', amount: 50_000 }).expect( 201 );
+            row = ( await list( project.id ) ).sales[0];
+            expect( row ).toMatchObject({ paidAmount: '110000', paymentStatus: 'PAID' });
+
+            await http().patch( `${salesUrl( project.id )}/${sale.id}/cancel` ).set( auth( memberToken ) ).expect( 400 );
+            await http().delete( `${salesUrl( project.id )}/${sale.id}` ).set( auth( memberToken ) ).expect( 400 ); // 청구한 건은 삭제 불가
+            await http().delete( `${salesUrl( project.id )}/${sale.id}/payments/${p1.id}` ).set( auth( memberToken ) ).expect( 200 );
+            expect( ( await list( project.id ) ).sales[0].paymentStatus ).toBe( 'PARTIAL' );
+        });
+
+        it('세금계산서 첨부·다운로드(참여자만), 청구 뒤에도 추가 첨부(수정본)', async () => {
+            const project = await createProject( ownerToken );
+            await addMember( project.id, memberId );
+            const upload = async ( name: string ) =>
+                ( await http().post( '/common/files/attachments' ).set( auth( memberToken ) ).attach( 'file', Buffer.from( name ), name ).expect( 201 ) ).body.id;
+
+            const first = await upload( 'invoice.pdf' );
+            const sale = await createSale( project.id, { supplyAmount: 1000, billedDate: '2026-11-17', attachmentIds: [ first ] } );
+            const second = await upload( 'invoice-fixed.pdf' );
+            await http().patch( `${salesUrl( project.id )}/${sale.id}` ).set( auth( memberToken ) ).send({ attachmentIds: [ first, second ] }).expect( 200 );
+
+            const row = ( await list( project.id ) ).sales[0];
+            expect( row.files.map( ( f: { id: number } ) => f.id ) ).toEqual([ first, second ]);
+            await http().get( `${salesUrl( project.id )}/${sale.id}/files/${second}` ).set( auth( memberToken ) ).expect( 200 );
+            await http().get( `${salesUrl( project.id )}/${sale.id}/files/${second}` ).set( auth( outsiderToken ) ).expect( 403 );
+        });
+    });
+
     //* 협력사 (하청기업)
     describe('협력사', () => {
         const createClient = async ( name: string ) =>
@@ -424,13 +563,33 @@ describe('과제 관리', () => {
             const client = await createClient( '하청상사A' );
 
             const created = ( await http().post( `/projects/${project.id}/partners` ).set( auth( memberToken ) ).send({
-                clientId: client.id, workScope: '디자인', contractAmount: 12_000_000, startDate: '2026-12-01', endDate: '2026-12-31', contactName: '박담당',
+                clientId: client.id, workScope: '디자인', contractAmount: 12_000_000, startDate: '2026-12-01', endDate: '2026-12-31',
+                contacts: [ { name: '박담당', role: 'PM', hp: '010-1234-5678' }, { name: '최실무', email: 'choi@example.com' } ],
             }).expect( 201 ) ).body;
-            expect( created ).toMatchObject({ contractAmount: '12000000', workScope: '디자인', client: { id: client.id, name: '하청상사A' } });
+            // 기본: 과세 10% → 부가세·합계를 서버가 계산
+            expect( created ).toMatchObject({
+                contractAmount: '12000000', taxType: 'TAXABLE', vatRate: '10', vatAmount: '1200000', totalAmount: '13200000',
+                workScope: '디자인', client: { id: client.id, name: '하청상사A' },
+            });
+            // 담당자 여러 명 (직접 기재, 보낸 순서대로)
+            expect( created.contacts.map( ( c: { name: string; role: string | null } ) => [ c.name, c.role ] ) ).toEqual([ [ '박담당', 'PM' ], [ '최실무', null ] ]);
 
+            // 담당자는 보내면 전체 교체, 안 보내면 그대로
+            const replaced = ( await http().patch( `/projects/${project.id}/partners/${created.id}` ).set( auth( memberToken ) )
+                .send({ contacts: [ { name: '정정산', role: '정산' } ] }).expect( 200 ) ).body;
+            expect( replaced.contacts.map( ( c: { name: string } ) => c.name ) ).toEqual([ '정정산' ]);
+            expect( await prisma.projectPartnerContact.count({ where: { partnerId: created.id } }) ).toBe( 1 );
+
+            // 금액만 바꿔도 저장된 과세·부가세율로 다시 계산, 부가세율만 바꿔도 다시 계산
             await http().patch( `/projects/${project.id}/partners/${created.id}` ).set( auth( memberToken ) ).send({ contractAmount: 15_000_000 }).expect( 200 );
+            const rated = ( await http().patch( `/projects/${project.id}/partners/${created.id}` ).set( auth( memberToken ) ).send({ vatRate: 3.3 }).expect( 200 ) ).body;
+            expect( rated ).toMatchObject({ contractAmount: '15000000', vatRate: '3.3', vatAmount: '495000', totalAmount: '15495000' });
+            const exempt = ( await http().patch( `/projects/${project.id}/partners/${created.id}` ).set( auth( memberToken ) ).send({ taxType: 'EXEMPT' }).expect( 200 ) ).body;
+            expect( exempt ).toMatchObject({ vatAmount: '0', totalAmount: '15000000' });
+
             const list = await http().get( `/projects/${project.id}/partners` ).set( auth( memberToken ) ).expect( 200 );
             expect( list.body.map( ( p: { contractAmount: string } ) => p.contractAmount ) ).toEqual([ '15000000' ]);
+            expect( list.body[0].contacts.map( ( c: { name: string } ) => c.name ) ).toEqual([ '정정산' ]); // 금액만 고친 수정은 담당자를 건드리지 않음
 
             await http().delete( `/projects/${project.id}/partners/${created.id}` ).set( auth( memberToken ) ).expect( 200 );
             const after = await http().get( `/projects/${project.id}/partners` ).set( auth( memberToken ) ).expect( 200 );
@@ -455,6 +614,14 @@ describe('과제 관리', () => {
             await http().post( url ).set( auth( ownerToken ) ).send({ clientId: client.id, startDate: '2026-12-31', endDate: '2026-12-01' }).expect( 400 );
             await http().post( url ).set( auth( ownerToken ) ).send({ clientId: client.id, contractAmount: -1 }).expect( 400 );
             await http().post( url ).set( auth( ownerToken ) ).send({ clientId: client.id, contractAmount: 10.5 }).expect( 400 );
+            // 부가세율: 0~100, 소수 둘째 자리까지
+            await http().post( url ).set( auth( ownerToken ) ).send({ clientId: client.id, vatRate: 101 }).expect( 400 );
+            await http().post( url ).set( auth( ownerToken ) ).send({ clientId: client.id, vatRate: 3.333 }).expect( 400 );
+            await http().post( url ).set( auth( ownerToken ) ).send({ clientId: client.id, vatRate: -1 }).expect( 400 );
+            // 담당자: 이름 필수(공백만 불가), 이메일 형식, 최대 20명
+            await http().post( url ).set( auth( ownerToken ) ).send({ clientId: client.id, contacts: [ { name: '  ' } ] }).expect( 400 );
+            await http().post( url ).set( auth( ownerToken ) ).send({ clientId: client.id, contacts: [ { name: '김', email: 'x' } ] }).expect( 400 );
+            await http().post( url ).set( auth( ownerToken ) ).send({ clientId: client.id, contacts: Array.from( { length: 21 }, ( _, i ) => ({ name: `담당${i}` }) ) }).expect( 400 );
             await http().get( url ).set( auth( outsiderToken ) ).expect( 403 );
         });
 

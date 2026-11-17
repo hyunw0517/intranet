@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/error-message";
 import { createQuote, updateQuoteVersion, type QuoteInput } from "@/services/api/project-quotes";
-import { formatAmount, QUOTE_TAX_LABEL, type QuoteTaxType, type QuoteVersion } from "@/types/project";
+import { formatAmount, type QuoteTaxType, type QuoteVersion } from "@/types/project";
 import { useProjectClient, useProjectMutation } from "../hooks/use-projects";
-import { quoteTotals } from "../quote-calc";
+import { DEFAULT_VAT_RATE, quoteTotals, vatRateError } from "../quote-calc";
+import { TaxFields } from "./tax-fields";
 
 const NO_CONTACT = "none";
 const MAX_ITEMS = 100;
@@ -35,7 +36,7 @@ const digits = (value: string, max: number) => value.replace(/[^0-9]/g, "").repl
 const kstToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 
 // 견적 작성(v1)·작성 중 버전 수정 화면
-// - 금액은 미리보기만 하고 저장 값은 서버가 다시 계산한다(수량 × 단가, 과세 10% 합계 기준 버림)
+// - 금액은 미리보기만 하고 저장 값은 서버가 다시 계산한다(수량 × 단가, 과세는 합계 × 부가세율(기본 10%) 버림)
 // - 수신 담당자는 발주처(프로젝트 거래처)의 담당자 중에서 고른다. 저장할 때마다 발주처·담당자 정보가 그 시점으로 스냅샷된다.
 export function QuoteEditor({
   projectId,
@@ -57,6 +58,7 @@ export function QuoteEditor({
 
   const [title, setTitle] = useState(initialTitle ?? "");
   const [taxType, setTaxType] = useState<QuoteTaxType>(version?.taxType ?? "TAXABLE");
+  const [vatRate, setVatRate] = useState(version?.vatRate ?? DEFAULT_VAT_RATE);
   const [quoteDate, setQuoteDate] = useState(version?.quoteDate.slice(0, 10) ?? kstToday());
   const [validUntil, setValidUntil] = useState(version?.validUntil?.slice(0, 10) ?? "");
   const [contactId, setContactId] = useState(version?.contactId ? String(version.contactId) : NO_CONTACT);
@@ -66,7 +68,7 @@ export function QuoteEditor({
       ? version.items.map((i) => newRow({ name: i.name, spec: i.spec ?? "", quantity: String(i.quantity), unitPrice: i.unitPrice, note: i.note ?? "" }))
       : [newRow()],
   );
-  const [errors, setErrors] = useState<{ title?: string; items?: string; validUntil?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string; items?: string; validUntil?: string; vatRate?: string }>({});
   const [serverError, setServerError] = useState<string | null>(null);
 
   const client = useProjectClient(clientId);
@@ -76,7 +78,8 @@ export function QuoteEditor({
   const update = useProjectMutation((input: QuoteInput) => updateQuoteVersion(projectId, quoteId!, version!.id, input));
   const pending = create.isPending || update.isPending;
 
-  const totals = quoteTotals(rows, taxType);
+  const totals = quoteTotals(rows, taxType, vatRate);
+  const rateError = vatRateError(vatRate); // 면세면 검사하지 않고 보내지도 않는다(서버는 저장된 값·기본 10% 유지)
 
   const setRow = (key: number, patch: Partial<ItemRow>) => setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const moveRow = (index: number, delta: number) =>
@@ -97,10 +100,11 @@ export function QuoteEditor({
     if (!title.trim()) next.title = "견적명을 입력해 주세요.";
     if (filled.some((r) => !r.name.trim() || !r.unitPrice || !r.quantity || Number(r.quantity) < 1)) {
       next.items = "품목마다 품목명·수량(1 이상)·단가를 입력해 주세요.";
-    } else if (quoteTotals(filled, taxType).overflow) {
+    } else if (quoteTotals(filled, taxType, vatRate).overflow) {
       next.items = "금액이 너무 큽니다. (최대 999,999,999,999,999원)";
     }
     if (validUntil && validUntil < quoteDate) next.validUntil = "유효기간은 견적일 이후여야 합니다.";
+    if (taxType === "TAXABLE" && rateError) next.vatRate = rateError;
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
@@ -108,6 +112,7 @@ export function QuoteEditor({
     const input: QuoteInput = {
       title: title.trim(),
       taxType,
+      vatRate: rateError ? undefined : Number(vatRate),
       quoteDate,
       validUntil: validUntil || null,
       contactId: contactId === NO_CONTACT ? null : Number(contactId),
@@ -144,20 +149,7 @@ export function QuoteEditor({
         <FormField id="quote-title" label="견적명" required error={errors.title} className="sm:col-span-2">
           <Input id="quote-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} aria-invalid={!!errors.title} aria-describedby="quote-title-message" />
         </FormField>
-        <FormField id="quote-tax" label="과세">
-          <Select value={taxType} onValueChange={(v) => setTaxType(v as QuoteTaxType)}>
-            <SelectTrigger id="quote-tax" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(QUOTE_TAX_LABEL) as QuoteTaxType[]).map((t) => (
-                <SelectItem key={t} value={t}>
-                  {QUOTE_TAX_LABEL[t]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormField>
+        <TaxFields idPrefix="quote" taxType={taxType} vatRate={vatRate} onTaxTypeChange={setTaxType} onVatRateChange={setVatRate} error={errors.vatRate} />
         <FormField id="quote-contact" label="수신 담당자" hint={client.data ? `${client.data.name}의 담당자` : undefined}>
           <Select value={contactId} onValueChange={setContactId}>
             <SelectTrigger id="quote-contact" className="w-full">

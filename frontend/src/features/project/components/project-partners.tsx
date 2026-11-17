@@ -20,14 +20,26 @@ import {
   updateProjectPartner,
   type ProjectPartnerInput,
 } from "@/services/api/projects";
-import { formatAmount, type ProjectPartner } from "@/types/project";
+import { formatAmount, formatTax, type ProjectPartner, type QuoteTaxType } from "@/types/project";
 import { useProjectClients, useProjectMutation, useProjectPartners } from "../hooks/use-projects";
+import { DEFAULT_VAT_RATE, quoteTotals, vatRateError } from "../quote-calc";
 import { formatPeriod } from "./project-badges";
-
-// Decimal(15,0) 최대값. tsconfig target이 ES2020 미만이라 BigInt 리터럴(123n) 대신 BigInt()를 쓴다.
-const MAX_AMOUNT = BigInt("999999999999999");
+import { TaxFields } from "./tax-fields";
 
 type FormState = { mode: "create" } | { mode: "edit"; partner: ProjectPartner } | null;
+
+// 담당자 입력 행 (직접 기재, 여러 명 - 2026-11-17 사용자 결정). 서버 최대 20명
+const MAX_CONTACTS = 20;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+interface ContactRow {
+  key: number;
+  name: string;
+  role: string;
+  hp: string;
+  email: string;
+}
+let contactKeySeq = 0;
+const newContact = (init: Partial<ContactRow> = {}): ContactRow => ({ key: ++contactKeySeq, name: "", role: "", hp: "", email: "", ...init });
 
 // 협력사 탭 - 하청기업 목록 (2026-11-17 사용자 결정: 참여자 누구나 관리, 금액도 참여자 전원)
 // 회사는 거래처 목록에서 고르고, 업무 범위·외주 계약 금액·계약 기간·담당자는 직접 적는다.
@@ -50,7 +62,8 @@ export function ProjectPartners({ projectId }: { projectId: number }) {
   };
 
   const partners = data ?? [];
-  const total = partners.reduce((sum, p) => sum + BigInt(p.contractAmount ?? "0"), BigInt(0));
+  const supplyTotal = partners.reduce((sum, p) => sum + BigInt(p.contractAmount ?? "0"), BigInt(0));
+  const total = partners.reduce((sum, p) => sum + BigInt(p.totalAmount ?? "0"), BigInt(0));
 
   return (
     <div className="grid gap-4">
@@ -75,7 +88,8 @@ export function ProjectPartners({ projectId }: { projectId: number }) {
               <TableRow>
                 <TableHead>회사</TableHead>
                 <TableHead>업무 범위</TableHead>
-                <TableHead className="w-40 text-right">계약 금액</TableHead>
+                <TableHead className="w-36 text-right">공급가액</TableHead>
+                <TableHead className="w-44 text-right">합계 (부가세 포함)</TableHead>
                 <TableHead className="w-48">계약 기간</TableHead>
                 <TableHead>담당자</TableHead>
                 <TableHead className="w-20"><span className="sr-only">관리</span></TableHead>
@@ -92,10 +106,30 @@ export function ProjectPartners({ projectId }: { projectId: number }) {
                     {p.workScope ?? "-"}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{formatAmount(p.contractAmount)}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatAmount(p.totalAmount)}
+                    {p.contractAmount !== null && (
+                      <span className="block text-xs text-muted-foreground">
+                        {formatTax(p.taxType, p.vatRate)}
+                        {p.taxType === "TAXABLE" && ` · ${formatAmount(p.vatAmount)}`}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">{formatPeriod(p.startDate, p.endDate)}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {p.contactName ?? "-"}
-                    {(p.contactHp || p.contactEmail) && <span className="block text-xs">{[p.contactHp, p.contactEmail].filter(Boolean).join(" · ")}</span>}
+                    {p.contacts.length === 0 ? (
+                      "-"
+                    ) : (
+                      <ul className="grid gap-1">
+                        {p.contacts.map((c) => (
+                          <li key={c.id}>
+                            {c.name}
+                            {c.role && <span className="text-xs"> ({c.role})</span>}
+                            {(c.hp || c.email) && <span className="block text-xs">{[c.hp, c.email].filter(Boolean).join(" · ")}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
@@ -112,7 +146,8 @@ export function ProjectPartners({ projectId }: { projectId: number }) {
             </TableBody>
             <TableFooter>
               <TableRow>
-                <TableCell colSpan={2}>외주 계약 금액 합계 (부가세 별도)</TableCell>
+                <TableCell colSpan={2}>외주 계약 금액 합계</TableCell>
+                <TableCell className="text-right tabular-nums">{formatAmount(supplyTotal.toString())}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatAmount(total.toString())}</TableCell>
                 <TableCell colSpan={3} />
               </TableRow>
@@ -150,7 +185,7 @@ function PartnerFormDialog({
   const [busy, setBusy] = useState(false);
   return (
     <Dialog open={state !== null} onOpenChange={(next) => !next && !busy && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
         {state && <PartnerForm projectId={projectId} existingClientIds={existingClientIds} state={state} onClose={onClose} onBusyChange={setBusy} />}
       </DialogContent>
     </Dialog>
@@ -175,12 +210,20 @@ function PartnerForm({
   const [clientId, setClientId] = useState(editing ? String(editing.clientId) : "");
   const [workScope, setWorkScope] = useState(editing?.workScope ?? "");
   const [amount, setAmount] = useState(editing?.contractAmount ?? ""); // 숫자만 (표시는 아래 미리보기)
+  const [taxType, setTaxType] = useState<QuoteTaxType>(editing?.taxType ?? "TAXABLE");
+  const [vatRate, setVatRate] = useState(editing?.vatRate ?? DEFAULT_VAT_RATE);
   const [startDate, setStartDate] = useState(toDateInputValue(editing?.startDate));
   const [endDate, setEndDate] = useState(toDateInputValue(editing?.endDate));
-  const [contactName, setContactName] = useState(editing?.contactName ?? "");
-  const [contactHp, setContactHp] = useState(editing?.contactHp ?? "");
-  const [contactEmail, setContactEmail] = useState(editing?.contactEmail ?? "");
-  const [errors, setErrors] = useState<{ client?: string; amount?: string; period?: string }>({});
+  const [contacts, setContacts] = useState<ContactRow[]>(() =>
+    editing && editing.contacts.length > 0
+      ? editing.contacts.map((c) => newContact({ name: c.name, role: c.role ?? "", hp: c.hp ?? "", email: c.email ?? "" }))
+      : [newContact()],
+  );
+  const [errors, setErrors] = useState<{ client?: string; amount?: string; period?: string; vatRate?: string; contacts?: string }>({});
+  const setContact = (key: number, patch: Partial<ContactRow>) => setContacts((prev) => prev.map((c) => (c.key === key ? { ...c, ...patch } : c)));
+  // 미리보기: 공급가액 1행으로 견적과 같은 계산 (서버가 다시 계산해 저장)
+  const totals = quoteTotals([{ quantity: "1", unitPrice: amount || "0" }], taxType, vatRate);
+  const rateError = vatRateError(vatRate); // 면세면 검사하지 않고 보내지도 않는다
   const [serverError, setServerError] = useState<string | null>(null);
 
   // 거래처 선택지 (만들 때만, 삭제되지 않은 거래처 최대 100개, 이미 협력사인 회사는 제외)
@@ -196,8 +239,13 @@ function PartnerForm({
     if (pending) return;
     const next: typeof errors = {};
     if (!editing && !clientId) next.client = "협력사로 추가할 거래처를 골라 주세요.";
-    if (amount && BigInt(amount) > MAX_AMOUNT) next.amount = "금액이 너무 큽니다.";
+    if (amount && totals.overflow) next.amount = "금액이 너무 큽니다. (부가세 포함 최대 999,999,999,999,999원)";
+    if (taxType === "TAXABLE" && rateError) next.vatRate = rateError;
     if (startDate && endDate && startDate > endDate) next.period = "계약 시작일은 종료일보다 늦을 수 없습니다.";
+    // 완전히 빈 담당자 행은 무시하고, 일부만 적은 행은 이름이 있어야 한다
+    const filled = contacts.filter((c) => c.name.trim() || c.role.trim() || c.hp.trim() || c.email.trim());
+    if (filled.some((c) => !c.name.trim())) next.contacts = "담당자마다 이름을 입력해 주세요.";
+    else if (filled.some((c) => c.email.trim() && !EMAIL_PATTERN.test(c.email.trim()))) next.contacts = "이메일 형식을 확인해 주세요.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
@@ -206,11 +254,11 @@ function PartnerForm({
     const input = {
       workScope: workScope.trim() || null,
       contractAmount: amount ? Number(amount) : null, // 999조 이하라 Number로 정확히 표현된다
+      taxType,
+      vatRate: rateError ? undefined : Number(vatRate),
       startDate: startDate || null,
       endDate: endDate || null,
-      contactName: contactName.trim() || null,
-      contactHp: contactHp.trim() || null,
-      contactEmail: contactEmail.trim() || null,
+      contacts: filled.map((c) => ({ name: c.name.trim(), role: c.role.trim() || null, hp: c.hp.trim() || null, email: c.email.trim() || null })),
     };
     try {
       if (editing) await update.mutateAsync({ id: editing.id, input });
@@ -256,22 +304,25 @@ function PartnerForm({
         <Textarea id="partner-scope" value={workScope} onChange={(e) => setWorkScope(e.target.value)} maxLength={500} rows={2} />
       </FormField>
 
-      <FormField
-        id="partner-amount"
-        label="외주 계약 금액 (원, 부가세 별도)"
-        error={errors.amount}
-        hint={amount ? formatAmount(amount) : undefined}
-      >
-        <Input
-          id="partner-amount"
-          inputMode="numeric"
-          value={amount ? Number(amount).toLocaleString("ko-KR") : ""}
-          onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, "").replace(/^0+(?=\d)/, "").slice(0, 15))}
-          aria-invalid={!!errors.amount}
-          aria-describedby="partner-amount-message"
-          placeholder="0"
-        />
-      </FormField>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <FormField id="partner-amount" label="외주 계약 금액 (공급가액, 원)" error={errors.amount}>
+          <Input
+            id="partner-amount"
+            inputMode="numeric"
+            value={amount ? Number(amount).toLocaleString("ko-KR") : ""}
+            onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, "").replace(/^0+(?=\d)/, "").slice(0, 15))}
+            aria-invalid={!!errors.amount}
+            aria-describedby="partner-amount-message"
+            placeholder="0"
+          />
+        </FormField>
+        <TaxFields idPrefix="partner" taxType={taxType} vatRate={vatRate} onTaxTypeChange={setTaxType} onVatRateChange={setVatRate} error={errors.vatRate} />
+      </div>
+      {amount && (
+        <p className="-mt-2 text-sm tabular-nums text-muted-foreground">
+          부가세 {formatAmount(totals.vat.toString())} · 합계 <span className="font-medium text-foreground">{formatAmount(totals.total.toString())}</span>
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField id="partner-start" label="계약 시작일" error={errors.period}>
@@ -282,17 +333,48 @@ function PartnerForm({
         </FormField>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <FormField id="partner-contact" label="담당자">
-          <Input id="partner-contact" value={contactName} onChange={(e) => setContactName(e.target.value)} maxLength={50} />
-        </FormField>
-        <FormField id="partner-hp" label="연락처">
-          <Input id="partner-hp" value={contactHp} onChange={(e) => setContactHp(e.target.value)} maxLength={20} inputMode="tel" />
-        </FormField>
-        <FormField id="partner-email" label="이메일">
-          <Input id="partner-email" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} maxLength={100} />
-        </FormField>
-      </div>
+      <section className="grid gap-2" aria-labelledby="partner-contacts-label">
+        <div className="flex items-center justify-between">
+          <h3 id="partner-contacts-label" className="text-sm font-medium">
+            담당자 <span className="text-muted-foreground">{contacts.length}</span>
+          </h3>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setContacts((prev) => [...prev, newContact()])}
+            disabled={contacts.length >= MAX_CONTACTS}
+          >
+            <Plus aria-hidden />
+            담당자 추가
+          </Button>
+        </div>
+        {errors.contacts && (
+          <p role="alert" className="text-xs text-destructive">
+            {errors.contacts}
+          </p>
+        )}
+        <ul className="grid gap-2">
+          {contacts.map((c, i) => (
+            <li key={c.key} className="grid gap-2 rounded-md border p-2 sm:grid-cols-[1fr_6rem_1fr_1fr_auto]">
+              <Input value={c.name} onChange={(e) => setContact(c.key, { name: e.target.value })} maxLength={50} placeholder="이름" aria-label={`${i + 1}번 담당자 이름`} />
+              <Input value={c.role} onChange={(e) => setContact(c.key, { role: e.target.value })} maxLength={50} placeholder="역할" aria-label={`${i + 1}번 담당자 역할`} />
+              <Input value={c.hp} onChange={(e) => setContact(c.key, { hp: e.target.value })} maxLength={20} inputMode="tel" placeholder="연락처" aria-label={`${i + 1}번 담당자 연락처`} />
+              <Input value={c.email} onChange={(e) => setContact(c.key, { email: e.target.value })} maxLength={100} type="email" placeholder="이메일" aria-label={`${i + 1}번 담당자 이메일`} />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="justify-self-end self-center"
+                onClick={() => setContacts((prev) => prev.filter((x) => x.key !== c.key))}
+                aria-label={`${i + 1}번 담당자 삭제`}
+              >
+                <Trash2 />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onClose} disabled={pending}>

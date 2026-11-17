@@ -21,6 +21,20 @@ describe('calcQuote - 금액·부가세', () => {
         expect( r.vatAmount.toString() ).toBe( '1' );
     });
 
+    // 2026-11-17 사용자 결정: 부가세율 직접 입력(기본 10%), 소수 둘째 자리까지
+    it('부가세율을 직접 주면 그 비율로 버림 (5% · 3.3% · 0%)', () => {
+        const five = calcQuote( [ { name: 'A', quantity: 1, unitPrice: 33_333 } ], ProjectQuoteTaxType.TAXABLE, 5 )!;
+        expect( five.vatAmount.toString() ).toBe( '1666' ); // 1,666.65 → 1,666
+        const decimal = calcQuote( [ { name: 'A', quantity: 1, unitPrice: 1_000 } ], ProjectQuoteTaxType.TAXABLE, '3.3' )!;
+        expect( decimal.vatAmount.toString() ).toBe( '33' );
+        const zero = calcQuote( [ { name: 'A', quantity: 1, unitPrice: 1_000 } ], ProjectQuoteTaxType.TAXABLE, 0 )!;
+        expect( zero.totalAmount.toString() ).toBe( '1000' );
+    });
+
+    it('면세는 부가세율과 관계없이 0', () => {
+        expect( calcQuote( [ { name: 'A', quantity: 1, unitPrice: 1000 } ], ProjectQuoteTaxType.EXEMPT, 50 )!.vatAmount.toString() ).toBe( '0' );
+    });
+
     it('면세는 부가세 0', () => {
         const r = calcQuote( [ { name: 'A', quantity: 2, unitPrice: 1000 } ], ProjectQuoteTaxType.EXEMPT )!;
         expect( r.vatAmount.toString() ).toBe( '0' );
@@ -70,7 +84,7 @@ describe('formatQuoteNo', () => {
 
 describe('buildQuoteHtml - 결재 본문', () => {
     const source = {
-        quoteNo: 'Q-2026-0001', version: 2, title: '견적', projectName: '<b>프로젝트</b>', taxType: ProjectQuoteTaxType.TAXABLE,
+        quoteNo: 'Q-2026-0001', version: 2, title: '견적', projectName: '<b>프로젝트</b>', taxType: ProjectQuoteTaxType.TAXABLE, vatRate: '3.30',
         quoteDate: '2026-11-17', validUntil: '2026-12-17', clientName: '가나상사', clientBusinessNo: '1234567890', contactName: '김담당',
         items: [ { name: '<script>x</script>설계', spec: null, quantity: 2, unitPrice: '1000', amount: '2000', note: null } ],
         supplyAmount: '2000', vatAmount: '200', totalAmount: '2200', note: null,
@@ -82,6 +96,7 @@ describe('buildQuoteHtml - 결재 본문', () => {
         expect( html ).not.toContain( '<script>' );
         expect( html ).toContain( '123-45-67890' );
         expect( html ).toContain( '2,200원' );
+        expect( html ).toContain( '과세 (부가세 3.3%)' ); // 저장된 부가세율을 그대로, 불필요한 0 없이
 
         // 결재 서비스는 본문을 다시 정제한다 → 표가 지워지면 안 된다
         expect( sanitizeEditorHtml( html, { allowImage: () => false } ).html ).toBe( html );

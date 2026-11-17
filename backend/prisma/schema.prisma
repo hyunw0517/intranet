@@ -4,9 +4,9 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
-  moduleFormat = "cjs"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  moduleFormat    = "cjs"
   previewFeatures = ["partialIndexes"] // 부분 인덱스 허용 (삭제되지 않은 계정끼리만 이메일이 겹치면 안 됨)
 }
 
@@ -20,173 +20,175 @@ datasource db {
 enum UserRole {
   GUEST
   USER
-  ADMIN        // 관리자 - 슈퍼관리자가 지정한 기능(Users.adminPermissions)만 사용
-  SUPER_ADMIN  // 슈퍼관리자 - 모든 관리자 기능 + ADMIN 승격·기능 지정
+  ADMIN // 관리자 - 슈퍼관리자가 지정한 기능(Users.adminPermissions)만 사용
+  SUPER_ADMIN // 슈퍼관리자 - 모든 관리자 기능 + ADMIN 승격·기능 지정
 }
 
 //? 관리자 기능 구분 -> 모델: Users.adminPermissions (ADMIN만 사용, SUPER_ADMIN은 전부 가진 것으로 본다)
 //  - 애드온 기능 값(시설·예약·결재라인·연차)도 핵심 enum에 둔다. (AGENTS.md 10.1 허용한 타협)
 enum AdminPermission {
-  USERS           // 회원 관리 (가입 승인, 회원 정보·소속·상태, 비밀번호 초기화, 잠금 해제)
-  ORGANIZATION    // 조직 관리 (부서·직급·직책)
-  BOARDS          // 게시판 관리 (게시판·게시판 권한, 규칙 없는 게시판 열람)
-  FACILITIES      // 시설 관리 (분류·시설·사용 불가 기간)
-  RESERVATIONS    // 예약 관리 (전체 예약 조회, 남의 예약·지난 예약 수정·삭제)
-  APPROVAL_LINES  // 결재라인 관리자 (결재라인 관리자 지정, 모든 결재 문서 열람·결재자 교체)
-  LEAVES          // 연차 관리 (연차 부여·조정)
-  PROJECTS        // 과제 관리 관리자 (모든 프로젝트 관리·금액 열람, 부재 담당자 교체)
+  USERS // 회원 관리 (가입 승인, 회원 정보·소속·상태, 비밀번호 초기화, 잠금 해제)
+  ORGANIZATION // 조직 관리 (부서·직급·직책)
+  BOARDS // 게시판 관리 (게시판·게시판 권한, 규칙 없는 게시판 열람)
+  FACILITIES // 시설 관리 (분류·시설·사용 불가 기간)
+  RESERVATIONS // 예약 관리 (전체 예약 조회, 남의 예약·지난 예약 수정·삭제)
+  APPROVAL_LINES // 결재라인 관리자 (결재라인 관리자 지정, 모든 결재 문서 열람·결재자 교체)
+  LEAVES // 연차 관리 (연차 부여·조정)
+  PROJECTS // 과제 관리 관리자 (모든 프로젝트 관리·금액 열람, 부재 담당자 교체)
 }
 
 //? 상태 구분 -> 모델: Users
 enum UserStatus {
-  ACTIVE     // 재직
-  INACTIVE   // 휴직/잠금 (로그인만 차단)
-  RESIGNED   // 퇴사
+  ACTIVE // 재직
+  INACTIVE // 휴직/잠금 (로그인만 차단)
+  RESIGNED // 퇴사
 }
 
 //? 게시판 구분 -> 모델: Board
 enum BoardType {
-  CATEGORY  // 카테고리(게시판 묶는 용도)
-  NOTICE    // 공지 게시판
-  NORMAL    // 일반 게시판
-  CALENDAR  // 캘린더
-  ALBUM     // 앨범
+  CATEGORY // 카테고리(게시판 묶는 용도)
+  NOTICE // 공지 게시판
+  NORMAL // 일반 게시판
+  CALENDAR // 캘린더
+  ALBUM // 앨범
 }
 
 //? 파일 사용 구분 -> 모델: Files
 enum FileTargetType {
-  USER_PROFILE        // 회원 프로필 사진
-  POST                // 게시글 첨부파일
-  POST_IMAGE          // 게시글 본문 이미지 (에디터 삽입)
-  APPROVAL_DOCUMENT   // 전자결재 문서 첨부파일
-  CHAT_MESSAGE        // 채팅 첨부파일
+  USER_PROFILE // 회원 프로필 사진
+  POST // 게시글 첨부파일
+  POST_IMAGE // 게시글 본문 이미지 (에디터 삽입)
+  APPROVAL_DOCUMENT // 전자결재 문서 첨부파일
+  CHAT_MESSAGE // 채팅 첨부파일
+  PROJECT_SALE // 매출 청구 건의 세금계산서 (외부 발행 파일 첨부, 과제 관리)
 }
 
 //? 알림 대상 구분 -> 모델: Notification (받는 사람이 확인할 대상)
 enum NotificationTargetType {
-  USER                // 회원 (가입 승인 대기·승인)
-  POST                // 게시글
-  COMMENT             // 댓글
-  APPROVAL            // 전자결재 문서
+  USER // 회원 (가입 승인 대기·승인)
+  POST // 게시글
+  COMMENT // 댓글
+  APPROVAL // 전자결재 문서
   FACILITY_RESERVATION // 시설 예약
-  PROJECT             // 프로젝트 (참여자로 추가됨)
-  PROJECT_TASK        // 과제 (담당 지정·마감 임박)
+  PROJECT // 프로젝트 (참여자로 추가됨)
+  PROJECT_TASK // 과제 (담당 지정·마감 임박)
 }
 
 //? 알림 이벤트 구분 -> 모델: Notification (받는 사람 입장에서 무슨 일이 생겼는지)
 enum NotificationActionType {
-  SYSTEM                // 시스템 안내
-  SIGNUP_REQUESTED      // 신규 회원가입 - 승인 대기 (관리자에게)
-  SIGNUP_APPROVED       // 가입 승인 완료 (가입한 회원에게)
-  NOTICE_CREATED        // 공지사항 등록
-  POST_COMMENTED        // 내 글에 댓글
-  COMMENT_REPLIED       // 내 댓글에 답글
-  POST_DELETED_BY_ADMIN    // 관리 권한으로 내 글이 삭제됨
+  SYSTEM // 시스템 안내
+  SIGNUP_REQUESTED // 신규 회원가입 - 승인 대기 (관리자에게)
+  SIGNUP_APPROVED // 가입 승인 완료 (가입한 회원에게)
+  NOTICE_CREATED // 공지사항 등록
+  POST_COMMENTED // 내 글에 댓글
+  COMMENT_REPLIED // 내 댓글에 답글
+  POST_DELETED_BY_ADMIN // 관리 권한으로 내 글이 삭제됨
   COMMENT_DELETED_BY_ADMIN // 관리 권한으로 내 댓글이 삭제됨
-  SESSION_REVOKED          // 보안: refresh token 재사용 감지로 한 기기의 로그인 해제
-  APPROVAL_REQUESTED    // 결재 요청 (내 차례 도착)
-  APPROVAL_APPROVED     // 결재 완료 (최종 승인)
-  APPROVAL_REJECTED     // 결재 반려
+  SESSION_REVOKED // 보안: refresh token 재사용 감지로 한 기기의 로그인 해제
+  APPROVAL_REQUESTED // 결재 요청 (내 차례 도착)
+  APPROVAL_APPROVED // 결재 완료 (최종 승인)
+  APPROVAL_REJECTED // 결재 반려
   RESERVATION_CANCELLED_BY_ADMIN // 관리자가 내 시설 예약을 취소함
-  RESERVATION_UPDATED_BY_ADMIN   // 관리자가 내 시설 예약 시간을 변경함
-  RESERVATION_DELETED_BY_ADMIN   // 관리자가 내 시설 예약을 삭제함
-  PROJECT_MEMBER_ADDED   // 프로젝트 참여자로 추가됨
-  PROJECT_TASK_ASSIGNED  // 과제 담당자로 지정됨
-  PROJECT_TASK_DUE_SOON  // 담당 과제 마감 임박 (마감 전날 배치)
+  RESERVATION_UPDATED_BY_ADMIN // 관리자가 내 시설 예약 시간을 변경함
+  RESERVATION_DELETED_BY_ADMIN // 관리자가 내 시설 예약을 삭제함
+  PROJECT_MEMBER_ADDED // 프로젝트 참여자로 추가됨
+  PROJECT_TASK_ASSIGNED // 과제 담당자로 지정됨
+  PROJECT_TASK_DUE_SOON // 담당 과제 마감 임박 (마감 전날 배치)
   // 채팅은 알림 행을 만들지 않는다(헤더 채팅 배지 + 소켓 푸시, 2026-11-13 사용자 결정)
 }
 
 //? 감사 로그 대상 구분 -> 모델: Audit (작업한 대상)
 enum AuditTargetType {
-  USER                // 회원
-  AUTH_SESSION        // 로그인 세션 (기기)
-  DEPARTMENT          // 부서
-  POSITION            // 직급
-  JOB_TITLE           // 직책
-  USER_DEPARTMENT     // 회원 소속
-  BOARD               // 게시판
-  BOARD_AUTH          // 게시판 권한
-  POST                // 게시글
-  COMMENT             // 댓글
-  FILE                // 파일
-  FACILITY_CATEGORY   // 시설 분류
-  FACILITY            // 시설
+  USER // 회원
+  AUTH_SESSION // 로그인 세션 (기기)
+  DEPARTMENT // 부서
+  POSITION // 직급
+  JOB_TITLE // 직책
+  USER_DEPARTMENT // 회원 소속
+  BOARD // 게시판
+  BOARD_AUTH // 게시판 권한
+  POST // 게시글
+  COMMENT // 댓글
+  FILE // 파일
+  FACILITY_CATEGORY // 시설 분류
+  FACILITY // 시설
   FACILITY_RESERVATION // 시설 예약
-  APPROVAL_LINE       // 결재라인 템플릿
+  APPROVAL_LINE // 결재라인 템플릿
   APPROVAL_LINE_MANAGER // 결재라인 관리자 규칙
-  APPROVAL            // 전자결재 문서
-  LEAVE               // 휴가
-  CHAT_ROOM           // 채팅방 (생성·초대·내보내기·나가기만, 메시지는 기록하지 않음)
-  PROJECT_CLIENT      // 거래처 (과제 관리)
+  APPROVAL // 전자결재 문서
+  LEAVE // 휴가
+  CHAT_ROOM // 채팅방 (생성·초대·내보내기·나가기만, 메시지는 기록하지 않음)
+  PROJECT_CLIENT // 거래처 (과제 관리)
   PROJECT_CLIENT_CONTACT // 거래처 담당자
-  PROJECT             // 프로젝트
-  PROJECT_MEMBER      // 프로젝트 참여자
-  PROJECT_TASK        // 과제
-  PROJECT_PARTNER     // 프로젝트 협력사 (하청기업)
-  PROJECT_QUOTE       // 견적서 (버전·품목 변경도 이 대상으로 기록)
+  PROJECT // 프로젝트
+  PROJECT_MEMBER // 프로젝트 참여자
+  PROJECT_TASK // 과제
+  PROJECT_PARTNER // 프로젝트 협력사 (하청기업)
+  PROJECT_QUOTE // 견적서 (버전·품목 변경도 이 대상으로 기록)
+  PROJECT_SALE // 매출 청구 건 (수금 기록도 이 대상으로 기록)
 }
 
 //? 감사 로그 이벤트 구분 -> 모델: Audit (작업자가 무엇을 했는지)
 enum AuditActionType {
-  CREATE          // 생성
-  UPDATE          // 수정
-  DELETE          // 삭제
-  RESTORE         // 복구
-  ROLE_CHANGE     // 권한 변경 (가입 승인 포함)
-  STATUS_CHANGE   // 상태 변경
-  LOGIN           // 로그인
-  LOGIN_FAILED    // 로그인 실패
-  LOGOUT          // 로그아웃 (기기 로그아웃 포함)
+  CREATE // 생성
+  UPDATE // 수정
+  DELETE // 삭제
+  RESTORE // 복구
+  ROLE_CHANGE // 권한 변경 (가입 승인 포함)
+  STATUS_CHANGE // 상태 변경
+  LOGIN // 로그인
+  LOGIN_FAILED // 로그인 실패
+  LOGOUT // 로그아웃 (기기 로그아웃 포함)
   PASSWORD_CHANGE // 본인 비밀번호 변경
-  PASSWORD_RESET  // 관리자 비밀번호 초기화
-  TOKEN_REUSE     // refresh token 재사용 감지 (세션 폐기)
-  LOGIN_LOCKED    // 로그인 실패 누적으로 잠금 (잠긴 동안의 시도는 기록하지 않음)
-  LOGIN_UNLOCKED  // 관리자 로그인 잠금 해제
+  PASSWORD_RESET // 관리자 비밀번호 초기화
+  TOKEN_REUSE // refresh token 재사용 감지 (세션 폐기)
+  LOGIN_LOCKED // 로그인 실패 누적으로 잠금 (잠긴 동안의 시도는 기록하지 않음)
+  LOGIN_UNLOCKED // 관리자 로그인 잠금 해제
 }
 
 //? 시설 예약 상태 -> 모델: FacilityReservation
 enum FacilityReservationStatus {
-  RESERVED   // 예약
-  CANCELLED  // 예약 취소
+  RESERVED // 예약
+  CANCELLED // 예약 취소
 }
 
 //? 전자결재 문서 상태 -> 모델: ApprovalDocument
 enum ApprovalStatus {
-  DRAFT         // 작성중
-  CANCELLED     // 회수(작성중/결재요청만 가능)
-  REQUESTED     // 결재요청
-  IN_PROGRESS   // 결재중
-  APPROVED      // 승인
-  REJECTED      // 반려
+  DRAFT // 작성중
+  CANCELLED // 회수(작성중/결재요청만 가능)
+  REQUESTED // 결재요청
+  IN_PROGRESS // 결재중
+  APPROVED // 승인
+  REJECTED // 반려
 }
 
 //? 전자결재 문서 타입 -> 모델: ApprovalDocument
-enum ApprovalDocumentType { 
+enum ApprovalDocumentType {
   GENERAL // 일반 문서
-  LEAVE   // 휴가 신청
-  QUOTE   // 견적서 확정 (과제 관리 + 결재가 둘 다 켜졌을 때만, ProjectsApprovalModule)
+  LEAVE // 휴가 신청
+  QUOTE // 견적서 확정 (과제 관리 + 결재가 둘 다 켜졌을 때만, ProjectsApprovalModule)
 }
 
 //? 전자결재 단계 상태 -> 모델: ApprovalDocumentStep
 enum ApprovalStepStatus {
-  WAITING    // 이전 결재 단계 대기
-  PENDING    // 현재 결재 차례
-  APPROVED   // 승인
-  REJECTED   // 반려
+  WAITING // 이전 결재 단계 대기
+  PENDING // 현재 결재 차례
+  APPROVED // 승인
+  REJECTED // 반려
 }
 
 //? 결재라인 구분 -> 모델: ApprovalLineTemplate
 enum ApprovalLineScope {
-  ADMIN       // 관리자 공용 결재라인
-  DEPARTMENT  // 부서 결재라인
-  PERSONAL    // 개인 결재라인
+  ADMIN // 관리자 공용 결재라인
+  DEPARTMENT // 부서 결재라인
+  PERSONAL // 개인 결재라인
 }
 
 //? 결재라인 관리자 범위 -> 모델: ApprovalLineManager
 enum ApprovalLineManagerScope {
-  ALL            // 공용 + 모든 부서 결재라인
-  DEPARTMENT     // 지정한 부서(departmentId)의 부서 결재라인
-  MY_DEPARTMENT  // 직책 대상만: 그 직책으로 소속된 부서의 부서 결재라인
+  ALL // 공용 + 모든 부서 결재라인
+  DEPARTMENT // 지정한 부서(departmentId)의 부서 결재라인
+  MY_DEPARTMENT // 직책 대상만: 그 직책으로 소속된 부서의 부서 결재라인
 }
 
 //? 캘린더 일정 색 -> 모델: Post (캘린더 게시판, NULL = 기본색). 화면이 라이트/다크 색을 정한다.
@@ -202,126 +204,125 @@ enum CalendarEventColor {
 
 //? 휴가 종류 -> 모델: LeaveRequest
 enum LeaveType {
-  ANNUAL    // 연차
-  SICK      // 병가
-  OFFICIAL  // 공가
+  ANNUAL // 연차
+  SICK // 병가
+  OFFICIAL // 공가
 }
 
 //? 휴가 사용 단위 -> 모델: LeaveRequest
 enum LeaveUnit {
-  FULL     // 하루 (1일)
-  HALF     // 반차 (0.5일)
-  QUARTER  // 반반차 (0.25일)
+  FULL // 하루 (1일)
+  HALF // 반차 (0.5일)
+  QUARTER // 반반차 (0.25일)
 }
 
 //? 채팅방 종류 -> 모델: ChatRoom
 enum ChatRoomType {
-  DIRECT  // 1:1 채팅
-  GROUP   // 단체 채팅
+  DIRECT // 1:1 채팅
+  GROUP // 단체 채팅
 }
 
 //? 채팅방 참여자 역할 -> 모델: ChatRoomMember
 enum ChatRoomMemberRole {
-  OWNER   // 방장
-  MEMBER  // 일반 참여자
+  OWNER // 방장
+  MEMBER // 일반 참여자
 }
 
 //? 채팅 메시지 종류 -> 모델: ChatMessage
 enum ChatMessageType {
-  TEXT    // 일반 메시지
-  FILE    // 파일 메시지
-  SYSTEM  // 입장/퇴장 등의 시스템 메시지
+  TEXT // 일반 메시지
+  FILE // 파일 메시지
+  SYSTEM // 입장/퇴장 등의 시스템 메시지
 }
 
 //? 프로젝트 상태 -> 모델: Project
 enum ProjectStatus {
-  PLANNED      // 준비
-  IN_PROGRESS  // 진행
-  ON_HOLD      // 보류
-  COMPLETED    // 완료
-  CLOSED       // 종료 (완료와 별개 - 유지보수 기간까지 끝나 완전히 닫힘)
-  CANCELLED    // 취소
+  PLANNED // 준비
+  IN_PROGRESS // 진행
+  ON_HOLD // 보류
+  COMPLETED // 완료
+  CLOSED // 종료 (완료와 별개 - 유지보수 기간까지 끝나 완전히 닫힘)
+  CANCELLED // 취소
 }
 
 //? 프로젝트 참여자 역할 -> 모델: ProjectMember
 enum ProjectMemberRole {
-  MANAGER  // 책임자 (여러 명 가능, 마지막 책임자는 뺄 수 없음)
-  MEMBER   // 참여자
+  MANAGER // 책임자 (여러 명 가능, 마지막 책임자는 뺄 수 없음)
+  MEMBER // 참여자
 }
 
 //? 과제 상태 (칸반 컬럼, 고정 3단계) -> 모델: ProjectTask
 //? 견적서 과세 구분 -> 모델: ProjectQuoteVersion
 enum ProjectQuoteTaxType {
-  TAXABLE  // 과세 - 부가세 = 공급가액 합 × 10%, 원 미만 버림
-  EXEMPT   // 면세 - 부가세 0
+  TAXABLE // 과세 - 부가세 = floor(공급가액 × 부가세율 ÷ 100), 부가세율은 직접 입력(기본 10%)
+  EXEMPT // 면세 - 부가세 0
 }
 
 //? 견적서 버전 상태 -> 모델: ProjectQuoteVersion
 // "결재 중·반려"는 저장하지 않고 연결된 결재 문서 상태로 계산한다 (결재에는 반려·회수 때 업무를 부르는 지점이 없어 따로 저장하면 어긋난다)
 enum ProjectQuoteStatus {
-  DRAFT      // 작성 중 (결재 문서가 연결돼 있으면 그 상태로 결재 중·반려를 표시)
-  CONFIRMED  // 확정 (결재 최종 승인 또는 직접 확정)
-  CANCELLED  // 확정 취소 (작성 중으로 돌아가지 않고 기록으로 남김)
+  DRAFT // 작성 중 (결재 문서가 연결돼 있으면 그 상태로 결재 중·반려를 표시)
+  CONFIRMED // 확정 (결재 최종 승인 또는 직접 확정)
+  CANCELLED // 확정 취소 (작성 중으로 돌아가지 않고 기록으로 남김)
 }
 
 enum ProjectTaskStatus {
-  TODO         // 할 일
-  IN_PROGRESS  // 진행
-  DONE         // 완료
+  TODO // 할 일
+  IN_PROGRESS // 진행
+  DONE // 완료
 }
-
 
 //! ==================== Model 선언부 ==================== !
 
 //* 회원 -> 모듈: Users, Auth
 model Users {
-  id        Int      @id @default(autoincrement())
-  empNo     String   @map("emp_no") // 사번
-  email     String   //@unique
-  password  String   // 해시된 값만 저장
-  name      String   // 이름
-  nickname  String?  // 닉네임
-  birthday  DateTime? @db.Date // 생일 @db.Date: 날짜만 저장
-  hp        String?  @db.VarChar(20) // 휴대폰 번호
-  tel       String?  @db.VarChar(20) // 전화번호
+  id       Int       @id @default(autoincrement())
+  empNo    String    @map("emp_no") // 사번
+  email    String //@unique
+  password String // 해시된 값만 저장
+  name     String // 이름
+  nickname String? // 닉네임
+  birthday DateTime? @db.Date // 생일 @db.Date: 날짜만 저장
+  hp       String?   @db.VarChar(20) // 휴대폰 번호
+  tel      String?   @db.VarChar(20) // 전화번호
 
-  joinAt    DateTime? @db.Date // 입사일 (연차 계산에 사용)
-  role      UserRole     @default(GUEST)  // 회원 권한
+  joinAt           DateTime?         @db.Date // 입사일 (연차 계산에 사용)
+  role             UserRole          @default(GUEST) // 회원 권한
   adminPermissions AdminPermission[] @default([]) @map("admin_permissions") // 관리자 기능 (ADMIN만 값이 있다, 다른 권한으로 바뀌면 비움)
-  status     UserStatus @default(ACTIVE)  // 회원 상태
-  tokenVersion Int    @default(0) @map("token_version") // 토큰 버전 (올리면 기존 로그인 발급 토큰 전부 무효화)
-  positionId Int?   @map("position_id") // 직급 id (관리자 지정 전 신규 가입자는 NULL)
+  status           UserStatus        @default(ACTIVE) // 회원 상태
+  tokenVersion     Int               @default(0) @map("token_version") // 토큰 버전 (올리면 기존 로그인 발급 토큰 전부 무효화)
+  positionId       Int?              @map("position_id") // 직급 id (관리자 지정 전 신규 가입자는 NULL)
 
-  position                Position?        @relation(fields: [positionId], references: [id]) // 직급
-  departments             UserDepartment[] // 소속 목록 (겸직 시 여러 개)
-  notifications           Notification[]              @relation("NotificationRecipient")        // 받은 알림 목록
-  sentNotifications       Notification[]              @relation("NotificationSender")           // 보낸 알림 목록
-  audits                  Audit[]                     @relation("AuditActor")                   // 작업한 감사 로그
-  posts                   Post[]                      @relation("PostAuthor")    // 작성한 게시글 목록
-  postViews               PostView[]          // 게시글 조회 기록
-  postLikes               PostLike[]          // 좋아요한 게시글 기록
-  comments                Comment[]                   @relation("CommentAuthor") // 작성한 댓글 목록
-  reservations            FacilityReservation[]       @relation("FacilityReservationUser")      // 예약한 시설 목록
-  approvalLineTemplates   ApprovalLineTemplate[]      @relation("ApprovalLineOwner")            // 소유한 개인 결재라인
-  approvalLineSteps       ApprovalLineTemplateStep[]  @relation("ApprovalLineStepApprover")     // 결재라인 템플릿의 결재자로 지정된 단계
-  approvalLineManagers    ApprovalLineManager[]       @relation("ApprovalLineManagerUser")      // 결재라인 관리자로 지정된 규칙
-  requestedApprovals      ApprovalDocument[]          @relation("ApprovalDocumentRequester")    // 기안한 결재 문서
-  approvalSteps           ApprovalDocumentStep[]      @relation("ApprovalDocumentStepApprover") // 결재자로 지정된 문서 단계
-  approvalHistories       ApprovalDocumentHistory[]   @relation("ApprovalDocumentHistoryActor") // 결재 상태 변경 이력
-  leaveRequests           LeaveRequest[]              @relation("LeaveRequestUser")             // 연차/병가 신청 목록
-  leaveGrants             LeaveGrant[]                @relation("LeaveGrantUser")               // 연도별 연차 부여
-  leaveSetting            LeaveUserSetting?           @relation("LeaveUserSettingUser")         // 영구 연차 조정
-  chatRooms               ChatRoomMember[]    // 참여 중인 채팅방
-  chatMessages            ChatMessage[]               @relation("ChatMessageSender")            // 보낸 채팅 메시지
-  authSessions            AuthSession[]       // 로그인 세션 (기기별 refresh token)
-  projectMembers          ProjectMember[]     // 참여 중인 프로젝트
-  assignedProjectTasks    ProjectTask[]               @relation("ProjectTaskAssignee")          // 담당한 과제
+  position              Position?                  @relation(fields: [positionId], references: [id]) // 직급
+  departments           UserDepartment[] // 소속 목록 (겸직 시 여러 개)
+  notifications         Notification[]             @relation("NotificationRecipient") // 받은 알림 목록
+  sentNotifications     Notification[]             @relation("NotificationSender") // 보낸 알림 목록
+  audits                Audit[]                    @relation("AuditActor") // 작업한 감사 로그
+  posts                 Post[]                     @relation("PostAuthor") // 작성한 게시글 목록
+  postViews             PostView[] // 게시글 조회 기록
+  postLikes             PostLike[] // 좋아요한 게시글 기록
+  comments              Comment[]                  @relation("CommentAuthor") // 작성한 댓글 목록
+  reservations          FacilityReservation[]      @relation("FacilityReservationUser") // 예약한 시설 목록
+  approvalLineTemplates ApprovalLineTemplate[]     @relation("ApprovalLineOwner") // 소유한 개인 결재라인
+  approvalLineSteps     ApprovalLineTemplateStep[] @relation("ApprovalLineStepApprover") // 결재라인 템플릿의 결재자로 지정된 단계
+  approvalLineManagers  ApprovalLineManager[]      @relation("ApprovalLineManagerUser") // 결재라인 관리자로 지정된 규칙
+  requestedApprovals    ApprovalDocument[]         @relation("ApprovalDocumentRequester") // 기안한 결재 문서
+  approvalSteps         ApprovalDocumentStep[]     @relation("ApprovalDocumentStepApprover") // 결재자로 지정된 문서 단계
+  approvalHistories     ApprovalDocumentHistory[]  @relation("ApprovalDocumentHistoryActor") // 결재 상태 변경 이력
+  leaveRequests         LeaveRequest[]             @relation("LeaveRequestUser") // 연차/병가 신청 목록
+  leaveGrants           LeaveGrant[]               @relation("LeaveGrantUser") // 연도별 연차 부여
+  leaveSetting          LeaveUserSetting?          @relation("LeaveUserSettingUser") // 영구 연차 조정
+  chatRooms             ChatRoomMember[] // 참여 중인 채팅방
+  chatMessages          ChatMessage[]              @relation("ChatMessageSender") // 보낸 채팅 메시지
+  authSessions          AuthSession[] // 로그인 세션 (기기별 refresh token)
+  projectMembers        ProjectMember[] // 참여 중인 프로젝트
+  assignedProjectTasks  ProjectTask[]              @relation("ProjectTaskAssignee") // 담당한 과제
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@unique([email], where: { deleted: false }) // 삭제되지 않은 계정만 이메일이 겹치지 않도록 설정
   @@unique([empNo], where: { deleted: false }) // 삭제되지 않은 계정만 사번이 겹치지 않도록 설정
@@ -342,11 +343,11 @@ model Users {
 //  - userId: 시도 당시 그 사번의 회원 (없는 사번은 NULL → 하루 지나면 배치로 정리). 다형 참조는 아니지만 상태 테이블이라 FK는 두지 않는다.
 model LoginHistory {
   id           Int       @id @default(autoincrement())
-  empNo        String    @unique @db.VarChar(50) @map("emp_no") // 시도한 사번
+  empNo        String    @unique @map("emp_no") @db.VarChar(50) // 시도한 사번
   userId       Int?      @map("user_id")
-  failCount    Int       @default(0) @map("fail_count")  // 현재 단계에서 연속 실패 횟수 (잠기면 0으로)
-  lockLevel    Int       @default(0) @map("lock_level")  // 잠금 단계 (0: 아직 잠긴 적 없음)
-  lockedUntil  DateTime? @map("locked_until")            // 이 시각까지 로그인 시도 거부
+  failCount    Int       @default(0) @map("fail_count") // 현재 단계에서 연속 실패 횟수 (잠기면 0으로)
+  lockLevel    Int       @default(0) @map("lock_level") // 잠금 단계 (0: 아직 잠긴 적 없음)
+  lockedUntil  DateTime? @map("locked_until") // 이 시각까지 로그인 시도 거부
   lastFailedAt DateTime  @map("last_failed_at")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -360,17 +361,17 @@ model AuthSession {
   id           String    @id @default(uuid()) @db.Uuid
   userId       Int       @map("user_id")
   tokenVersion Int       @map("token_version") // 발급 당시 Users.tokenVersion (다르면 비밀번호 변경·전체 로그아웃으로 끊긴 세션)
-  currentJti   String    @map("current_jti") @db.Uuid  // 현재 유효한 refresh token의 jti
+  currentJti   String    @map("current_jti") @db.Uuid // 현재 유효한 refresh token의 jti
   previousJti  String?   @map("previous_jti") @db.Uuid // 직전 refresh token의 jti (유예 시간 판단용)
-  rotatedAt    DateTime? @map("rotated_at")   // 마지막 교체 시각
+  rotatedAt    DateTime? @map("rotated_at") // 마지막 교체 시각
   userAgent    String?   @map("user_agent") @db.VarChar(500) // 기기 목록 표시용
   lastUsedAt   DateTime  @default(now()) @map("last_used_at") // 마지막 재발급 시각 (유휴 만료 판단)
-  expiresAt    DateTime  @map("expires_at")   // 절대 만료 (로그인 + 7일, 재발급해도 늘어나지 않음)
-  revokedAt    DateTime? @map("revoked_at")   // 폐기 시각 (로그아웃·기기 로그아웃·재사용 감지)
+  expiresAt    DateTime  @map("expires_at") // 절대 만료 (로그인 + 7일, 재발급해도 늘어나지 않음)
+  revokedAt    DateTime? @map("revoked_at") // 폐기 시각 (로그아웃·기기 로그아웃·재사용 감지)
 
-  user         Users     @relation(fields: [userId], references: [id])
+  user Users @relation(fields: [userId], references: [id])
 
-  createdAt    DateTime  @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId])
   @@map("auth_session_model")
@@ -378,25 +379,25 @@ model AuthSession {
 
 //* 부서 -> 모듈: Organization
 model Department {
-  id        Int      @id @default(autoincrement())
-  parentDepartmentId Int? @map("parent_department_id") // 상위 부서 id (최상위 부서는 NULL)
-  name      String   // 부서명
-  sortOrder Int      @default(0) @map("sort_order") // 정렬 순서
+  id                 Int    @id @default(autoincrement())
+  parentDepartmentId Int?   @map("parent_department_id") // 상위 부서 id (최상위 부서는 NULL)
+  name               String // 부서명
+  sortOrder          Int    @default(0) @map("sort_order") // 정렬 순서
 
-  parent    Department?  @relation("DepartmentTree", fields: [parentDepartmentId], references: [id]) // 상위 부서
-  children  Department[] @relation("DepartmentTree") // 하위 부서 목록
-  members   UserDepartment[] // 소속 회원 목록
-  boardAuths BoardAuth[] // 게시판 권한 목록
+  parent                Department?            @relation("DepartmentTree", fields: [parentDepartmentId], references: [id]) // 상위 부서
+  children              Department[]           @relation("DepartmentTree") // 하위 부서 목록
+  members               UserDepartment[] // 소속 회원 목록
+  boardAuths            BoardAuth[] // 게시판 권한 목록
   approvalLineTemplates ApprovalLineTemplate[] // 부서 결재라인
-  approvalLineManagers  ApprovalLineManager[]  // 이 부서를 관리 범위로 둔 결재라인 관리자 규칙
+  approvalLineManagers  ApprovalLineManager[] // 이 부서를 관리 범위로 둔 결재라인 관리자 규칙
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([parentDepartmentId, deleted])
   @@map("department_model")
@@ -404,65 +405,65 @@ model Department {
 
 //* 직급 -> 모듈: Organization
 model Position {
-  id        Int      @id @default(autoincrement())
-  name      String   // 직급명
-  sortOrder Int      @default(0) @map("sort_order") // 정렬 순서 + 직급 순위 비교
+  id        Int    @id @default(autoincrement())
+  name      String // 직급명
+  sortOrder Int    @default(0) @map("sort_order") // 정렬 순서 + 직급 순위 비교
 
-  users     Users[] // 해당 직급 회원 목록
+  users      Users[] // 해당 직급 회원 목록
   boardAuths BoardAuth[] // 게시판 권한 목록
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@map("position_model")
 }
 
 //* 직책 -> 모듈: Organization
 model JobTitle {
-  id        Int      @id @default(autoincrement())
-  name      String   // 직책명
-  sortOrder Int      @default(0) @map("sort_order") // 정렬 순서
+  id        Int    @id @default(autoincrement())
+  name      String // 직책명
+  sortOrder Int    @default(0) @map("sort_order") // 정렬 순서
 
-  members   UserDepartment[] // 해당 직책 소속 목록
-  boardAuths BoardAuthJobTitle[] // 게시판 권한 목록
+  members              UserDepartment[] // 해당 직책 소속 목록
+  boardAuths           BoardAuthJobTitle[] // 게시판 권한 목록
   approvalLineManagers ApprovalLineManager[] // 결재라인 관리자 규칙 (직책 대상)
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@map("job_title_model")
 }
 
 //* 회원 소속 (회원-부서-직책, 직급은 Users에서 관리) -> 모듈: Organization
 model UserDepartment {
-  id           Int      @id @default(autoincrement())
-  userId       Int      @map("user_id") // 회원 id
-  departmentId Int      @map("department_id") // 부서 id
-  jobTitleId   Int?     @map("job_title_id") // 직책 id (직책이 없다면 NULL)
-  isPrimary    Boolean  @default(false) @map("is_primary") // 주 소속 여부
+  id           Int     @id @default(autoincrement())
+  userId       Int     @map("user_id") // 회원 id
+  departmentId Int     @map("department_id") // 부서 id
+  jobTitleId   Int?    @map("job_title_id") // 직책 id (직책이 없다면 NULL)
+  isPrimary    Boolean @default(false) @map("is_primary") // 주 소속 여부
 
-  user         Users      @relation(fields: [userId], references: [id])
-  department   Department @relation(fields: [departmentId], references: [id])
-  jobTitle     JobTitle?  @relation(fields: [jobTitleId], references: [id])
+  user       Users      @relation(fields: [userId], references: [id])
+  department Department @relation(fields: [departmentId], references: [id])
+  jobTitle   JobTitle?  @relation(fields: [jobTitleId], references: [id])
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
-  
+  deletedId Int?      @map("deleted_id")
+
   @@unique([userId], where: { isPrimary: true, deleted: false }) // 회원 1명당 주 소속을 1개로 제한
   @@index([userId, deleted])
   @@index([departmentId, deleted])
@@ -472,24 +473,24 @@ model UserDepartment {
 
 //* 파일 -> 모듈: 공용
 model Files {
-  id        Int      @id @default(autoincrement())
-  targetType FileTargetType? @map("target_type") // 파일이 속한 대상 타입 (예: USER_PROFILE, POST 등)
-  targetId Int? @map("target_id") // 파일이 속한 대상의 ID
-  originalName String   @map("original_name")  // 사용자가 올린 파일명
-  storedName   String   @unique @map("stored_name")    // 서버에 저장된 파일명 (uuid 등)
-  path      String   // 파일 경로
-  size      Int      // 파일 크기
-  mimeType      String   @map("mime_type")  // 파일 타입 (예: image/png, application/pdf 등)
-  order     Int     @default(0) // 파일 순서 (예: 1, 2, 3 등)
+  id           Int             @id @default(autoincrement())
+  targetType   FileTargetType? @map("target_type") // 파일이 속한 대상 타입 (예: USER_PROFILE, POST 등)
+  targetId     Int?            @map("target_id") // 파일이 속한 대상의 ID
+  originalName String          @map("original_name") // 사용자가 올린 파일명
+  storedName   String          @unique @map("stored_name") // 서버에 저장된 파일명 (uuid 등)
+  path         String // 파일 경로
+  size         Int // 파일 크기
+  mimeType     String          @map("mime_type") // 파일 타입 (예: image/png, application/pdf 등)
+  order        Int             @default(0) // 파일 순서 (예: 1, 2, 3 등)
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int    @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int    @map("updated_id")
-  deleted   Boolean  @default(false) // soft delete
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false) // soft delete
   deletedAt DateTime? @map("deleted_at") // soft delete
-  deletedId Int?     @map("deleted_id") // 삭제자 id
-  
+  deletedId Int?      @map("deleted_id") // 삭제자 id
+
   @@index([targetType, targetId])
   @@map("files_model")
 }
@@ -499,23 +500,23 @@ model Files {
 //  - 삭제는 물리 삭제: 본인 삭제 + 90일 지난 알림은 하루 1회 배치로 정리 (soft delete 없음).
 //  - link: 알림을 만드는 쪽이 이동할 화면 주소를 정해서 저장한다. (핵심은 애드온 테이블을 조회하지 않음)
 model Notification {
-  id         BigInt   @id @default(autoincrement())
-  userId     Int      @map("user_id") // 수신자 id
+  id         BigInt                  @id @default(autoincrement())
+  userId     Int                     @map("user_id") // 수신자 id
   targetType NotificationTargetType? @map("target_type") // 알림 대상 모델
-  targetId   Int?     @map("target_id") // 알림 대상 id (다형 참조라 FK 없음)
+  targetId   Int?                    @map("target_id") // 알림 대상 id (다형 참조라 FK 없음)
   actionType NotificationActionType  @map("action_type") // 이벤트 구분
-  title      String   // 알림 제목
-  content    String?  // 알림 내용
-  link       String?  // 눌렀을 때 이동할 프론트 주소 (예: /boards/3/posts/120)
+  title      String // 알림 제목
+  content    String? // 알림 내용
+  link       String? // 눌렀을 때 이동할 프론트 주소 (예: /boards/3/posts/120)
 
-  isRead     Boolean   @default(false) @map("is_read") // 확인 여부
-  readAt     DateTime? @map("read_at") // 확인 시간
+  isRead Boolean   @default(false) @map("is_read") // 확인 여부
+  readAt DateTime? @map("read_at") // 확인 시간
 
-  user       Users    @relation("NotificationRecipient", fields: [userId], references: [id]) // 수신자
-  sender     Users?   @relation("NotificationSender", fields: [createdId], references: [id]) // 발신자 (시스템 알림은 NULL)
+  user   Users  @relation("NotificationRecipient", fields: [userId], references: [id]) // 수신자
+  sender Users? @relation("NotificationSender", fields: [createdId], references: [id]) // 발신자 (시스템 알림은 NULL)
 
-  createdAt DateTime  @default(now()) @map("created_at")
-  createdId Int?      @map("created_id") // 발신자 id
+  createdAt DateTime @default(now()) @map("created_at")
+  createdId Int?     @map("created_id") // 발신자 id
 
   @@index([userId, createdAt(sort: Desc), id(sort: Desc)]) // 내 알림 목록 (커서 페이지네이션)
   @@index([userId, isRead]) // 안 읽은 알림 수
@@ -528,21 +529,21 @@ model Notification {
 //  - 단건: targetId에 대상 id, detail에 변경 내용.
 //  - 일괄 처리(ids 배열): 묶어서 1행. targetId는 NULL, detail에 batch: true + 대상 pk 배열 + 변경 내용.
 model Audit {
-  id         BigInt   @id @default(autoincrement())
+  id         BigInt           @id @default(autoincrement())
   targetType AuditTargetType? @map("target_type") // 작업 대상 모델
-  targetId   Int?     @map("target_id") // 작업 대상 id (다형 참조라 FK 없음, 일괄 처리는 NULL)
+  targetId   Int?             @map("target_id") // 작업 대상 id (다형 참조라 FK 없음, 일괄 처리는 NULL)
   actionType AuditActionType  @map("action_type") // 이벤트 구분
 
-  content    String?  // 작업 내용 (사람이 읽는 요약)
-  detail     Json?    // 변경 내용 (변경 전후 값, 일괄 처리 여부·대상 pk 배열)
+  content String? // 작업 내용 (사람이 읽는 요약)
+  detail  Json? // 변경 내용 (변경 전후 값, 일괄 처리 여부·대상 pk 배열)
 
-  ipAddress  String?  @db.VarChar(45) @map("ip_address") // IPv6 방식 사용을 고려한 길이
-  userAgent  String?  @map("user_agent") // 사용자 접속 환경
+  ipAddress String? @map("ip_address") @db.VarChar(45) // IPv6 방식 사용을 고려한 길이
+  userAgent String? @map("user_agent") // 사용자 접속 환경
 
-  actor      Users?   @relation("AuditActor", fields: [createdId], references: [id]) // 작업자 (로그인 실패 등 회원이 없으면 NULL)
+  actor Users? @relation("AuditActor", fields: [createdId], references: [id]) // 작업자 (로그인 실패 등 회원이 없으면 NULL)
 
-  createdAt DateTime  @default(now()) @map("created_at")
-  createdId Int?      @map("created_id") // 작업자 id
+  createdAt DateTime @default(now()) @map("created_at")
+  createdId Int?     @map("created_id") // 작업자 id
 
   @@index([createdId, createdAt(sort: Desc)])
   @@index([targetType, targetId, createdAt(sort: Desc)])
@@ -554,25 +555,25 @@ model Board {
   id            Int       @id @default(autoincrement())
   parentBoardId Int?      @map("parent_board_id") // 상위 게시판 id (최상위는 NULL)
   type          BoardType @default(NORMAL) // 게시판 구분
-  name          String    // 게시판명
-  description   String?   // 게시판 설명
+  name          String // 게시판명
+  description   String? // 게시판 설명
   isAnonymous   Boolean   @default(false) @map("is_anonymous") // 익명 게시판 여부
   allowSecret   Boolean   @default(false) @map("allow_secret") // 비밀글 허용 여부
   showLeaves    Boolean   @default(false) @map("show_leaves") // 휴가자 표시 (캘린더 게시판만, 휴가 애드온이 켜져 있을 때 화면이 휴가 API를 함께 부른다 - 게시판은 휴가를 모른다)
   sortOrder     Int       @default(0) @map("sort_order") // 정렬 순서
 
-  parent    Board?  @relation("BoardHierarchy", fields: [parentBoardId], references: [id]) // 상위 게시판
-  children  Board[] @relation("BoardHierarchy") // 하위 게시판 목록
-  posts     Post[]      // 게시글 목록
-  auths     BoardAuth[] // 게시판 권한 목록
+  parent   Board?      @relation("BoardHierarchy", fields: [parentBoardId], references: [id]) // 상위 게시판
+  children Board[]     @relation("BoardHierarchy") // 하위 게시판 목록
+  posts    Post[] // 게시글 목록
+  auths    BoardAuth[] // 게시판 권한 목록
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([parentBoardId, deleted, sortOrder])
   @@map("board_model")
@@ -580,70 +581,69 @@ model Board {
 
 //* 게시글 -> 모듈: Posts
 model Post {
-  id        Int      @id @default(autoincrement())
-  boardId   Int      @map("board_id") // 게시판 id
-  authorId  Int      @map("author_id") // 작성자 id
+  id                   Int     @id @default(autoincrement())
+  boardId              Int     @map("board_id") // 게시판 id
+  authorId             Int     @map("author_id") // 작성자 id
   authorDepartmentName String? @map("author_department_name") // 작성자 - 작성 당시 대표로 지정한 소속 부서명
-  authorJobTitleName   String? @map("author_job_title_name")   // 작성자 - 작성 당시 직책명
-  authorPositionName   String? @map("author_position_name")   // 작성자 - 작성 당시 직급명
-  title     String   // 게시글 제목
-  content   String?   // 게시글 본문 (정제된 HTML)
-  contentText String? @map("content_text") // 본문에서 태그를 뺀 텍스트 (본문 검색용, 저장 시 content와 함께 생성)
-  isPinned  Boolean   @default(false) @map("is_pinned") // 상단 고정
-  viewCount Int     @default(0) @map("view_count") // 조회수
-  likeCount Int     @default(0) @map("like_count") // 좋아요 수
-  isSecret  Boolean @default(false) @map("is_secret") // 비밀글 여부 (작성자 + 게시판 관리자만 열람 가능)
+  authorJobTitleName   String? @map("author_job_title_name") // 작성자 - 작성 당시 직책명
+  authorPositionName   String? @map("author_position_name") // 작성자 - 작성 당시 직급명
+  title                String // 게시글 제목
+  content              String? // 게시글 본문 (정제된 HTML)
+  contentText          String? @map("content_text") // 본문에서 태그를 뺀 텍스트 (본문 검색용, 저장 시 content와 함께 생성)
+  isPinned             Boolean @default(false) @map("is_pinned") // 상단 고정
+  viewCount            Int     @default(0) @map("view_count") // 조회수
+  likeCount            Int     @default(0) @map("like_count") // 좋아요 수
+  isSecret             Boolean @default(false) @map("is_secret") // 비밀글 여부 (작성자 + 게시판 관리자만 열람 가능)
 
-  eventStartAt  DateTime? @map("event_start_at")  // 일정 시작 시간 (캘린더 게시판용)
-  eventEndAt    DateTime? @map("event_end_at")  // 일정 종료 시간 (캘린더 게시판용)
-  isAllDay      Boolean?  @map("is_all_day")  // 시간 미선택 (캘린더 게시판용)
-  eventColor    CalendarEventColor? @map("event_color") // 일정 색 (캘린더 게시판용, NULL = 기본색)
+  eventStartAt DateTime?           @map("event_start_at") // 일정 시작 시간 (캘린더 게시판용)
+  eventEndAt   DateTime?           @map("event_end_at") // 일정 종료 시간 (캘린더 게시판용)
+  isAllDay     Boolean?            @map("is_all_day") // 시간 미선택 (캘린더 게시판용)
+  eventColor   CalendarEventColor? @map("event_color") // 일정 색 (캘린더 게시판용, NULL = 기본색)
 
-  board     Board     @relation(fields: [boardId], references: [id])
-  author    Users     @relation("PostAuthor", fields: [authorId], references: [id]) // 작성자
-  comments  Comment[] // 댓글 목록
-  views     PostView[] // 조회 기록
-  likes     PostLike[] // 좋아요 기록
+  board    Board      @relation(fields: [boardId], references: [id])
+  author   Users      @relation("PostAuthor", fields: [authorId], references: [id]) // 작성자
+  comments Comment[] // 댓글 목록
+  views    PostView[] // 조회 기록
+  likes    PostLike[] // 좋아요 기록
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
   editedAt  DateTime? @map("edited_at") // 마지막 수정 시간(게시글 수정 여부 확인용)
-  deleted   Boolean  @default(false)
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
-  @@index([boardId, deleted, createdAt(sort: Desc)])  // 게시판별 최신글 목록
+  @@index([boardId, deleted, createdAt(sort: Desc)]) // 게시판별 최신글 목록
   @@index([authorId, deleted, createdAt(sort: Desc)]) // 내가 쓴 글 목록
   @@index([boardId, deleted, eventStartAt]) // 월간 캘린더 조회 (캘린더 게시판용)
-
   @@map("post_model")
 }
 
 //* 댓글 -> 모듈: Comments
 model Comment {
-  id              Int      @id @default(autoincrement())
-  postId          Int      @map("post_id") // 게시글 id
-  parentCommentId Int?     @map("parent_comment_id") // 상위 댓글 id (일반 댓글은 NULL, 대댓글만 값 있음)
-  authorId        Int      @map("author_id") // 작성자 id
+  id                   Int     @id @default(autoincrement())
+  postId               Int     @map("post_id") // 게시글 id
+  parentCommentId      Int?    @map("parent_comment_id") // 상위 댓글 id (일반 댓글은 NULL, 대댓글만 값 있음)
+  authorId             Int     @map("author_id") // 작성자 id
   authorDepartmentName String? @map("author_department_name") // 작성자 - 작성 당시 대표로 지정한 소속 부서명
-  authorJobTitleName   String? @map("author_job_title_name")   // 작성자 - 작성 당시 직책명
-  authorPositionName   String? @map("author_position_name")   // 작성자 - 작성 당시 직급명
-  comment         String   // 댓글 내용
+  authorJobTitleName   String? @map("author_job_title_name") // 작성자 - 작성 당시 직책명
+  authorPositionName   String? @map("author_position_name") // 작성자 - 작성 당시 직급명
+  comment              String // 댓글 내용
 
-  post      Post      @relation(fields: [postId], references: [id])
-  author    Users     @relation("CommentAuthor", fields: [authorId], references: [id]) // 작성자
-  parent    Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id]) // 상위 댓글
-  replies   Comment[] @relation("CommentReplies") // 대댓글 목록
+  post    Post      @relation(fields: [postId], references: [id])
+  author  Users     @relation("CommentAuthor", fields: [authorId], references: [id]) // 작성자
+  parent  Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id]) // 상위 댓글
+  replies Comment[] @relation("CommentReplies") // 대댓글 목록
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([postId, deleted, createdAt(sort: Desc)])
   @@index([parentCommentId, deleted])
@@ -652,29 +652,29 @@ model Comment {
 
 //* 게시글 조회 기록 (1개의 게시글 -> 사용자당 1개) 
 model PostView {
-  postId    Int   @map("post_id")
-  userId    Int   @map("user_id")
-  viewedAt  DateTime @default(now()) @map("viewed_at") // 최초 조회 시간
+  postId   Int      @map("post_id")
+  userId   Int      @map("user_id")
+  viewedAt DateTime @default(now()) @map("viewed_at") // 최초 조회 시간
 
-  post Post @relation(fields: [postId], references: [id])
+  post Post  @relation(fields: [postId], references: [id])
   user Users @relation(fields: [userId], references: [id])
 
   @@id([postId, userId]) // 중복 조회 방지 + 게시글별 읽은 사람 조회
-  @@index([userId])      // FK 인덱스 (PostgreSQL은 자동 생성 안 함)
+  @@index([userId]) // FK 인덱스 (PostgreSQL은 자동 생성 안 함)
   @@map("post_view_model")
 }
 
 //* 게시글 좋아요 (1개의 게시글 -> 사용자당 1개)
 model PostLike {
-  postId    Int   @map("post_id")
-  userId    Int   @map("user_id")
+  postId    Int      @map("post_id")
+  userId    Int      @map("user_id")
   createdAt DateTime @default(now()) @map("created_at") // 좋아요 누른 시간
 
-  post Post @relation(fields: [postId], references: [id])
+  post Post  @relation(fields: [postId], references: [id])
   user Users @relation(fields: [userId], references: [id])
 
   @@id([postId, userId]) // 중복 좋아요 방지 + 게시글별 좋아요 누른 사람 조회
-  @@index([userId])      // FK 인덱스 + 내가 좋아요한 글 목록
+  @@index([userId]) // FK 인덱스 + 내가 좋아요한 글 목록
   @@map("post_like_model")
 }
 
@@ -688,23 +688,23 @@ model BoardAuth {
   includeSubDepartment Boolean @default(false) @map("include_sub_department") // 하위 부서 포함 여부
   positionId           Int?    @map("position_id") // 직급 id - 기준 직급 이상 허용 (Position.sortOrder 기준, NULL이면 직급 조건 없음)
 
-  authAdmin   Boolean @default(false)  @map("auth_admin") // 게시판 관리 권한 (다른 사람이 작성한 게시글/댓글 삭제 권한만)
-  authRead    Boolean @default(true)  @map("auth_read")
+  authAdmin   Boolean @default(false) @map("auth_admin") // 게시판 관리 권한 (다른 사람이 작성한 게시글/댓글 삭제 권한만)
+  authRead    Boolean @default(true) @map("auth_read")
   authWrite   Boolean @default(false) @map("auth_write")
-  authComment Boolean @default(true)  @map("auth_comment")
+  authComment Boolean @default(true) @map("auth_comment")
 
   board      Board               @relation(fields: [boardId], references: [id])
   department Department?         @relation(fields: [departmentId], references: [id])
   position   Position?           @relation(fields: [positionId], references: [id])
   jobTitles  BoardAuthJobTitle[] // 허용 직책 목록 (비어 있으면 직책 조건 없음)
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([boardId, deleted])
   @@index([departmentId, positionId])
@@ -716,8 +716,8 @@ model BoardAuthJobTitle {
   boardAuthId Int @map("board_auth_id") // 게시판 권한 id
   jobTitleId  Int @map("job_title_id") // 직책 id
 
-  boardAuth   BoardAuth @relation(fields: [boardAuthId], references: [id])
-  jobTitle    JobTitle  @relation(fields: [jobTitleId], references: [id])
+  boardAuth BoardAuth @relation(fields: [boardAuthId], references: [id])
+  jobTitle  JobTitle  @relation(fields: [jobTitleId], references: [id])
 
   @@id([boardAuthId, jobTitleId])
   @@index([jobTitleId]) // 복합 PK는 boardAuthId가 앞이라 jobTitleId 단독 조회용 인덱스 별도 필요
@@ -730,25 +730,25 @@ model BoardAuthJobTitle {
 // 시각은 한국 시간 기준, 자정부터의 분. 예약은 하루 안에서만 하므로 종료는 최대 1440(24:00)
 // DB CHECK 제약(마이그레이션 SQL에 직접 작성): 단위 > 0, 0 <= 시작 < 종료 <= 1440, 예약 가능 기간 > 0
 model FacilityCategory {
-  id        Int     @id @default(autoincrement())
-  name      String  // 분류명
-  sortOrder Int     @default(0) @map("sort_order") // 정렬 순서
+  id        Int    @id @default(autoincrement())
+  name      String // 분류명
+  sortOrder Int    @default(0) @map("sort_order") // 정렬 순서
 
-  slotMinutes    Int   @default(30) @map("slot_minutes")                // 예약 단위(분). 시작·종료가 운영 시작부터 이 단위에 맞아야 한다
-  openMinute     Int   @default(540) @map("open_minute")                // 운영 시작 (540 = 09:00)
-  closeMinute    Int   @default(1080) @map("close_minute")              // 운영 종료 (1080 = 18:00), 이 시각에 끝나는 예약까지 가능 [)
+  slotMinutes    Int   @default(30) @map("slot_minutes") // 예약 단위(분). 시작·종료가 운영 시작부터 이 단위에 맞아야 한다
+  openMinute     Int   @default(540) @map("open_minute") // 운영 시작 (540 = 09:00)
+  closeMinute    Int   @default(1080) @map("close_minute") // 운영 종료 (1080 = 18:00), 이 시각에 끝나는 예약까지 가능 [)
   operatingDays  Int[] @default([1, 2, 3, 4, 5]) @map("operating_days") // 운영 요일 (ISO: 1 = 월 … 7 = 일)
-  maxAdvanceDays Int   @default(90) @map("max_advance_days")            // 오늘부터 며칠 앞까지 예약 가능 (반복 예약 기간 포함)
+  maxAdvanceDays Int   @default(90) @map("max_advance_days") // 오늘부터 며칠 앞까지 예약 가능 (반복 예약 기간 포함)
 
   facilities Facility[] // 이 분류의 시설 목록
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([deleted, sortOrder])
   @@map("facility_category_model")
@@ -759,23 +759,23 @@ model FacilityCategory {
 model Facility {
   id          Int     @id @default(autoincrement())
   categoryId  Int     @map("category_id") // 분류 id (필수)
-  name        String  // 시설명
+  name        String // 시설명
   location    String? // 위치
-  capacity    Int?    // 최대 인원
+  capacity    Int? // 최대 인원
   description String? // 설명
   isActive    Boolean @default(true) @map("is_active") // 활성화 여부
 
-  category            FacilityCategory @relation(fields: [categoryId], references: [id])
-  reservations        FacilityReservation[]
-  unavailablePeriods  FacilityUnavailable[]
+  category           FacilityCategory      @relation(fields: [categoryId], references: [id])
+  reservations       FacilityReservation[]
+  unavailablePeriods FacilityUnavailable[]
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([categoryId, deleted, isActive])
   @@map("facility_model")
@@ -784,25 +784,25 @@ model Facility {
 //* 시설 예약 -> 모듈: Reservations (애드온)
 // DB 제약(마이그레이션 SQL에 직접 작성): 종료 > 시작, 같은 시설의 RESERVED·삭제 안 된 예약끼리 [시작, 종료) 겹침 금지 (exclusion constraint, btree_gist)
 model FacilityReservation {
-  id            Int       @id @default(autoincrement())
-  facilityId    Int       @map("facility_id") // 시설 id
-  userId        Int       @map("user_id") // 예약자 id
-  title         String?   // 예약 제목 (회의명 등)
-  description   String?   // 설명 (사용 목적)
-  startAt       DateTime  @map("start_at") // 시작 시간
-  endAt         DateTime  @map("end_at") // 종료 시간
-  status        FacilityReservationStatus @default(RESERVED)
+  id          Int                       @id @default(autoincrement())
+  facilityId  Int                       @map("facility_id") // 시설 id
+  userId      Int                       @map("user_id") // 예약자 id
+  title       String? // 예약 제목 (회의명 등)
+  description String? // 설명 (사용 목적)
+  startAt     DateTime                  @map("start_at") // 시작 시간
+  endAt       DateTime                  @map("end_at") // 종료 시간
+  status      FacilityReservationStatus @default(RESERVED)
 
-  facility      Facility    @relation(fields: [facilityId], references: [id])
-  user          Users       @relation("FacilityReservationUser", fields: [userId], references: [id])
+  facility Facility @relation(fields: [facilityId], references: [id])
+  user     Users    @relation("FacilityReservationUser", fields: [userId], references: [id])
 
-  createdAt     DateTime @default(now()) @map("created_at")
-  createdId     Int      @map("created_id")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  updatedId     Int      @map("updated_id")
-  deleted       Boolean  @default(false)
-  deletedAt     DateTime? @map("deleted_at")
-  deletedId     Int?     @map("deleted_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
+  deletedAt DateTime? @map("deleted_at")
+  deletedId Int?      @map("deleted_id")
 
   @@index([facilityId, status, startAt, endAt])
   @@index([userId, status, startAt])
@@ -811,21 +811,21 @@ model FacilityReservation {
 
 //* 시설 예약 불가 기간 -> 모듈: Reservations (애드온)
 model FacilityUnavailable {
-  id            Int      @id @default(autoincrement())
-  facilityId    Int      @map("facility_id") // 시설 id
-  startAt       DateTime @map("start_at") // 예약 불가 시작 시간
-  endAt         DateTime @map("end_at") // 예약 불가 종료 시간
-  reason        String?  // 예약 불가 사유
+  id         Int      @id @default(autoincrement())
+  facilityId Int      @map("facility_id") // 시설 id
+  startAt    DateTime @map("start_at") // 예약 불가 시작 시간
+  endAt      DateTime @map("end_at") // 예약 불가 종료 시간
+  reason     String? // 예약 불가 사유
 
-  facility    Facility @relation(fields: [facilityId], references: [id])
+  facility Facility @relation(fields: [facilityId], references: [id])
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([facilityId, deleted, startAt, endAt])
   @@map("facility_unavailable_model")
@@ -835,26 +835,26 @@ model FacilityUnavailable {
 // 상신 화면에서 결재자 목록을 채우는 불러오기용. 공용·부서는 결재라인 관리자, 개인은 본인이 만든다. (features.md 7.5)
 // DB CHECK 제약(마이그레이션 SQL에 직접 작성): ADMIN = 부서·소유자 없음 / DEPARTMENT = 부서만 / PERSONAL = 소유자만
 model ApprovalLineTemplate {
-  id           Int               @id @default(autoincrement())
-  name         String            // 결재라인명
-  scope        ApprovalLineScope // 관리자 / 부서 / 개인
+  id    Int               @id @default(autoincrement())
+  name  String // 결재라인명
+  scope ApprovalLineScope // 관리자 / 부서 / 개인
 
   departmentId Int? @map("department_id") // DEPARTMENT인 경우 해당 부서
   ownerUserId  Int? @map("owner_user_id") // PERSONAL인 경우 소유 사용자
 
   department Department? @relation(fields: [departmentId], references: [id])
-  ownerUser Users? @relation("ApprovalLineOwner", fields: [ownerUserId], references: [id])
+  ownerUser  Users?      @relation("ApprovalLineOwner", fields: [ownerUserId], references: [id])
 
   steps     ApprovalLineTemplateStep[]
-  documents ApprovalDocument[] @relation("ApprovalDocumentSourceTemplate")
+  documents ApprovalDocument[]         @relation("ApprovalDocumentSourceTemplate")
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([scope, departmentId, deleted])
   @@index([scope, ownerUserId, deleted])
@@ -869,8 +869,8 @@ model ApprovalLineTemplate {
 //   DEPARTMENT ⇔ department_id 있음, MY_DEPARTMENT ⇒ 직책 대상
 model ApprovalLineManager {
   id           Int                      @id @default(autoincrement())
-  userId       Int?                     @map("user_id")       // 대상: 회원
-  jobTitleId   Int?                     @map("job_title_id")  // 대상: 직책
+  userId       Int?                     @map("user_id") // 대상: 회원
+  jobTitleId   Int?                     @map("job_title_id") // 대상: 직책
   scope        ApprovalLineManagerScope // 관리 범위
   departmentId Int?                     @map("department_id") // scope = DEPARTMENT인 경우 관리할 부서
 
@@ -878,13 +878,13 @@ model ApprovalLineManager {
   jobTitle   JobTitle?   @relation(fields: [jobTitleId], references: [id])
   department Department? @relation(fields: [departmentId], references: [id])
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([userId, deleted])
   @@index([jobTitleId, deleted])
@@ -913,15 +913,15 @@ model ApprovalLineTemplateStep {
 
 //* 전자결재 문서 -> 모듈: Approvals
 model ApprovalDocument {
-  id                     Int            @id @default(autoincrement())
-  requesterId            Int            @map("requester_id") // 기안자
-  approvalLineTemplateId Int?           @map("approval_line_template_id") // 사용한 템플릿
+  id                     Int  @id @default(autoincrement())
+  requesterId            Int  @map("requester_id") // 기안자
+  approvalLineTemplateId Int? @map("approval_line_template_id") // 사용한 템플릿
 
   documentType ApprovalDocumentType @default(GENERAL) @map("document_type") // 문서 타입
-  title   String
-  content String?
+  title        String
+  content      String?
 
-  status  ApprovalStatus @default(DRAFT)  // 결재 상태
+  status ApprovalStatus @default(DRAFT) // 결재 상태
 
   currentStepOrder Int? @map("current_step_order") // 현재 단계 번호 (병렬 단계면 그 단계의 결재자 모두가 PENDING)
 
@@ -937,13 +937,13 @@ model ApprovalDocument {
 
   leaveRequest LeaveRequest?
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([requesterId, status, createdAt(sort: Desc)])
   @@index([status, createdAt(sort: Desc)])
@@ -983,9 +983,9 @@ model ApprovalDocumentStep {
 
 //* 전자결재 상태 변경 이력 -> 모듈: Approvals
 model ApprovalDocumentHistory {
-  id                 BigInt         @id @default(autoincrement())
-  approvalDocumentId Int            @map("approval_document_id")
-  actorId            Int?           @map("actor_id") // 상태 변경 사용자
+  id                 BigInt          @id @default(autoincrement())
+  approvalDocumentId Int             @map("approval_document_id")
+  actorId            Int?            @map("actor_id") // 상태 변경 사용자
   fromStatus         ApprovalStatus? @map("from_status")
   toStatus           ApprovalStatus  @map("to_status")
   comment            String?
@@ -1003,16 +1003,16 @@ model ApprovalDocumentHistory {
 
 //* 연차/병가 신청 -> 모듈: Leaves
 model LeaveRequest {
-  id                 Int       @id @default(autoincrement())
-  userId             Int       @map("user_id")
-  approvalDocumentId Int       @unique @map("approval_document_id")
+  id                 Int @id @default(autoincrement())
+  userId             Int @map("user_id")
+  approvalDocumentId Int @unique @map("approval_document_id")
 
   type      LeaveType
   unit      LeaveUnit @default(FULL) // 사용 단위
-  startDate DateTime @db.Date @map("start_date")
-  endDate   DateTime @db.Date @map("end_date")
-  startTime DateTime? @db.Time(0) @map("start_time") // 반차/반반차 시작 시각 (FULL이면 NULL)
-  endTime   DateTime? @db.Time(0) @map("end_time")   // 반차/반반차 종료 시각 (FULL이면 NULL)
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime  @map("end_date") @db.Date
+  startTime DateTime? @map("start_time") @db.Time(0) // 반차/반반차 시작 시각 (FULL이면 NULL)
+  endTime   DateTime? @map("end_time") @db.Time(0) // 반차/반반차 종료 시각 (FULL이면 NULL)
 
   // 실제 사용 일수 (서버에서 계산, 0.25 단위)
   // FULL = 기간 내 근무일 수, HALF = 0.5, QUARTER = 0.25
@@ -1040,10 +1040,10 @@ model LeaveGrant {
   userId Int @map("user_id")
   year   Int // 회계연도 (1/1~12/31, KST)
 
-  baseDays      Decimal @db.Decimal(5, 2) @map("base_days")                  // 규칙 계산값 (배치·재계산만 쓴다)
-  permanentDays Decimal @default(0) @db.Decimal(5, 2) @map("permanent_days") // 그해에 적용된 영구 조정값 (LeaveUserSetting에서 복사, 입사한 해는 0) - 지난 연도 기록이 바뀌지 않게 연도마다 저장
-  adjustDays    Decimal @default(0) @db.Decimal(5, 2) @map("adjust_days")    // 매년 초기화되는 조정값 (±, 0.25 단위, 배치는 건드리지 않음, 새해 행은 0)
-  adjustReason  String? @map("adjust_reason")                                // 매년 조정 사유
+  baseDays      Decimal @map("base_days") @db.Decimal(5, 2) // 규칙 계산값 (배치·재계산만 쓴다)
+  permanentDays Decimal @default(0) @map("permanent_days") @db.Decimal(5, 2) // 그해에 적용된 영구 조정값 (LeaveUserSetting에서 복사, 입사한 해는 0) - 지난 연도 기록이 바뀌지 않게 연도마다 저장
+  adjustDays    Decimal @default(0) @map("adjust_days") @db.Decimal(5, 2) // 매년 초기화되는 조정값 (±, 0.25 단위, 배치는 건드리지 않음, 새해 행은 0)
+  adjustReason  String? @map("adjust_reason") // 매년 조정 사유
 
   user Users @relation("LeaveGrantUser", fields: [userId], references: [id])
 
@@ -1060,8 +1060,8 @@ model LeaveGrant {
 model LeaveUserSetting {
   id              Int     @id @default(autoincrement())
   userId          Int     @unique @map("user_id")
-  permanentDays   Decimal @default(0) @db.Decimal(5, 2) @map("permanent_days") // 매년 더하는 일수 (±, 0.25 단위, 25일 한도 없음)
-  permanentReason String? @map("permanent_reason")                             // 영구 조정 사유 (예: 계열사 근속 10년 인정)
+  permanentDays   Decimal @default(0) @map("permanent_days") @db.Decimal(5, 2) // 매년 더하는 일수 (±, 0.25 단위, 25일 한도 없음)
+  permanentReason String? @map("permanent_reason") // 영구 조정 사유 (예: 계열사 근속 10년 인정)
 
   user Users @relation("LeaveUserSettingUser", fields: [userId], references: [id])
 
@@ -1089,19 +1089,18 @@ model ChatRoom {
   members  ChatRoomMember[]
   messages ChatMessage[]
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@unique([directKey], where: { deleted: false }) // 1:1 채팅방은 하나만 (동시 생성 방지, 단체 채팅방에서 2명만 남는 경우 중복 허용)
   @@index([type, deleted])
   @@index([lastMessageAt(sort: Desc)])
   @@map("chat_room_model")
 }
-
 
 //* 채팅방 참여자 -> 모듈: Chat
 model ChatRoomMember {
@@ -1127,32 +1126,30 @@ model ChatRoomMember {
   @@map("chat_room_member_model")
 }
 
-
 //* 채팅 메시지 -> 모듈: Chat
 model ChatMessage {
   id         Int             @id @default(autoincrement())
   chatRoomId Int             @map("chat_room_id")
-  senderId   Int?             @map("sender_id")
+  senderId   Int?            @map("sender_id")
   type       ChatMessageType @default(TEXT)
   content    String?
 
-  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id])
-  sender Users? @relation("ChatMessageSender", fields: [senderId], references: [id])
-  edits  ChatMessageEdit[] // 수정 이력 (수정 전 내용)
+  chatRoom ChatRoom          @relation(fields: [chatRoomId], references: [id])
+  sender   Users?            @relation("ChatMessageSender", fields: [senderId], references: [id])
+  edits    ChatMessageEdit[] // 수정 이력 (수정 전 내용)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   editedAt  DateTime? @map("edited_at") // 마지막 수정 시각 ("수정됨" 표시용, 수정한 적 없으면 NULL)
 
-  deleted   Boolean  @default(false)
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([chatRoomId, deleted, id(sort: Desc)])
   @@index([senderId, createdAt(sort: Desc)])
   @@map("chat_message_model")
 }
-
 
 //* 채팅 메시지 수정 이력 -> 모듈: Chat
 // 수정할 때마다 "수정 전 내용"을 1행씩 쌓는다. 최신 내용은 ChatMessage.content.
@@ -1160,7 +1157,7 @@ model ChatMessage {
 model ChatMessageEdit {
   id        Int      @id @default(autoincrement())
   messageId Int      @map("message_id")
-  content   String   // 수정 전 내용
+  content   String // 수정 전 내용
   createdAt DateTime @default(now()) @map("created_at") // 수정한 시각
 
   message ChatMessage @relation(fields: [messageId], references: [id])
@@ -1173,7 +1170,7 @@ model ChatMessageEdit {
 // USER 이상 누구나 등록·수정·삭제한다(감사 로그로 추적). 삭제는 soft delete - 기존 프로젝트·견적에는 실제 이름이 그대로 보인다.
 model ProjectClient {
   id         Int     @id @default(autoincrement())
-  name       String  // 회사명
+  name       String // 회사명
   businessNo String? @map("business_no") @db.VarChar(20) // 사업자등록번호 (입력했을 때만 삭제 안 된 거래처끼리 중복 금지)
   ceoName    String? @map("ceo_name") // 대표자
   address    String? // 주소
@@ -1181,16 +1178,16 @@ model ProjectClient {
   memo       String? // 메모
 
   contacts ProjectClientContact[] // 담당자 목록
-  projects Project[]              // 발주처로 연결된 프로젝트
-  partners ProjectPartner[]       // 협력사(하청)로 참여한 프로젝트
+  projects Project[] // 발주처로 연결된 프로젝트
+  partners ProjectPartner[] // 협력사(하청)로 참여한 프로젝트
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id") // [삭제된 거래처] 탭에 삭제한 사람 표시
+  deletedId Int?      @map("deleted_id") // [삭제된 거래처] 탭에 삭제한 사람 표시
 
   @@unique([businessNo], where: { deleted: false }) // 삭제되지 않은 거래처끼리만 사업자등록번호가 겹치지 않도록
   @@index([deleted, name])
@@ -1202,7 +1199,7 @@ model ProjectClient {
 model ProjectClientContact {
   id         Int     @id @default(autoincrement())
   clientId   Int     @map("client_id") // 거래처 id
-  name       String  // 이름
+  name       String // 이름
   department String? // 부서
   jobTitle   String? @map("job_title") // 직책
   hp         String? @db.VarChar(20) // 연락처
@@ -1211,13 +1208,13 @@ model ProjectClientContact {
 
   client ProjectClient @relation(fields: [clientId], references: [id])
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([clientId, deleted])
   @@map("project_client_contact_model")
@@ -1228,26 +1225,27 @@ model ProjectClientContact {
 // DB CHECK 제약(마이그레이션 SQL에 직접 작성): 시작·종료일이 둘 다 있으면 시작 <= 종료
 model Project {
   id          Int           @id @default(autoincrement())
-  name        String        // 프로젝트명
-  description String?       // 설명
+  name        String // 프로젝트명
+  description String? // 설명
   status      ProjectStatus @default(PLANNED)
-  startDate   DateTime?     @db.Date @map("start_date") // 시작일 (선택)
-  endDate     DateTime?     @db.Date @map("end_date")   // 종료일 (선택)
+  startDate   DateTime?     @map("start_date") @db.Date // 시작일 (선택)
+  endDate     DateTime?     @map("end_date") @db.Date // 종료일 (선택)
   clientId    Int?          @map("client_id") // 거래처 id (선택, 삭제된 거래처도 연결 유지)
 
-  client  ProjectClient?  @relation(fields: [clientId], references: [id])
-  members ProjectMember[] // 참여자 (책임자 포함)
-  tasks   ProjectTask[]   // 과제
+  client   ProjectClient?   @relation(fields: [clientId], references: [id])
+  members  ProjectMember[] // 참여자 (책임자 포함)
+  tasks    ProjectTask[] // 과제
   partners ProjectPartner[] // 협력사 (하청기업, 여러 개)
-  quotes   ProjectQuote[]   // 견적서
+  quotes   ProjectQuote[] // 견적서
+  sales    ProjectSale[] // 매출 (청구 건)
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([deleted, status])
   @@index([clientId])
@@ -1258,21 +1256,21 @@ model Project {
 // 만든 사람이 자동으로 책임자. 참여자를 빼면 soft delete(참여 이력 보존), 다시 넣으면 새 행.
 // 빠진 참여자가 담당인 과제는 담당자를 그대로 둔다(ProjectTask.assigneeId, "담당자 부재").
 model ProjectMember {
-  id            Int               @id @default(autoincrement())
-  projectId     Int               @map("project_id")
-  userId        Int               @map("user_id")
-  role          ProjectMemberRole @default(MEMBER)
+  id        Int               @id @default(autoincrement())
+  projectId Int               @map("project_id")
+  userId    Int               @map("user_id")
+  role      ProjectMemberRole @default(MEMBER)
 
   project Project @relation(fields: [projectId], references: [id])
   user    Users   @relation(fields: [userId], references: [id])
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at") // 프로젝트에서 빠진 시각
-  deletedId Int?     @map("deleted_id")  // 뺀 사람
+  deletedId Int?      @map("deleted_id") // 뺀 사람
 
   @@unique([projectId, userId], where: { deleted: false }) // 활성 참여자는 한 명당 한 행 (동시 추가도 DB가 막음)
   @@index([userId, deleted])
@@ -1286,31 +1284,51 @@ model ProjectMember {
 // 담당자는 거래처 담당자를 고르지 않고 직접 적는다(사용자 결정).
 // DB CHECK 제약(마이그레이션 SQL에 직접 작성): 계약 금액 >= 0, 계약 기간이 둘 다 있으면 시작 <= 종료
 model ProjectPartner {
-  id             Int       @id @default(autoincrement())
-  projectId      Int       @map("project_id")
-  clientId       Int       @map("client_id") // 거래처 id (삭제된 거래처도 연결 유지)
-  workScope      String?   @map("work_scope") // 업무 범위
-  contractAmount Decimal?  @db.Decimal(15, 0) @map("contract_amount") // 외주 계약 금액 (원, 부가세 별도)
-  startDate      DateTime? @db.Date @map("start_date") // 계약 기간
-  endDate        DateTime? @db.Date @map("end_date")
-  contactName    String?   @map("contact_name") // 협력사 담당자 (직접 기재)
-  contactHp      String?   @db.VarChar(20) @map("contact_hp")
-  contactEmail   String?   @map("contact_email")
+  id             Int                 @id @default(autoincrement())
+  projectId      Int                 @map("project_id")
+  clientId       Int                 @map("client_id") // 거래처 id (삭제된 거래처도 연결 유지)
+  workScope      String?             @map("work_scope") // 업무 범위
+  contractAmount Decimal?            @map("contract_amount") @db.Decimal(15, 0) // 외주 계약 금액 = 공급가액 (원, 부가세 별도)
+  taxType        ProjectQuoteTaxType @default(TAXABLE) @map("tax_type") // 과세 / 면세 (2026-11-17 사용자 결정)
+  vatRate        Decimal             @default(10) @map("vat_rate") @db.Decimal(5, 2) // 부가세율(%) - 직접 입력, 기본 10, 면세면 무시
+  vatAmount      Decimal?            @map("vat_amount") @db.Decimal(15, 0) // 부가세 = floor(공급가액 × 부가세율 ÷ 100), 금액이 없으면 NULL
+  totalAmount    Decimal?            @map("total_amount") @db.Decimal(15, 0) // 합계 = 공급가액 + 부가세 (실제 지급액)
+  startDate      DateTime?           @map("start_date") @db.Date // 계약 기간
+  endDate        DateTime?           @map("end_date") @db.Date
 
-  project Project       @relation(fields: [projectId], references: [id])
-  client  ProjectClient @relation(fields: [clientId], references: [id])
+  project  Project                 @relation(fields: [projectId], references: [id])
+  client   ProjectClient           @relation(fields: [clientId], references: [id])
+  contacts ProjectPartnerContact[] // 협력사 담당자 (직접 기재, 여러 명)
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@unique([projectId, clientId], where: { deleted: false }) // 같은 프로젝트에 같은 회사는 활성 한 행
   @@index([clientId, deleted])
   @@map("project_partner_model")
+}
+
+//* 협력사 담당자 -> 모듈: Projects (애드온, 2026-11-17 사용자 결정: 직접 기재, 여러 명)
+// 거래처 담당자(ProjectClientContact)를 고르지 않고 이 외주 건의 담당자를 직접 적는다(PM·실무·정산 등).
+// 협력사 행에 딸린 값이라 수정할 때 목록 전체를 교체한다(견적 품목과 같은 방식). 협력사를 빼도(soft delete) 그대로 남는다.
+model ProjectPartnerContact {
+  id        Int     @id @default(autoincrement())
+  partnerId Int     @map("partner_id")
+  sortOrder Int     @map("sort_order")
+  name      String  @db.VarChar(50) // 이름 (필수)
+  role      String? @db.VarChar(50) // 역할 (예: PM, 실무, 정산)
+  hp        String? @db.VarChar(20) // 연락처
+  email     String? @db.VarChar(100) // 이메일
+
+  partner ProjectPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, sortOrder])
+  @@map("project_partner_contact_model")
 }
 
 //* 견적서 (견적번호 단위) -> 모듈: Projects (애드온, docs/design/projects.md 5-1장)
@@ -1324,13 +1342,13 @@ model ProjectQuote {
   project  Project               @relation(fields: [projectId], references: [id])
   versions ProjectQuoteVersion[]
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([projectId, deleted])
   @@map("project_quote_model")
@@ -1339,7 +1357,7 @@ model ProjectQuote {
 //* 견적서 버전 (v1, v2 …) -> 모듈: Projects (애드온)
 // 새 버전은 최신 버전을 복사해 만들고 이전 버전은 읽기 전용. 확정은 최신 버전만, 확정된 견적은 새 버전 불가.
 // 발주처·수신 담당자는 작성 당시 정보를 스냅샷으로 남긴다(거래처가 바뀌어도 낸 견적서는 그대로).
-// 금액은 서버 계산: 공급가액 = 품목 금액 합, 부가세 = 과세면 floor(공급가액 × 10%), 합계 = 둘의 합
+// 금액은 서버 계산: 공급가액 = 품목 금액 합, 부가세 = 과세면 floor(공급가액 × 부가세율 ÷ 100) (부가세율 직접 입력, 기본 10), 합계 = 둘의 합
 // approvalDocumentId: 결재 상신 시 연결 (FK 없음 - 결재는 다른 애드온이라 스키마 관계로 묶지 않는다). 반려 후 다시 올리면 새 문서로 바뀐다.
 model ProjectQuoteVersion {
   id         Int                 @id @default(autoincrement())
@@ -1347,27 +1365,28 @@ model ProjectQuoteVersion {
   version    Int
   status     ProjectQuoteStatus  @default(DRAFT)
   taxType    ProjectQuoteTaxType @default(TAXABLE) @map("tax_type")
-  quoteDate  DateTime            @db.Date @map("quote_date")  // 견적일
-  validUntil DateTime?           @db.Date @map("valid_until") // 유효기간
+  vatRate    Decimal             @default(10) @map("vat_rate") @db.Decimal(5, 2) // 부가세율(%) - 직접 입력, 기본 10 (2026-11-17 사용자 결정), 면세면 무시
+  quoteDate  DateTime            @map("quote_date") @db.Date // 견적일
+  validUntil DateTime?           @map("valid_until") @db.Date // 유효기간
 
   // 발주처 스냅샷
-  clientId         Int?    @map("client_id")
-  clientName       String  @map("client_name")
-  clientBusinessNo String? @db.VarChar(20) @map("client_business_no")
-  clientCeoName    String? @map("client_ceo_name")
-  clientAddress    String? @map("client_address")
-  clientTel        String? @db.VarChar(20) @map("client_tel")
+  clientId          Int?    @map("client_id")
+  clientName        String  @map("client_name")
+  clientBusinessNo  String? @map("client_business_no") @db.VarChar(20)
+  clientCeoName     String? @map("client_ceo_name")
+  clientAddress     String? @map("client_address")
+  clientTel         String? @map("client_tel") @db.VarChar(20)
   // 수신 담당자 스냅샷 (거래처 담당자 중 선택, 선택)
   contactId         Int?    @map("contact_id")
   contactName       String? @map("contact_name")
   contactDepartment String? @map("contact_department")
   contactJobTitle   String? @map("contact_job_title")
-  contactHp         String? @db.VarChar(20) @map("contact_hp")
+  contactHp         String? @map("contact_hp") @db.VarChar(20)
   contactEmail      String? @map("contact_email")
 
-  supplyAmount Decimal @default(0) @db.Decimal(15, 0) @map("supply_amount") // 공급가액
-  vatAmount    Decimal @default(0) @db.Decimal(15, 0) @map("vat_amount")    // 부가세
-  totalAmount  Decimal @default(0) @db.Decimal(15, 0) @map("total_amount")  // 합계
+  supplyAmount Decimal @default(0) @map("supply_amount") @db.Decimal(15, 0) // 공급가액
+  vatAmount    Decimal @default(0) @map("vat_amount") @db.Decimal(15, 0) // 부가세
+  totalAmount  Decimal @default(0) @map("total_amount") @db.Decimal(15, 0) // 합계
   note         String? // 비고·특기사항
 
   approvalDocumentId Int?      @unique @map("approval_document_id")
@@ -1378,6 +1397,7 @@ model ProjectQuoteVersion {
 
   quote ProjectQuote       @relation(fields: [quoteId], references: [id])
   items ProjectQuoteItem[]
+  sales ProjectSale[] // 이 확정 견적으로 청구한 매출 (분할 청구)
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -1396,10 +1416,10 @@ model ProjectQuoteItem {
   id        Int     @id @default(autoincrement())
   versionId Int     @map("version_id")
   sortOrder Int     @map("sort_order")
-  name      String  // 품목명
+  name      String // 품목명
   spec      String? // 규격
-  quantity  Int     // 수량
-  unitPrice Decimal @db.Decimal(15, 0) @map("unit_price") // 단가
+  quantity  Int // 수량
+  unitPrice Decimal @map("unit_price") @db.Decimal(15, 0) // 단가
   amount    Decimal @db.Decimal(15, 0) // 금액 = 수량 × 단가
   note      String? // 비고
 
@@ -1407,6 +1427,76 @@ model ProjectQuoteItem {
 
   @@index([versionId, sortOrder])
   @@map("project_quote_item_model")
+}
+
+//? 매출 청구 상태 -> 모델: ProjectSale (수금 상태는 수금 합계로 계산)
+enum ProjectSaleStatus {
+  PLANNED // 청구 예정 (금액·예정일, 삭제 가능)
+  BILLED // 청구 (청구일 = 매출 기준일, 세금계산서 첨부)
+  CANCELLED // 청구 취소 (수금이 없을 때만, 기록으로 남김)
+}
+
+//* 매출 청구 건 -> 모듈: Projects (애드온, docs/design/projects.md 5-2장, 2026-11-17 사용자 결정)
+// 프로젝트에 단다. 확정 견적 연결은 선택 - 연결하면 그 견적의 청구 합계(취소 제외, 부가세 포함) ≤ 견적 합계 (견적 행 잠금 후 검사)
+// 금액: 공급가액 입력 + 부가세 자동(과세 = 부가세율(기본 10%) 적용 후 버림 / 면세 0). 청구 예정일 때만 금액 수정, 청구 뒤에는 잠근다.
+// 세금계산서 파일은 Files(targetType = PROJECT_SALE)로 첨부, 승인번호는 taxInvoiceNo.
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): 금액 >= 0, 청구 상태면 청구일 필수
+model ProjectSale {
+  id             Int                 @id @default(autoincrement())
+  projectId      Int                 @map("project_id")
+  quoteVersionId Int?                @map("quote_version_id") // 확정 견적 버전 (선택)
+  title          String // 청구명 (예: 계약금, 잔금)
+  status         ProjectSaleStatus   @default(PLANNED)
+  taxType        ProjectQuoteTaxType @default(TAXABLE) @map("tax_type")
+  vatRate        Decimal             @default(10) @map("vat_rate") @db.Decimal(5, 2) // 부가세율(%) - 직접 입력, 기본 10, 면세면 무시
+  supplyAmount   Decimal             @map("supply_amount") @db.Decimal(15, 0) // 공급가액 (입력)
+  vatAmount      Decimal             @map("vat_amount") @db.Decimal(15, 0) // 부가세 (서버 계산)
+  totalAmount    Decimal             @map("total_amount") @db.Decimal(15, 0) // 합계 = 청구 금액
+  plannedDate    DateTime?           @map("planned_date") @db.Date // 청구 예정일
+  billedDate     DateTime?           @map("billed_date") @db.Date // 청구일 = 매출 기준일 = 세금계산서 발행일
+  taxInvoiceNo   String?             @map("tax_invoice_no") @db.VarChar(30) // 국세청 승인번호
+  memo           String?
+  cancelledAt    DateTime?           @map("cancelled_at")
+  cancelledId    Int?                @map("cancelled_id")
+
+  project      Project              @relation(fields: [projectId], references: [id])
+  quoteVersion ProjectQuoteVersion? @relation(fields: [quoteVersionId], references: [id])
+  payments     ProjectSalePayment[]
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false) // 청구 예정만 삭제(soft)
+  deletedAt DateTime? @map("deleted_at")
+  deletedId Int?      @map("deleted_id")
+
+  @@index([projectId, deleted, status])
+  @@index([quoteVersionId])
+  @@index([billedDate])
+  @@map("project_sale_model")
+}
+
+//* 수금 기록 (부분 수금) -> 모듈: Projects (애드온)
+// 청구한 건에만, 수금 합계 ≤ 청구 금액(청구 행 잠금 후 검사). 삭제는 soft(기록 유지).
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): 수금액 > 0
+model ProjectSalePayment {
+  id       Int      @id @default(autoincrement())
+  saleId   Int      @map("sale_id")
+  paidDate DateTime @map("paid_date") @db.Date // 수금일
+  amount   Decimal  @db.Decimal(15, 0) // 수금액
+  memo     String?
+
+  sale ProjectSale @relation(fields: [saleId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  deleted   Boolean   @default(false)
+  deletedAt DateTime? @map("deleted_at")
+  deletedId Int?      @map("deleted_id")
+
+  @@index([saleId, deleted])
+  @@map("project_sale_payment_model")
 }
 
 //* 견적번호 채번 (연도별 마지막 번호) -> 모듈: Projects (애드온)
@@ -1424,23 +1514,23 @@ model ProjectQuoteSequence {
 model ProjectTask {
   id          Int               @id @default(autoincrement())
   projectId   Int               @map("project_id")
-  title       String            // 제목
-  description String?           // 내용
+  title       String // 제목
+  description String? // 내용
   status      ProjectTaskStatus @default(TODO)
   assigneeId  Int?              @map("assignee_id") // 담당자 (지정할 때는 현재 참여자만, 참여자가 빠져도 값은 그대로)
-  dueDate     DateTime?         @db.Date @map("due_date") // 마감일
+  dueDate     DateTime?         @map("due_date") @db.Date // 마감일
   sortOrder   Int               @default(0) @map("sort_order")
 
   project  Project @relation(fields: [projectId], references: [id])
   assignee Users?  @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id])
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdId Int      @map("created_id")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedId Int      @map("updated_id")
-  deleted   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
   deletedAt DateTime? @map("deleted_at")
-  deletedId Int?     @map("deleted_id")
+  deletedId Int?      @map("deleted_id")
 
   @@index([projectId, deleted, status, sortOrder])
   @@index([assigneeId, deleted])

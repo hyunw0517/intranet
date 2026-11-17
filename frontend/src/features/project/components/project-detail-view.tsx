@@ -21,6 +21,7 @@ import { ProjectFormDialog, type ProjectFormState } from "./project-form-dialog"
 import { ProjectMembers } from "./project-members";
 import { ProjectPartners } from "./project-partners";
 import { ProjectQuotes } from "./project-quotes";
+import { ProjectSales } from "./project-sales";
 import { TaskFormDialog, type TaskFormState } from "./task-form-dialog";
 
 // 프로젝트 상세 - 탭: 칸반(기본) / 개요 / 참여자 / 협력사 (2026-11-17 사용자 결정)
@@ -115,6 +116,7 @@ function ProjectDetailContent({
           <TabsTrigger value="members">참여자 {project.members.length}</TabsTrigger>
           <TabsTrigger value="partners">협력사</TabsTrigger>
           <TabsTrigger value="quotes">견적</TabsTrigger>
+          <TabsTrigger value="sales">매출</TabsTrigger>
         </TabsList>
 
         <TabsContent value="board" className="mt-4">
@@ -146,6 +148,10 @@ function ProjectDetailContent({
 
         <TabsContent value="quotes" className="mt-4">
           <ProjectQuotes project={project} />
+        </TabsContent>
+
+        <TabsContent value="sales" className="mt-4">
+          <ProjectSales projectId={project.id} />
         </TabsContent>
       </Tabs>
 

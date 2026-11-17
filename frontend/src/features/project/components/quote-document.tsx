@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { formatAmount, formatBusinessNo, QUOTE_TAX_LABEL, type QuoteVersion } from "@/types/project";
+import { formatAmount, formatBusinessNo, formatTax, type QuoteVersion } from "@/types/project";
 
 // 견적서 양식 (읽기 전용) - 상세 화면에 보이고, [인쇄]하면 이 영역만 종이에 나온다(globals.css의 .print-area)
 // 발주처·담당자는 버전에 저장된 스냅샷을 그대로 보여 준다(거래처가 바뀌어도 낸 견적서는 그대로).
@@ -8,7 +8,7 @@ export function QuoteDocument({ quoteNo, title, version, className }: { quoteNo:
     ["견적번호", `${quoteNo} v${version.version}`],
     ["견적일", version.quoteDate.slice(0, 10)],
     ["유효기간", version.validUntil ? `${version.validUntil.slice(0, 10)}까지` : "-"],
-    ["과세", QUOTE_TAX_LABEL[version.taxType]],
+    ["과세", formatTax(version.taxType, version.vatRate)],
   ];
   const client: [string, string][] = [
     ["회사명", version.clientName],

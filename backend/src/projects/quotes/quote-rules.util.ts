@@ -4,7 +4,20 @@ import { ApprovalStatus, Prisma, ProjectQuoteStatus, ProjectQuoteTaxType } from 
 
 // 금액 최대값: Decimal(15,0) (원화 정수, 999조)
 export const MAX_AMOUNT = new Prisma.Decimal( '999999999999999' );
-export const VAT_RATE = new Prisma.Decimal( '0.1' );
+// 부가세율(%) 기본값 - 견적·매출·협력사 모두 직접 입력하고 기본은 10 (2026-11-17 사용자 결정)
+export const DEFAULT_VAT_RATE = 10;
+
+//* 부가세 = floor(공급가액 × 부가세율 ÷ 100) (원 미만 버림), 면세면 0
+// 견적·매출·협력사 공용. 부가세율은 소수 둘째 자리까지(DTO), Decimal로 계산해 정밀도 손실이 없다.
+export function calcVat( supply: Prisma.Decimal, taxType: ProjectQuoteTaxType, vatRate: number | string | Prisma.Decimal = DEFAULT_VAT_RATE ): Prisma.Decimal {
+    if ( taxType !== ProjectQuoteTaxType.TAXABLE ) return new Prisma.Decimal( 0 );
+    return supply.mul( vatRate ).div( 100 ).floor();
+}
+
+//* 부가세율 표시 "10" / "3.3" (불필요한 0 제거)
+export function formatVatRate( vatRate: number | string | Prisma.Decimal ): string {
+    return new Prisma.Decimal( vatRate ).toString();
+}
 
 //* 화면·API에 보여 주는 견적 상태 - 저장 상태(DRAFT·CONFIRMED·CANCELLED) + 결재 문서 상태로 계산
 export type QuoteDisplayStatus = 'DRAFT' | 'IN_APPROVAL' | 'REJECTED' | 'CONFIRMED' | 'CANCELLED';
@@ -38,9 +51,9 @@ export interface QuoteItemInput {
 
 //* 품목 금액 + 합계 계산 (2026-11-17 사용자 결정)
 // - 금액 = 수량 × 단가 (Decimal로 계산 - 수량 × 단가가 JS number 정밀도(2^53)를 넘을 수 있다)
-// - 과세: 부가세 = floor(공급가액 × 10%) (합계 기준, 원 미만 버림), 면세: 0
+// - 과세: 부가세 = floor(공급가액 × 부가세율 ÷ 100) (합계 기준, 원 미만 버림, 부가세율 기본 10), 면세: 0
 // - 어느 금액이든 999조를 넘으면 null (호출한 쪽이 400)
-export function calcQuote( items: QuoteItemInput[], taxType: ProjectQuoteTaxType ) {
+export function calcQuote( items: QuoteItemInput[], taxType: ProjectQuoteTaxType, vatRate: number | string | Prisma.Decimal = DEFAULT_VAT_RATE ) {
     const rows = items.map( ( item, i ) => ({
         ...item,
         sortOrder: i,
@@ -49,7 +62,7 @@ export function calcQuote( items: QuoteItemInput[], taxType: ProjectQuoteTaxType
     }) );
 
     const supplyAmount = rows.reduce( ( sum, r ) => sum.add( r.amount ), new Prisma.Decimal( 0 ) );
-    const vatAmount = taxType === ProjectQuoteTaxType.TAXABLE ? supplyAmount.mul( VAT_RATE ).floor() : new Prisma.Decimal( 0 );
+    const vatAmount = calcVat( supplyAmount, taxType, vatRate );
     const totalAmount = supplyAmount.add( vatAmount );
 
     const overflow = rows.some( ( r ) => r.amount.gt( MAX_AMOUNT ) ) || totalAmount.gt( MAX_AMOUNT );
@@ -82,6 +95,7 @@ export interface QuoteHtmlSource {
     title: string;
     projectName: string;
     taxType: ProjectQuoteTaxType;
+    vatRate: number | string | Prisma.Decimal; // 부가세율(%)
     quoteDate: string;       // "YYYY-MM-DD"
     validUntil: string | null;
     clientName: string;
@@ -106,7 +120,7 @@ export function buildQuoteHtml( q: QuoteHtmlSource ): string {
         `<strong>프로젝트</strong> ${escapeHtml( q.projectName )}`,
         `<strong>발주처</strong> ${escapeHtml( q.clientName )}${bno ? ` (${escapeHtml( bno )})` : ''}${q.contactName ? ` · ${escapeHtml( q.contactName )} 님` : ''}`,
         `<strong>견적일</strong> ${q.quoteDate}${q.validUntil ? ` · <strong>유효기간</strong> ${q.validUntil}까지` : ''}`,
-        `<strong>과세</strong> ${q.taxType === ProjectQuoteTaxType.TAXABLE ? '과세 (부가세 10%)' : '면세'}`,
+        `<strong>과세</strong> ${q.taxType === ProjectQuoteTaxType.TAXABLE ? `과세 (부가세 ${formatVatRate( q.vatRate )}%)` : '면세'}`,
     ].map( ( line ) => `<p>${line}</p>` ).join( '' );
 
     const rows = q.items.map( ( item, i ) => `<tr><td>${i + 1}</td><td>${escapeHtml( item.name )}</td><td>${escapeHtml( item.spec )}</td>`

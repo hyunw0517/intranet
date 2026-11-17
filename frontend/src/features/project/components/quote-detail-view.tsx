@@ -68,7 +68,7 @@ function QuoteDetailContent({ quote, clientId }: { quote: QuoteDetail; clientId:
     deleteVersion: { title: `v${version.version}을 삭제할까요?`, description: "작성 중인 이 버전을 지웁니다. 이전 버전이 최신이 됩니다.", confirm: "삭제", done: "버전을 삭제했습니다.", destructive: true },
     deleteQuote: { title: "견적을 삭제할까요?", description: "모든 버전이 목록에서 사라집니다. 확정된 버전이 있으면 삭제할 수 없습니다.", confirm: "삭제", done: "견적을 삭제했습니다.", destructive: true },
     confirm: { title: "견적을 확정할까요?", description: "확정하면 고칠 수 없고, 합계가 프로젝트 계약 금액에 더해집니다.", confirm: "확정", done: "견적을 확정했습니다." },
-    cancel: { title: "확정을 취소할까요?", description: "작성 중으로 돌아가지 않고 '확정 취소'로 남습니다. 계약 금액에서 빠집니다.", confirm: "확정 취소", done: "확정을 취소했습니다.", destructive: true },
+    cancel: { title: "확정을 취소할까요?", description: "작성 중으로 돌아가지 않고 '확정 취소'로 남습니다. 계약 금액에서 빠집니다. 이 견적에 연결된 매출(청구)이 있으면 취소할 수 없습니다.", confirm: "확정 취소", done: "확정을 취소했습니다.", destructive: true },
   };
 
   const run = async () => {

@@ -14,6 +14,7 @@ export interface QuoteItemInput {
 export interface QuoteInput {
   title?: string;
   taxType?: QuoteTaxType;
+  vatRate?: number; // % (0~100, 소수 둘째 자리까지, 없으면 10)
   quoteDate?: string; // "YYYY-MM-DD" (없으면 오늘)
   validUntil?: string | null;
   contactId?: number | null; // 발주처 담당자 (수신자)

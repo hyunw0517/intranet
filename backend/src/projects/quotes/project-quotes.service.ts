@@ -6,8 +6,9 @@ import { kstDateString } from "src/common/util/date.util";
 import { PrismaService } from "src/prisma/prisma.service";
 import { toDateOnly } from "../dto/project.dto";
 import { ProjectAccessService, ProjectActor } from "../project-access.service";
+import { ProjectSalesService } from "../sales/project-sales.service";
 import { CreateProjectQuoteDto, QuoteContentDto, UpdateProjectQuoteDto } from "./dto/project-quote.dto";
-import { buildQuoteHtml, calcQuote, formatQuoteNo, isQuoteEditable, QuoteDisplayStatus, quoteDisplayStatus } from "./quote-rules.util";
+import { buildQuoteHtml, calcQuote, DEFAULT_VAT_RATE, formatQuoteNo, isQuoteEditable, QuoteDisplayStatus, quoteDisplayStatus } from "./quote-rules.util";
 
 type Tx = Prisma.TransactionClient;
 
@@ -69,6 +70,7 @@ export class ProjectQuotesService {
                     version: latest.version,
                     status: this.display( latest, approvals ),
                     taxType: latest.taxType,
+                    vatRate: latest.vatRate,
                     quoteDate: latest.quoteDate,
                     totalAmount: latest.totalAmount,
                 },
@@ -170,6 +172,7 @@ export class ProjectQuotesService {
                     quoteId,
                     version: latest.version + 1,
                     taxType: latest.taxType,
+                    vatRate: latest.vatRate,
                     quoteDate: toDateOnly( kstDateString( new Date() ) )!,
                     validUntil: null,
                     note: latest.note,
@@ -242,13 +245,16 @@ export class ProjectQuotesService {
     }
 
     //* 확정 취소 - "취소됨"으로 남긴다(작성 중으로 돌아가지 않음). 결재로 확정된 것도 가능.
-    // TODO(매출 작업 때): 매출에 연결된 견적은 취소 불가
+    // 매출(취소되지 않은 청구, 예정 포함)이 연결된 견적은 취소 불가 (5-2장) - 견적 행을 잠근 뒤 세므로 매출 등록과 직렬화된다
     async cancelConfirm( user: ProjectActor, projectId: number, quoteId: number, versionId: number ) {
         const access = await this.access.check( user, projectId );
         const quote = await this.findQuote( projectId, quoteId );
 
         await this.prisma.$transaction( async ( tx ) => {
             await this.lockQuote( tx, quoteId );
+            if ( await ProjectSalesService.countLinkedSales( tx, versionId ) > 0 ) {
+                throw new BadRequestException( '매출이 연결된 견적은 확정을 취소할 수 없습니다. 연결된 청구를 먼저 삭제·취소해 주세요.' );
+            }
             const { count } = await tx.projectQuoteVersion.updateMany({
                 where: { id: versionId, quoteId, status: ProjectQuoteStatus.CONFIRMED },
                 data: { status: ProjectQuoteStatus.CANCELLED, cancelledAt: new Date(), cancelledId: user.id, updatedId: user.id },
@@ -275,6 +281,7 @@ export class ProjectQuotesService {
             title: quote.title,
             projectName: access.projectName,
             taxType: version.taxType,
+            vatRate: version.vatRate,
             quoteDate: version.quoteDate.toISOString().slice( 0, 10 ),
             validUntil: version.validUntil?.toISOString().slice( 0, 10 ) ?? null,
             clientName: version.clientName,
@@ -398,13 +405,15 @@ export class ProjectQuotesService {
     // 요청 → 저장할 버전 값 + 품목 (금액 계산 포함)
     private content( body: QuoteContentDto ) {
         const taxType = body.taxType ?? ProjectQuoteTaxType.TAXABLE;
+        const vatRate = body.vatRate ?? DEFAULT_VAT_RATE;
         const quoteDate = body.quoteDate ?? kstDateString( new Date() );
         this.assertValidUntil( quoteDate, body.validUntil ?? null );
-        const calc = calcQuote( body.items ?? [], taxType );
+        const calc = calcQuote( body.items ?? [], taxType, vatRate );
         if ( !calc ) throw new BadRequestException( AMOUNT_OVER );
         return {
             version: {
                 taxType,
+                vatRate,
                 quoteDate: toDateOnly( quoteDate )!,
                 validUntil: toDateOnly( body.validUntil ?? null ),
                 note: body.note ?? null,
@@ -420,6 +429,7 @@ export class ProjectQuotesService {
     private mergeContent( version: VersionRow, body: QuoteContentDto ) {
         return this.content({
             taxType: body.taxType ?? version.taxType,
+            vatRate: body.vatRate ?? version.vatRate.toNumber(),
             quoteDate: body.quoteDate ?? version.quoteDate.toISOString().slice( 0, 10 ),
             validUntil: body.validUntil !== undefined ? body.validUntil : version.validUntil?.toISOString().slice( 0, 10 ) ?? null,
             note: body.note !== undefined ? body.note : version.note,

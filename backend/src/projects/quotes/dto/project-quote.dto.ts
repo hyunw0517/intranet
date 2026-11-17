@@ -4,7 +4,7 @@ import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
 import { StringToNumber } from 'src/common/decorator/string-to-number.decorator';
 import { ProjectQuoteTaxType } from 'src/generated/prisma/client';
 import { MAX_AMOUNT } from '../../dto/project-partner.dto';
-import { DATE_ONLY, DATE_ONLY_MESSAGE } from '../../dto/project.dto';
+import { DATE_ONLY, DATE_ONLY_MESSAGE, VatRateField } from '../../dto/project.dto';
 
 export const MAX_QUOTE_ITEMS = 100;
 export const MAX_QUANTITY = 1_000_000;
@@ -49,6 +49,10 @@ export class QuoteContentDto {
     @IsEnum(ProjectQuoteTaxType)
     @IsOptional()
     taxType?: ProjectQuoteTaxType;
+
+    // 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 (2026-11-17 사용자 결정)
+    @VatRateField()
+    vatRate?: number;
 
     // 견적일 (없으면 오늘)
     @Matches( DATE_ONLY, { message: DATE_ONLY_MESSAGE } )

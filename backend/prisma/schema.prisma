@@ -123,6 +123,7 @@ enum AuditTargetType {
   PROJECT_MEMBER      // 프로젝트 참여자
   PROJECT_TASK        // 과제
   PROJECT_PARTNER     // 프로젝트 협력사 (하청기업)
+  PROJECT_QUOTE       // 견적서 (버전·품목 변경도 이 대상으로 기록)
 }
 
 //? 감사 로그 이벤트 구분 -> 모델: Audit (작업자가 무엇을 했는지)
@@ -163,6 +164,7 @@ enum ApprovalStatus {
 enum ApprovalDocumentType { 
   GENERAL // 일반 문서
   LEAVE   // 휴가 신청
+  QUOTE   // 견적서 확정 (과제 관리 + 결재가 둘 다 켜졌을 때만, ProjectsApprovalModule)
 }
 
 //? 전자결재 단계 상태 -> 모델: ApprovalDocumentStep
@@ -248,6 +250,20 @@ enum ProjectMemberRole {
 }
 
 //? 과제 상태 (칸반 컬럼, 고정 3단계) -> 모델: ProjectTask
+//? 견적서 과세 구분 -> 모델: ProjectQuoteVersion
+enum ProjectQuoteTaxType {
+  TAXABLE  // 과세 - 부가세 = 공급가액 합 × 10%, 원 미만 버림
+  EXEMPT   // 면세 - 부가세 0
+}
+
+//? 견적서 버전 상태 -> 모델: ProjectQuoteVersion
+// "결재 중·반려"는 저장하지 않고 연결된 결재 문서 상태로 계산한다 (결재에는 반려·회수 때 업무를 부르는 지점이 없어 따로 저장하면 어긋난다)
+enum ProjectQuoteStatus {
+  DRAFT      // 작성 중 (결재 문서가 연결돼 있으면 그 상태로 결재 중·반려를 표시)
+  CONFIRMED  // 확정 (결재 최종 승인 또는 직접 확정)
+  CANCELLED  // 확정 취소 (작성 중으로 돌아가지 않고 기록으로 남김)
+}
+
 enum ProjectTaskStatus {
   TODO         // 할 일
   IN_PROGRESS  // 진행
@@ -1223,6 +1239,7 @@ model Project {
   members ProjectMember[] // 참여자 (책임자 포함)
   tasks   ProjectTask[]   // 과제
   partners ProjectPartner[] // 협력사 (하청기업, 여러 개)
+  quotes   ProjectQuote[]   // 견적서
 
   createdAt DateTime @default(now()) @map("created_at")
   createdId Int      @map("created_id")
@@ -1294,6 +1311,111 @@ model ProjectPartner {
   @@unique([projectId, clientId], where: { deleted: false }) // 같은 프로젝트에 같은 회사는 활성 한 행
   @@index([clientId, deleted])
   @@map("project_partner_model")
+}
+
+//* 견적서 (견적번호 단위) -> 모듈: Projects (애드온, docs/design/projects.md 5-1장)
+// 참여자 누구나 작성·수정·새 버전·결재 상신·직접 확정·확정 취소. 확정된 버전이 없을 때만 삭제(soft).
+model ProjectQuote {
+  id        Int    @id @default(autoincrement())
+  projectId Int    @map("project_id")
+  quoteNo   String @unique @map("quote_no") @db.VarChar(20) // "Q-2026-0001" (연도별 일련번호, ProjectQuoteSequence)
+  title     String // 견적명
+
+  project  Project               @relation(fields: [projectId], references: [id])
+  versions ProjectQuoteVersion[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdId Int      @map("created_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedId Int      @map("updated_id")
+  deleted   Boolean  @default(false)
+  deletedAt DateTime? @map("deleted_at")
+  deletedId Int?     @map("deleted_id")
+
+  @@index([projectId, deleted])
+  @@map("project_quote_model")
+}
+
+//* 견적서 버전 (v1, v2 …) -> 모듈: Projects (애드온)
+// 새 버전은 최신 버전을 복사해 만들고 이전 버전은 읽기 전용. 확정은 최신 버전만, 확정된 견적은 새 버전 불가.
+// 발주처·수신 담당자는 작성 당시 정보를 스냅샷으로 남긴다(거래처가 바뀌어도 낸 견적서는 그대로).
+// 금액은 서버 계산: 공급가액 = 품목 금액 합, 부가세 = 과세면 floor(공급가액 × 10%), 합계 = 둘의 합
+// approvalDocumentId: 결재 상신 시 연결 (FK 없음 - 결재는 다른 애드온이라 스키마 관계로 묶지 않는다). 반려 후 다시 올리면 새 문서로 바뀐다.
+model ProjectQuoteVersion {
+  id         Int                 @id @default(autoincrement())
+  quoteId    Int                 @map("quote_id")
+  version    Int
+  status     ProjectQuoteStatus  @default(DRAFT)
+  taxType    ProjectQuoteTaxType @default(TAXABLE) @map("tax_type")
+  quoteDate  DateTime            @db.Date @map("quote_date")  // 견적일
+  validUntil DateTime?           @db.Date @map("valid_until") // 유효기간
+
+  // 발주처 스냅샷
+  clientId         Int?    @map("client_id")
+  clientName       String  @map("client_name")
+  clientBusinessNo String? @db.VarChar(20) @map("client_business_no")
+  clientCeoName    String? @map("client_ceo_name")
+  clientAddress    String? @map("client_address")
+  clientTel        String? @db.VarChar(20) @map("client_tel")
+  // 수신 담당자 스냅샷 (거래처 담당자 중 선택, 선택)
+  contactId         Int?    @map("contact_id")
+  contactName       String? @map("contact_name")
+  contactDepartment String? @map("contact_department")
+  contactJobTitle   String? @map("contact_job_title")
+  contactHp         String? @db.VarChar(20) @map("contact_hp")
+  contactEmail      String? @map("contact_email")
+
+  supplyAmount Decimal @default(0) @db.Decimal(15, 0) @map("supply_amount") // 공급가액
+  vatAmount    Decimal @default(0) @db.Decimal(15, 0) @map("vat_amount")    // 부가세
+  totalAmount  Decimal @default(0) @db.Decimal(15, 0) @map("total_amount")  // 합계
+  note         String? // 비고·특기사항
+
+  approvalDocumentId Int?      @unique @map("approval_document_id")
+  confirmedAt        DateTime? @map("confirmed_at")
+  confirmedId        Int?      @map("confirmed_id") // 직접 확정한 사람 (결재로 확정되면 기안자)
+  cancelledAt        DateTime? @map("cancelled_at")
+  cancelledId        Int?      @map("cancelled_id")
+
+  quote ProjectQuote       @relation(fields: [quoteId], references: [id])
+  items ProjectQuoteItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdId Int      @map("created_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedId Int      @map("updated_id")
+
+  @@unique([quoteId, version])
+  @@index([status])
+  @@map("project_quote_version_model")
+}
+
+//* 견적서 품목 행 -> 모듈: Projects (애드온)
+// 금액 = 수량 × 단가 (서버 계산). 버전을 저장할 때 행 전체를 바꾼다(지우고 다시 만듦).
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): 수량 >= 1, 단가 >= 0
+model ProjectQuoteItem {
+  id        Int     @id @default(autoincrement())
+  versionId Int     @map("version_id")
+  sortOrder Int     @map("sort_order")
+  name      String  // 품목명
+  spec      String? // 규격
+  quantity  Int     // 수량
+  unitPrice Decimal @db.Decimal(15, 0) @map("unit_price") // 단가
+  amount    Decimal @db.Decimal(15, 0) // 금액 = 수량 × 단가
+  note      String? // 비고
+
+  version ProjectQuoteVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId, sortOrder])
+  @@map("project_quote_item_model")
+}
+
+//* 견적번호 채번 (연도별 마지막 번호) -> 모듈: Projects (애드온)
+// 견적을 만들 때 그 해의 행을 잠그고(upsert 후 FOR UPDATE) lastNo + 1 → 동시에 만들어도 번호가 겹치지 않는다(quoteNo unique는 이중 방어).
+model ProjectQuoteSequence {
+  year   Int @id
+  lastNo Int @default(0) @map("last_no")
+
+  @@map("project_quote_sequence_model")
 }
 
 //* 과제 (칸반 카드) -> 모듈: Projects (애드온)

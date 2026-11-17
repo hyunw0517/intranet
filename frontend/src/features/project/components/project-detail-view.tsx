@@ -20,6 +20,7 @@ import { formatPeriod, ProgressBar, ProjectStatusBadge } from "./project-badges"
 import { ProjectFormDialog, type ProjectFormState } from "./project-form-dialog";
 import { ProjectMembers } from "./project-members";
 import { ProjectPartners } from "./project-partners";
+import { ProjectQuotes } from "./project-quotes";
 import { TaskFormDialog, type TaskFormState } from "./task-form-dialog";
 
 // 프로젝트 상세 - 탭: 칸반(기본) / 개요 / 참여자 / 협력사 (2026-11-17 사용자 결정)
@@ -113,6 +114,7 @@ function ProjectDetailContent({
           <TabsTrigger value="overview">개요</TabsTrigger>
           <TabsTrigger value="members">참여자 {project.members.length}</TabsTrigger>
           <TabsTrigger value="partners">협력사</TabsTrigger>
+          <TabsTrigger value="quotes">견적</TabsTrigger>
         </TabsList>
 
         <TabsContent value="board" className="mt-4">
@@ -140,6 +142,10 @@ function ProjectDetailContent({
 
         <TabsContent value="partners" className="mt-4">
           <ProjectPartners projectId={project.id} />
+        </TabsContent>
+
+        <TabsContent value="quotes" className="mt-4">
+          <ProjectQuotes project={project} />
         </TabsContent>
       </Tabs>
 

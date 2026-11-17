@@ -239,6 +239,180 @@ describe('과제 관리', () => {
         });
     });
 
+    //* 견적서 (docs/design/projects.md 5-1장) - .env.test는 결재가 켜져 있어 확정은 결재로 한다
+    describe('견적서', () => {
+        let approverToken: string;
+        let approverId: number;
+        let clientId: number;
+        let contactId: number;
+
+        const items = [
+            { name: '설계', spec: 'M/M', quantity: 3, unitPrice: 11_111 },
+            { name: '개발', quantity: 1, unitPrice: 1_000_000, note: '1식' },
+        ]; // 공급가액 1,033,333 → 부가세 103,333(버림) → 합계 1,136,666
+
+        beforeAll( async () => {
+            const approver = await createTestUser( prisma, UserRole.USER );
+            approverId = approver.id;
+            approverToken = await loginAs( app, approver.empNo );
+            const client = ( await http().post( '/projects/clients' ).set( auth( ownerToken ) ).send({ name: '견적상사', businessNo: '9998887777' }).expect( 201 ) ).body;
+            clientId = client.id;
+            contactId = ( await http().post( `/projects/clients/${clientId}/contacts` ).set( auth( ownerToken ) ).send({ name: '이수신' }).expect( 201 ) ).body.id;
+        });
+
+        const newQuote = async ( projectId: number, body: Record<string, unknown> = {} ) =>
+            ( await http().post( `/projects/${projectId}/quotes` ).set( auth( memberToken ) ).send({ title: '1차 견적', items, ...body }).expect( 201 ) ).body;
+        const detail = async ( projectId: number, quoteId: number ) =>
+            ( await http().get( `/projects/${projectId}/quotes/${quoteId}` ).set( auth( memberToken ) ).expect( 200 ) ).body;
+        const submit = ( projectId: number, quoteId: number, versionId: number ) =>
+            http().post( `/projects/${projectId}/quotes/${quoteId}/versions/${versionId}/submit` ).set( auth( memberToken ) ).send({ steps: [ { approverIds: [ approverId ] } ] });
+
+        const quoteProject = async () => {
+            const project = await createProject( ownerToken, { clientId } );
+            await addMember( project.id, memberId );
+            return project;
+        };
+
+        it('발주처가 없는 프로젝트는 견적을 만들 수 없다 (400)', async () => {
+            const project = await createProject( ownerToken );
+            await http().post( `/projects/${project.id}/quotes` ).set( auth( ownerToken ) ).send({ title: 'x' }).expect( 400 );
+        });
+
+        it('만들면 연도별 번호 + v1, 금액·부가세(합계 기준 버림)를 서버가 계산하고 발주처·담당자를 스냅샷한다', async () => {
+            const project = await quoteProject();
+            const quote = await newQuote( project.id, { contactId, quoteDate: '2026-11-17', validUntil: '2026-12-17' } );
+            expect( quote.quoteNo ).toMatch( /^Q-2026-\d{4}$/ );
+
+            const d = await detail( project.id, quote.id );
+            const v1 = d.versions[0];
+            expect( v1 ).toMatchObject({
+                version: 1, displayStatus: 'DRAFT', isLatest: true,
+                supplyAmount: '1033333', vatAmount: '103333', totalAmount: '1136666',
+                clientName: '견적상사', clientBusinessNo: '9998887777', contactName: '이수신',
+            });
+            expect( v1.items.map( ( i: { amount: string } ) => i.amount ) ).toEqual([ '33333', '1000000' ]);
+
+            // 스냅샷: 거래처 이름을 바꿔도 이미 저장된 버전은 그대로
+            await http().patch( `/projects/clients/${clientId}` ).set( auth( ownerToken ) ).send({ name: '견적상사(변경)' }).expect( 200 );
+            expect( ( await detail( project.id, quote.id ) ).versions[0].clientName ).toBe( '견적상사' );
+            await http().patch( `/projects/clients/${clientId}` ).set( auth( ownerToken ) ).send({ name: '견적상사' }).expect( 200 );
+        });
+
+        it('면세면 부가세 0, 유효기간이 견적일보다 앞이면 400, 다른 거래처 담당자는 400', async () => {
+            const project = await quoteProject();
+            const exempt = await newQuote( project.id, { taxType: 'EXEMPT' } );
+            expect( ( await detail( project.id, exempt.id ) ).versions[0] ).toMatchObject({ vatAmount: '0', totalAmount: '1033333' });
+
+            await http().post( `/projects/${project.id}/quotes` ).set( auth( memberToken ) ).send({ title: 'x', quoteDate: '2026-11-17', validUntil: '2026-11-01' }).expect( 400 );
+            const other = ( await http().post( '/projects/clients' ).set( auth( ownerToken ) ).send({ name: '남의상사' }).expect( 201 ) ).body;
+            const otherContact = ( await http().post( `/projects/clients/${other.id}/contacts` ).set( auth( ownerToken ) ).send({ name: '남' }).expect( 201 ) ).body;
+            await http().post( `/projects/${project.id}/quotes` ).set( auth( memberToken ) ).send({ title: 'x', contactId: otherContact.id }).expect( 400 );
+        });
+
+        it('⭐ 동시에 여러 견적을 만들어도 견적번호가 겹치지 않는다 (채번 행 잠금)', async () => {
+            const project = await quoteProject();
+            const results = await Promise.all( Array.from({ length: 5 }, () =>
+                http().post( `/projects/${project.id}/quotes` ).set( auth( memberToken ) ).send({ title: '동시', items }) ) );
+            expect( results.every( ( r ) => r.status === 201 ) ).toBe( true );
+            expect( new Set( results.map( ( r ) => r.body.quoteNo ) ).size ).toBe( 5 );
+        });
+
+        it('결재가 켜져 있으면 직접 확정은 400, 품목이 없으면 상신 400', async () => {
+            const project = await quoteProject();
+            const quote = await newQuote( project.id );
+            const v1 = ( await detail( project.id, quote.id ) ).versions[0];
+            await http().patch( `/projects/${project.id}/quotes/${quote.id}/versions/${v1.id}/confirm` ).set( auth( memberToken ) ).expect( 400 );
+
+            const empty = await newQuote( project.id, { items: [] } );
+            const ev = ( await detail( project.id, empty.id ) ).versions[0];
+            await submit( project.id, empty.id, ev.id ).expect( 400 );
+            expect( ( await detail( project.id, empty.id ) ).versions[0].displayStatus ).toBe( 'DRAFT' ); // 실패해도 작성 중
+        });
+
+        it('⭐ 결재 상신 → 결재 중(수정·새 버전 불가) → 최종 승인 시 확정, 결재 본문에 견적 스냅샷, 계약 금액 = 확정 합계', async () => {
+            const project = await quoteProject();
+            const quote = await newQuote( project.id );
+            const v1 = ( await detail( project.id, quote.id ) ).versions[0];
+
+            const { approvalDocumentId } = ( await submit( project.id, quote.id, v1.id ).expect( 201 ) ).body;
+            let d = await detail( project.id, quote.id );
+            expect( d.versions[0] ).toMatchObject({ displayStatus: 'IN_APPROVAL', approvalDocument: { id: approvalDocumentId, status: 'REQUESTED' } });
+
+            await http().patch( `/projects/${project.id}/quotes/${quote.id}/versions/${v1.id}` ).set( auth( memberToken ) ).send({ note: 'x' }).expect( 400 );
+            await http().post( `/projects/${project.id}/quotes/${quote.id}/versions` ).set( auth( memberToken ) ).expect( 400 );
+            await submit( project.id, quote.id, v1.id ).expect( 400 ); // 이미 결재 중
+
+            const doc = await http().get( `/approvals/documents/${approvalDocumentId}` ).set( auth( approverToken ) ).expect( 200 );
+            expect( doc.body.documentType ).toBe( 'QUOTE' );
+            expect( doc.body.content ).toContain( '<table>' );
+            expect( doc.body.content ).toContain( '1,136,666원' );
+
+            await http().patch( `/approvals/documents/${approvalDocumentId}/approve` ).set( auth( approverToken ) ).send({}).expect( 200 );
+            d = await detail( project.id, quote.id );
+            expect( d.versions[0].displayStatus ).toBe( 'CONFIRMED' );
+
+            await http().post( `/projects/${project.id}/quotes/${quote.id}/versions` ).set( auth( memberToken ) ).expect( 400 ); // 확정 견적은 새 버전 불가
+            const list = await http().get( `/projects/${project.id}/quotes` ).set( auth( memberToken ) ).expect( 200 );
+            expect( list.body ).toMatchObject({ approvalEnabled: true, contractAmount: '1136666' });
+
+            // 결재함의 "다시 기안"은 견적 문서에 쓸 수 없다 (처리기에 onCopy 없음)
+            await http().post( `/approvals/documents/${approvalDocumentId}/copy` ).set( auth( memberToken ) ).expect( ( r ) => expect( r.status ).toBeGreaterThanOrEqual( 400 ) );
+        });
+
+        it('반려되면 고쳐서 다시 올릴 수 있고, 새 결재 문서로 연결된다', async () => {
+            const project = await quoteProject();
+            const quote = await newQuote( project.id );
+            const v1 = ( await detail( project.id, quote.id ) ).versions[0];
+            const first = ( await submit( project.id, quote.id, v1.id ).expect( 201 ) ).body.approvalDocumentId;
+            await http().patch( `/approvals/documents/${first}/reject` ).set( auth( approverToken ) ).send({ comment: '단가 조정' }).expect( 200 );
+            expect( ( await detail( project.id, quote.id ) ).versions[0].displayStatus ).toBe( 'REJECTED' );
+
+            await http().patch( `/projects/${project.id}/quotes/${quote.id}/versions/${v1.id}` ).set( auth( memberToken ) )
+                .send({ items: [ { name: '설계', quantity: 1, unitPrice: 500_000 } ] }).expect( 200 );
+            const second = ( await submit( project.id, quote.id, v1.id ).expect( 201 ) ).body.approvalDocumentId;
+            expect( second ).not.toBe( first );
+            expect( ( await detail( project.id, quote.id ) ).versions[0] ).toMatchObject({ displayStatus: 'IN_APPROVAL', totalAmount: '550000' });
+        });
+
+        it('새 버전: 최신을 복사해 v2(작성 중), 이전 버전은 고칠 수 없다. v2 삭제 가능, v1은 견적 삭제로', async () => {
+            const project = await quoteProject();
+            const quote = await newQuote( project.id );
+            const v1 = ( await detail( project.id, quote.id ) ).versions[0];
+            const v2 = ( await http().post( `/projects/${project.id}/quotes/${quote.id}/versions` ).set( auth( memberToken ) ).expect( 201 ) ).body;
+            expect( v2.version ).toBe( 2 );
+
+            const d = await detail( project.id, quote.id );
+            expect( d.versions.map( ( v: { version: number; items: unknown[] } ) => [ v.version, v.items.length ] ) ).toEqual([ [ 2, 2 ], [ 1, 2 ] ]);
+            await http().patch( `/projects/${project.id}/quotes/${quote.id}/versions/${v1.id}` ).set( auth( memberToken ) ).send({ note: 'x' }).expect( 400 );
+
+            await http().delete( `/projects/${project.id}/quotes/${quote.id}/versions/${v1.id}` ).set( auth( memberToken ) ).expect( 400 );
+            await http().delete( `/projects/${project.id}/quotes/${quote.id}/versions/${v2.id}` ).set( auth( memberToken ) ).expect( 200 );
+            await http().delete( `/projects/${project.id}/quotes/${quote.id}` ).set( auth( memberToken ) ).expect( 200 );
+            await http().get( `/projects/${project.id}/quotes/${quote.id}` ).set( auth( memberToken ) ).expect( 404 );
+        });
+
+        it('확정 취소: "취소됨"으로 남고 계약 금액에서 빠지며, 확정 버전이 있는 견적은 삭제할 수 없다', async () => {
+            const project = await quoteProject();
+            const quote = await newQuote( project.id );
+            const v1 = ( await detail( project.id, quote.id ) ).versions[0];
+            const docId = ( await submit( project.id, quote.id, v1.id ).expect( 201 ) ).body.approvalDocumentId;
+            await http().patch( `/approvals/documents/${docId}/approve` ).set( auth( approverToken ) ).send({}).expect( 200 );
+
+            await http().delete( `/projects/${project.id}/quotes/${quote.id}` ).set( auth( memberToken ) ).expect( 400 );
+            await http().patch( `/projects/${project.id}/quotes/${quote.id}/versions/${v1.id}/cancel` ).set( auth( memberToken ) ).expect( 200 );
+            expect( ( await detail( project.id, quote.id ) ).versions[0].displayStatus ).toBe( 'CANCELLED' );
+            expect( ( await http().get( `/projects/${project.id}/quotes` ).set( auth( memberToken ) ).expect( 200 ) ).body.contractAmount ).toBe( '0' );
+            await http().patch( `/projects/${project.id}/quotes/${quote.id}/versions/${v1.id}/cancel` ).set( auth( memberToken ) ).expect( 400 ); // 이미 취소
+        });
+
+        it('참여하지 않은 회원은 403, 품목 수량 0·소수 단가는 400', async () => {
+            const project = await quoteProject();
+            await http().get( `/projects/${project.id}/quotes` ).set( auth( outsiderToken ) ).expect( 403 );
+            await http().post( `/projects/${project.id}/quotes` ).set( auth( memberToken ) ).send({ title: 'x', items: [ { name: 'a', quantity: 0, unitPrice: 1 } ] }).expect( 400 );
+            await http().post( `/projects/${project.id}/quotes` ).set( auth( memberToken ) ).send({ title: 'x', items: [ { name: 'a', quantity: 1, unitPrice: 1.5 } ] }).expect( 400 );
+        });
+    });
+
     //* 협력사 (하청기업)
     describe('협력사', () => {
         const createClient = async ( name: string ) =>

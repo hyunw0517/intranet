@@ -200,3 +200,35 @@
     @apply outline-2 outline-ring;
   }
 }
+
+/* 에디터 본문 표 (결재 문서 본문의 견적서 품목표 - 서버가 만드는 HTML, 2026-11-17) */
+@layer base {
+  .rich-text table {
+    @apply my-3 w-full border-collapse text-sm;
+  }
+  .rich-text th,
+  .rich-text td {
+    @apply border px-2 py-1 text-left;
+  }
+  .rich-text thead th {
+    @apply bg-muted/50 font-medium;
+  }
+}
+
+/* 인쇄: .print-area(견적서 양식)만 종이에 나오게 한다. 앱 레이아웃(사이드바·헤더)은 그대로 두고 보이기만 끈다. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    border: none;
+    box-shadow: none;
+  }
+}

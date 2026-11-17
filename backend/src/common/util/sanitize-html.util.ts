@@ -15,6 +15,7 @@ const ALLOWED_OPTIONS: sanitizeHtml.IOptions = {
         'a',                                        // 링크
         'img',                                      // 본문 이미지 (우리 서버 주소만, exclusiveFilter에서 검사)
         'div', 'iframe',                            // 외부 영상 (YouTube·Vimeo 임베드 주소만, exclusiveFilter에서 검사)
+        'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', // 표 (속성 없이 구조만) - 서버가 만드는 결재 본문(견적서 품목표)용, 2026-11-17
     ],
     allowedAttributes: {
         a: [ 'href', 'target', 'rel' ],
@@ -59,7 +60,7 @@ export const VIDEO_EMBED_SRC_REGEX =
     /^https:\/\/(www\.youtube-nocookie\.com\/embed\/[A-Za-z0-9_-]{11}|player\.vimeo\.com\/video\/\d+(\?h=[0-9a-f]+)?)$/;
 
 // 블록 요소가 끝나는 위치 (텍스트 추출 시 단어가 붙지 않게 공백을 넣는다)
-const BLOCK_END = /<\/(p|h1|h2|h3|li|blockquote|pre)>|<br\s*\/?>|<hr\s*\/?>/gi;
+const BLOCK_END = /<\/(p|h1|h2|h3|li|blockquote|pre|td|th)>|<br\s*\/?>|<hr\s*\/?>/gi;
 
 // sanitize-html은 텍스트를 이 네 가지 엔티티로만 이스케이프하므로 이것만 되돌리면 원문 텍스트가 된다.
 function decodeBasicEntities( text: string ): string {

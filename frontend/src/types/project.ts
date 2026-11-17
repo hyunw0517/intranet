@@ -169,3 +169,86 @@ export function formatBusinessNo(value: string | null | undefined) {
   if (!value) return "-";
   return value.length === 10 ? `${value.slice(0, 3)}-${value.slice(3, 5)}-${value.slice(5)}` : value;
 }
+
+// ── 견적서 (docs/design/projects.md 5-1장) ───────────────────────────
+// 금액은 Decimal(15,0)이라 문자열로 온다. 표시 상태는 서버가 결재 문서 상태로 계산한다.
+export type QuoteTaxType = "TAXABLE" | "EXEMPT";
+export type QuoteDisplayStatus = "DRAFT" | "IN_APPROVAL" | "REJECTED" | "CONFIRMED" | "CANCELLED";
+
+export const QUOTE_TAX_LABEL: Record<QuoteTaxType, string> = { TAXABLE: "과세 (부가세 10%)", EXEMPT: "면세" };
+export const QUOTE_STATUS_LABEL: Record<QuoteDisplayStatus, string> = {
+  DRAFT: "작성 중",
+  IN_APPROVAL: "결재 중",
+  REJECTED: "반려",
+  CONFIRMED: "확정",
+  CANCELLED: "확정 취소",
+};
+
+// GET /projects/:id/quotes
+export interface QuoteListResult {
+  approvalEnabled: boolean; // 켜져 있으면 확정은 결재로 ([결재 요청]), 꺼져 있으면 [확정]
+  contractAmount: string; // 확정 버전 합계 = 프로젝트 계약 금액
+  quotes: {
+    id: number;
+    quoteNo: string;
+    title: string;
+    versionCount: number;
+    latest: { id: number; version: number; status: QuoteDisplayStatus; taxType: QuoteTaxType; quoteDate: string; totalAmount: string };
+    createdAt: string;
+  }[];
+}
+
+export interface QuoteItem {
+  id: number;
+  sortOrder: number;
+  name: string;
+  spec: string | null;
+  quantity: number;
+  unitPrice: string;
+  amount: string;
+  note: string | null;
+}
+
+export interface QuoteVersion {
+  id: number;
+  version: number;
+  isLatest: boolean;
+  displayStatus: QuoteDisplayStatus;
+  taxType: QuoteTaxType;
+  quoteDate: string;
+  validUntil: string | null;
+  clientId: number | null;
+  clientName: string;
+  clientBusinessNo: string | null;
+  clientCeoName: string | null;
+  clientAddress: string | null;
+  clientTel: string | null;
+  contactId: number | null;
+  contactName: string | null;
+  contactDepartment: string | null;
+  contactJobTitle: string | null;
+  contactHp: string | null;
+  contactEmail: string | null;
+  supplyAmount: string;
+  vatAmount: string;
+  totalAmount: string;
+  note: string | null;
+  approvalDocument: { id: number; status: string | null } | null;
+  confirmedAt: string | null;
+  cancelledAt: string | null;
+  items: QuoteItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /projects/:id/quotes/:quoteId (버전은 최신 순)
+export interface QuoteDetail {
+  id: number;
+  quoteNo: string;
+  title: string;
+  projectId: number;
+  projectName: string;
+  approvalEnabled: boolean;
+  versions: QuoteVersion[];
+  createdAt: string;
+}

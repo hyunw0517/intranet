@@ -11,6 +11,7 @@
 // - 본부마다 본부장 1명, 팀마다 팀장 1명. seed 밖의 회원이 이미 팀장인 팀은 건너뛴다.
 // - 임원(이사 이상)은 지정된 자리(회장실·대표이사실·본부장)에만 배정하고, 팀원 직급은 부장 아래에서 피라미드 비율로 뽑는다.
 // - 게시판 권한 판정 확인용 경우를 섞는다: 겸직(팀장 + 다른 팀 팀원), 본부 직속, 직급 없음, 휴직·퇴사, 가입 승인 전(GUEST)
+// - 이름: 입사 시기에 맞는 세대별 이름 + 실제 성씨 비율. 같은 직급이나 같은 부서에는 동명이인을 만들지 않는다. (이미 DB에 있는 회원 포함)
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -60,8 +61,70 @@ function pickWeighted( weights: Record<string, number> ){
     return Object.keys( weights )[0];
 }
 
-const SURNAMES = ['김', '이', '박', '최', '정', '강', '조', '윤', '장', '임', '한', '오', '서', '신', '권'];
-const GIVEN_NAMES = ['민준', '서연', '도윤', '지우', '하준', '서윤', '시우', '하은', '주원', '지민', '예준', '수아', '유진', '지호', '채원', '현우', '다은', '건우', '소율', '태윤'];
+// 이름 전용 난수: 이름을 다시 뽑아도 소속·입사일 배정이 바뀌지 않게 위의 난수와 분리한다.
+let nameRandomState = 20261119;
+function nameRandom(){
+    nameRandomState = ( nameRandomState + 0x6D2B79F5 ) | 0;
+    let t = Math.imul( nameRandomState ^ ( nameRandomState >>> 15 ), 1 | nameRandomState );
+    t = ( t + Math.imul( t ^ ( t >>> 7 ), 61 | t ) ) ^ t;
+    return ( ( t ^ ( t >>> 14 ) ) >>> 0 ) / 4294967296;
+}
+function pickName( list: string[] ){
+    return list[ Math.floor( nameRandom() * list.length ) ];
+}
+
+// 성씨별 비중 (흔한 성이 많되 한쪽으로 쏠리지 않게 실제 비율을 완만하게 조정)
+const SURNAME_WEIGHTS: Record<string, number> = {
+    김: 14, 이: 11, 박: 7, 최: 5, 정: 5, 강: 3, 조: 3, 윤: 3, 장: 3, 임: 3,
+    한: 2, 오: 2, 서: 2, 신: 2, 권: 2, 황: 2, 안: 2, 송: 2, 전: 2, 홍: 2,
+    유: 1, 고: 1, 문: 1, 양: 1, 손: 1, 배: 1, 백: 1, 허: 1, 남: 1, 심: 1,
+    노: 1, 하: 1, 곽: 1, 성: 1, 차: 1, 주: 1, 우: 1, 구: 1, 민: 1, 류: 1,
+    나: 1, 진: 1, 지: 1, 엄: 1, 채: 1, 원: 1, 천: 1, 방: 1, 공: 1, 현: 1,
+    함: 0.5, 변: 0.5, 염: 0.5, 여: 0.5, 추: 0.5, 도: 0.5, 석: 0.5, 설: 0.5, 마: 0.5, 길: 0.5,
+    남궁: 0.3, 황보: 0.3, 제갈: 0.3, 선우: 0.3, 독고: 0.3, 사공: 0.3,
+};
+
+// 입사 시기별 이름 (세대에 어울리는 이름)
+const GIVEN_NAMES_SENIOR = [ // ~2010년 입사
+    '영수', '정호', '성민', '동현', '상훈', '재현', '종민', '병철', '승호', '태성', '기훈', '창민', '용준', '광수', '대성', '규철', '준호', '경수', '형준', '인식',
+    '미경', '은정', '혜진', '경희', '수진', '선영', '지영', '현숙', '정아', '미영', '은주', '윤희', '명희', '영란', '혜경', '순영', '연희', '소영', '민정', '유경',
+];
+const GIVEN_NAMES_MIDDLE = [ // 2011~2019년 입사
+    '민수', '지훈', '현우', '준혁', '성현', '동욱', '진우', '우진', '상현', '재훈', '승민', '태훈', '영민', '정훈', '석진', '민재', '성훈', '희준', '도현', '형석',
+    '지은', '수빈', '혜원', '유진', '민지', '보람', '아름', '은지', '지혜', '소연', '다혜', '슬기', '나영', '효진', '예진', '가영', '한나', '세영', '미진', '정민',
+];
+const GIVEN_NAMES_JUNIOR = [ // 2020년 이후 입사, 가입 승인 전
+    '민준', '서준', '도윤', '시우', '하준', '주원', '지호', '건우', '우빈', '현준', '태민', '준서', '은우', '유찬', '시현', '승우', '재윤', '정우', '로운', '가온',
+    '서연', '서윤', '지우', '하은', '수아', '채원', '다은', '소율', '예린', '지아', '윤서', '아린', '나윤', '시은', '하린', '유나', '예나', '수현', '민서', '하늘',
+];
+// 외자 이름 (세대 구분 없이 가끔 섞는다)
+const GIVEN_NAMES_SINGLE = [ '준', '건', '솔', '린', '현', '민', '훈', '결', '윤', '진' ];
+const SINGLE_NAME_RATE = 0.06;
+
+function randomName( joinYear: number ){
+    let r = nameRandom() * Object.values( SURNAME_WEIGHTS ).reduce( ( sum, w ) => sum + w, 0 );
+    let surname = '김';
+    for( const [ key, weight ] of Object.entries( SURNAME_WEIGHTS ) ){
+        r -= weight;
+        if( r < 0 ){
+            surname = key;
+            break;
+        }
+    }
+
+    if( nameRandom() < SINGLE_NAME_RATE ){
+        return `${surname}${pickName( GIVEN_NAMES_SINGLE )}`;
+    }
+
+    const isJunior = joinYear === 0 || joinYear >= 2020; // 0 = 입사일 없는 GUEST
+    const givenNames = isJunior ? GIVEN_NAMES_JUNIOR : joinYear >= 2011 ? GIVEN_NAMES_MIDDLE : GIVEN_NAMES_SENIOR;
+    return `${surname}${pickName( givenNames )}`;
+}
+
+// 동명이인을 막는 범위: 직급 하나 + 소속 부서 전부
+function nameGroups( position: string | null | undefined, departmentIds: number[] ){
+    return [ ...( position ? [ `직급:${position}` ] : [] ), ...departmentIds.map( ( id ) => `부서:${id}` ) ];
+}
 
 interface Membership {
     departmentId: number;
@@ -88,7 +151,7 @@ async function main(){
 
     const seedEmpNos = Array.from( { length: USER_COUNT }, ( _, i ) => empNoOf( i ) );
 
-    const [departments, positions, jobTitles, admin, existingPositions, existingLeaders] = await Promise.all([
+    const [departments, positions, jobTitles, admin, existingPositions, existingLeaders, existingUsers] = await Promise.all([
         prisma.department.findMany({
             select: { id: true, parentDepartmentId: true, name: true },
             where: { deleted: false },
@@ -120,6 +183,15 @@ async function main(){
                 jobTitle: { name: '팀장' },
                 user: { deleted: false, empNo: { notIn: seedEmpNos } },
             },
+        }),
+        // 이미 있는 회원의 이름 (같은 직급·부서 동명이인 방지)
+        prisma.users.findMany({
+            select: {
+                name: true,
+                position: { select: { name: true } },
+                departments: { select: { departmentId: true }, where: { deleted: false } },
+            },
+            where: { deleted: false },
         }),
     ]);
 
@@ -220,6 +292,18 @@ async function main(){
 
     specs.length = USER_COUNT;
 
+    // 직급·부서별로 이미 쓴 이름
+    const usedNames = new Map<string, Set<string>>();
+    const isNameTaken = ( name: string, groups: string[] ) => groups.some( ( group ) => usedNames.get( group )?.has( name ) );
+    const markNameUsed = ( name: string, groups: string[] ) => {
+        for( const group of groups ){
+            usedNames.set( group, ( usedNames.get( group ) ?? new Set<string>() ).add( name ) );
+        }
+    };
+    for( const user of existingUsers ){
+        markNameUsed( user.name, nameGroups( user.position?.name, user.departments.map( ( d ) => d.departmentId ) ) );
+    }
+
     // ── 저장
     const passwordHash = await bcrypt.hash( TEST_PASSWORD, Number( process.env.HASH_ROUNDS ?? 10 ) );
     let created = 0;
@@ -228,7 +312,9 @@ async function main(){
 
     for( const [ index, spec ] of specs.entries() ){
         const empNo = empNoOf( index );
-        const name = `${pick( SURNAMES )}${pick( GIVEN_NAMES )}`;
+        // 예전에 이름을 뽑던 자리. 입사일 배정이 바뀌지 않도록 난수 2개를 그대로 소비한다.
+        random();
+        random();
         const [ fromYear, toYear ] = spec.joinYears;
         const joinYear = fromYear + Math.floor( random() * ( toYear - fromYear + 1 ) );
         const joinMonth = Math.floor( random() * 12 );
@@ -243,6 +329,16 @@ async function main(){
             skipped++;
             continue;
         }
+
+        const groups = nameGroups( spec.position, spec.memberships.map( ( m ) => m.departmentId ) );
+        let name = randomName( joinYear );
+        for( let tries = 0; isNameTaken( name, groups ); tries++ ){
+            if( tries >= 500 ){
+                throw new Error(`${empNo}: 같은 직급·부서와 겹치지 않는 이름을 찾지 못했습니다.`);
+            }
+            name = randomName( joinYear );
+        }
+        markNameUsed( name, groups );
 
         const memberships = spec.memberships
             .map( ( m ) => `${departmentName.get( m.departmentId )}(${m.jobTitle})` )

@@ -20,6 +20,7 @@ import {
   type ChatMessage,
   type ChatRoomDetail,
 } from "@/services/api/chats";
+import { buildChatCopyText } from "../chat-copy";
 import { messageDate, messageTime, unreadReaders } from "../chat-display";
 import { chatKeys, patchMessageInCache, useChatMessages } from "../hooks/use-chats";
 import { ChatFileContent } from "./chat-file-content";
@@ -115,6 +116,14 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
         const el = e.currentTarget;
         stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD;
       }}
+      onCopy={(e) => {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+        const text = buildChatCopyText(e.currentTarget, selection, messages);
+        if (text === null) return;
+        e.clipboardData.setData("text/plain", text);
+        e.preventDefault();
+      }}
       className="min-h-0 flex-1 overflow-y-auto px-3 py-2"
       role="log"
       aria-label="대화 내용"
@@ -143,12 +152,12 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
         return (
           <Fragment key={message.id}>
             {showDate && (
-              <p className="my-3 text-center text-xs text-muted-foreground">
+              <p data-copy-date={messageDate(message.createdAt)} className="my-3 text-center text-xs text-muted-foreground">
                 <span className="rounded-full bg-muted px-2.5 py-0.5">{messageDate(message.createdAt)}</span>
               </p>
             )}
             {message.type === "SYSTEM" ? (
-              <p className="my-2 text-center text-xs text-muted-foreground">{message.content}</p>
+              <p className="my-2 text-center text-xs text-muted-foreground select-none">{message.content}</p>
             ) : editingId === message.id ? (
               <MessageEditForm
                 initial={message.content ?? ""}
@@ -219,13 +228,14 @@ function MessageBubble({
   actions: React.ReactNode;
 }) {
   return (
-    <div className={cn("group mt-1 flex flex-col", mine ? "items-end" : "items-start", showName && "mt-3")}>
-      {showName && <p className="mb-1 px-1 text-xs text-muted-foreground">{message.sender?.name ?? "(알 수 없음)"}</p>}
+    <div data-copy-message={message.id} className={cn("group mt-1 flex flex-col", mine ? "items-end" : "items-start", showName && "mt-3")}>
+      {showName && <p className="mb-1 px-1 text-xs text-muted-foreground select-none">{message.sender?.name ?? "(알 수 없음)"}</p>}
       <div className={cn("flex max-w-[85%] items-end gap-1.5", mine && "flex-row-reverse")}>
         {message.type === "FILE" && !message.deleted ? (
           <ChatFileContent message={message} mine={mine} />
         ) : (
           <p
+            data-copy-body
             className={cn(
               "rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap",
               message.deleted
@@ -238,7 +248,7 @@ function MessageBubble({
             {message.deleted ? "삭제된 메시지입니다" : message.content}
           </p>
         )}
-        <span className={cn("flex shrink-0 flex-col pb-0.5 text-[11px] leading-tight text-muted-foreground", mine ? "items-end" : "items-start")}>
+        <span className={cn("flex shrink-0 flex-col pb-0.5 text-[11px] leading-tight text-muted-foreground select-none", mine ? "items-end" : "items-start")}>
           {unread > 0 && (
             <span className="font-medium text-primary">
               <span className="sr-only">읽지 않은 사람 </span>

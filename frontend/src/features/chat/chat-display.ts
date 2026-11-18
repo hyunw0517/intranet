@@ -43,8 +43,22 @@ export function messageTime(value: string) {
   return toKstParts(value).time;
 }
 
+// 복사용 시각: 오전/오후 h:mm (KST)
+export function messageTime12h(value: string) {
+  const [hour, minute] = toKstParts(value).time.split(":");
+  const h = Number(hour);
+  return `${h < 12 ? "오전" : "오후"} ${h % 12 || 12}:${minute}`;
+}
+
 export function messageDate(value: string) {
   return toKstParts(value).date;
+}
+
+// 복사용 날짜: yyyy-MM-dd → 2026년 11월 13일 금요일 (이미 KST 날짜라 UTC로 읽어 요일만 구한다)
+export function copyDateLabel(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  const weekday = "일월화수목금토"[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+  return `${year}년 ${month}월 ${day}일 ${weekday}요일`;
 }
 
 // 배지 숫자 (100 이상은 99+)

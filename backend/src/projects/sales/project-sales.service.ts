@@ -4,6 +4,8 @@ import { AuditService, TargetAudit } from "src/common/audit.service";
 import { FileKind } from "src/common/const/file.const";
 import { FilesService } from "src/common/files.service";
 import { PrismaService } from "src/prisma/prisma.service";
+import { kstDateString } from "src/common/util/date.util";
+import { fillMonths, monthOf, recentMonths } from "../budgets/budget-rules.util";
 import { toDateOnly } from "../dto/project.dto";
 import { DEFAULT_VAT_RATE } from "../quotes/quote-rules.util";
 import { ProjectAccessService, ProjectActor } from "../project-access.service";
@@ -59,6 +61,10 @@ export class ProjectSalesService {
 
         return {
             summary: { billedTotal, plannedTotal, paidTotal, outstanding: billedTotal.sub( paidTotal ) },
+            // 월별 매출 그래프 (최근 12개월, 청구일 기준, "청구 매출" 카드와 같은 부가세 포함 합계)
+            monthlySales: fillMonths( recentMonths( kstDateString( new Date() ) ), sales
+                .filter( ( s ) => s.status === ProjectSaleStatus.BILLED && s.billedDate )
+                .map( ( s ) => ({ month: monthOf( s.billedDate! ), amount: s.totalAmount }) ) ),
             confirmedQuotes: await this.quoteBalances( projectId ),
             sales: rows,
         };

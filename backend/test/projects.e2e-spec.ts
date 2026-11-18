@@ -552,6 +552,220 @@ describe('과제 관리', () => {
         });
     });
 
+    //* 예산 (docs/design/projects.md 5-3장)
+    describe('예산', () => {
+        const categoriesUrl = '/projects/budget-categories';
+        const budgetsUrl = ( projectId: number ) => `/projects/${projectId}/budgets`;
+        const expensesUrl = ( projectId: number ) => `${budgetsUrl( projectId )}/expenses`;
+        let seq = 0;
+
+        const createCategory = async ( name = `항목${++seq}` ) =>
+            ( await http().post( categoriesUrl ).set( auth( adminToken ) ).send({ name }).expect( 201 ) ).body;
+        const budget = async ( projectId: number ) =>
+            ( await http().get( budgetsUrl( projectId ) ).set( auth( memberToken ) ).expect( 200 ) ).body;
+        const saveBudgets = ( projectId: number, items: { categoryId: number; amount: number }[] ) =>
+            http().put( budgetsUrl( projectId ) ).set( auth( memberToken ) ).send({ items });
+        const createExpense = async ( projectId: number, body: Record<string, unknown> ) =>
+            ( await http().post( expensesUrl( projectId ) ).set( auth( memberToken ) )
+                .send({ title: '지출', expenseDate: '2026-11-10', supplyAmount: 1000, ...body }).expect( 201 ) ).body;
+        const memberProject = async ( body: Record<string, unknown> = {} ) => {
+            const project = await createProject( ownerToken, body );
+            await addMember( project.id, memberId );
+            return project;
+        };
+
+        it('비용 항목: 관리자만 관리, 이름 중복 409, 숨기면 목록에서 빠지고 같은 이름을 다시 만들 수 있다', async () => {
+            const category = await createCategory( '인건비' );
+            await http().post( categoriesUrl ).set( auth( memberToken ) ).send({ name: '남의 항목' }).expect( 403 );
+            await http().post( categoriesUrl ).set( auth( adminToken ) ).send({ name: ' 인건비 ' }).expect( 409 );
+            await http().post( categoriesUrl ).set( auth( adminToken ) ).send({ name: '   ' }).expect( 400 );
+
+            await http().patch( `${categoriesUrl}/${category.id}` ).set( auth( adminToken ) ).send({ name: '인건비(정규)' }).expect( 200 );
+            await http().delete( `${categoriesUrl}/${category.id}` ).set( auth( memberToken ) ).expect( 403 );
+            await http().delete( `${categoriesUrl}/${category.id}` ).set( auth( adminToken ) ).expect( 200 );
+
+            const list = ( await http().get( categoriesUrl ).set( auth( memberToken ) ).expect( 200 ) ).body;
+            expect( list.map( ( c: { id: number } ) => c.id ) ).not.toContain( category.id );
+            await createCategory( '인건비(정규)' );
+        });
+
+        it('예산 대비 지출은 공급가액으로 비교하고, 넘어도 저장하며 경고만 준다', async () => {
+            const project = await memberProject();
+            const category = await createCategory();
+            await saveBudgets( project.id, [ { categoryId: category.id, amount: 1000 } ] ).expect( 200 );
+
+            // 공급가액 1,000 = 예산과 같음 → 초과 아님 (부가세 100은 비교에 넣지 않는다)
+            const first = await createExpense( project.id, { categoryId: category.id } );
+            expect( first ).toMatchObject({ supplyAmount: '1000', vatAmount: '100', totalAmount: '1100', budgetWarning: null });
+
+            // 1원 넘으면 저장되고 경고
+            const second = await createExpense( project.id, { categoryId: category.id, supplyAmount: 1, taxType: 'EXEMPT' } );
+            expect( second.budgetWarning ).toMatchObject({ budgetAmount: '1000', spentAmount: '1001', overAmount: '1' });
+
+            const body = await budget( project.id );
+            expect( body.summary ).toMatchObject({ budgetTotal: '1000', spentTotal: '1001', remaining: '-1' });
+            expect( body.categories[0] ).toMatchObject({ categoryId: category.id, spentAmount: '1001', over: true });
+            expect( body.expenses ).toHaveLength( 2 );
+            expect( body.monthlyExpenses ).toHaveLength( 12 );
+
+            // 삭제하면 합계에서 빠진다
+            await http().delete( `${expensesUrl( project.id )}/${second.id}` ).set( auth( memberToken ) ).expect( 200 );
+            expect( ( await budget( project.id ) ).categories[0] ).toMatchObject({ spentAmount: '1000', over: false });
+        });
+
+        it('예산 저장은 목록 전체 교체, 같은 항목 두 번은 400, 참여하지 않은 회원은 403', async () => {
+            const project = await memberProject();
+            const a = await createCategory();
+            const b = await createCategory();
+            await saveBudgets( project.id, [ { categoryId: a.id, amount: 100 }, { categoryId: b.id, amount: 200 } ] ).expect( 200 );
+            await saveBudgets( project.id, [ { categoryId: b.id, amount: 300 } ] ).expect( 200 );
+
+            const body = await budget( project.id );
+            expect( body.categories.map( ( c: { categoryId: number; budgetAmount: string } ) => [ c.categoryId, c.budgetAmount ] ) ).toEqual([ [ b.id, '300' ] ]);
+
+            await saveBudgets( project.id, [ { categoryId: a.id, amount: 1 }, { categoryId: a.id, amount: 2 } ] ).expect( 400 );
+            await http().get( budgetsUrl( project.id ) ).set( auth( outsiderToken ) ).expect( 403 );
+            await http().put( budgetsUrl( project.id ) ).set( auth( outsiderToken ) ).send({ items: [] }).expect( 403 );
+        });
+
+        it('숨긴 항목은 새로 고를 수 없지만 이미 쓴 예산·지출은 이름과 함께 남는다', async () => {
+            const project = await memberProject();
+            const category = await createCategory( '폐지될 항목' );
+            await saveBudgets( project.id, [ { categoryId: category.id, amount: 500 } ] ).expect( 200 );
+            const expense = await createExpense( project.id, { categoryId: category.id } );
+            await http().delete( `${categoriesUrl}/${category.id}` ).set( auth( adminToken ) ).expect( 200 );
+
+            await http().post( expensesUrl( project.id ) ).set( auth( memberToken ) )
+                .send({ categoryId: category.id, title: 'x', expenseDate: '2026-11-10', supplyAmount: 1 }).expect( 400 );
+            const other = await memberProject();
+            await saveBudgets( other.id, [ { categoryId: category.id, amount: 1 } ] ).expect( 400 );
+
+            // 기존 행은 그대로: 금액 수정 가능, 지출 수정 가능
+            await saveBudgets( project.id, [ { categoryId: category.id, amount: 700 } ] ).expect( 200 );
+            await http().patch( `${expensesUrl( project.id )}/${expense.id}` ).set( auth( memberToken ) ).send({ title: '고침' }).expect( 200 );
+            expect( ( await budget( project.id ) ).categories[0] ).toMatchObject({ name: '폐지될 항목', deleted: true, budgetAmount: '700' });
+        });
+
+        it('지출에 협력사를 고르면 계약 금액 대비 지급액을 보여 주고, 예산 금액은 바뀌지 않는다', async () => {
+            const project = await memberProject();
+            const category = await createCategory();
+            const client = ( await http().post( '/projects/clients' ).set( auth( ownerToken ) ).send({ name: '지급상사' }).expect( 201 ) ).body;
+            const partner = ( await http().post( `/projects/${project.id}/partners` ).set( auth( memberToken ) )
+                .send({ clientId: client.id, contractAmount: 2000 }).expect( 201 ) ).body;
+            await saveBudgets( project.id, [ { categoryId: category.id, amount: 5000 } ] ).expect( 200 );
+
+            await createExpense( project.id, { categoryId: category.id, partnerId: partner.id, supplyAmount: 500 } );
+            const body = await budget( project.id );
+            // 계약 금액과는 공급가액으로 비교하고, 실제 지급액(부가세 포함)은 따로 알려 준다
+            expect( body.partners ).toEqual([ expect.objectContaining({ partnerId: partner.id, contractAmount: '2000', paidAmount: '500', paidTotalAmount: '550', remaining: '1500', removed: false }) ]);
+            expect( body.summary.budgetTotal ).toBe( '5000' );
+
+            // 다른 프로젝트의 협력사는 400
+            const other = await memberProject();
+            await http().post( expensesUrl( other.id ) ).set( auth( memberToken ) )
+                .send({ categoryId: category.id, partnerId: partner.id, title: 'x', expenseDate: '2026-11-10', supplyAmount: 1 }).expect( 400 );
+
+            // 협력사를 빼도 지급 기록은 남고, 새로 고를 수는 없다
+            await http().delete( `/projects/${project.id}/partners/${partner.id}` ).set( auth( memberToken ) ).expect( 200 );
+            expect( ( await budget( project.id ) ).partners[0] ).toMatchObject({ partnerId: partner.id, removed: true, paidAmount: '500' });
+            await http().post( expensesUrl( project.id ) ).set( auth( memberToken ) )
+                .send({ categoryId: category.id, partnerId: partner.id, title: 'x', expenseDate: '2026-11-10', supplyAmount: 1 }).expect( 400 );
+        });
+
+        it('입력 검증과 증빙 첨부·다운로드(참여자만)', async () => {
+            const project = await memberProject();
+            const category = await createCategory();
+            const url = expensesUrl( project.id );
+            const valid = { categoryId: category.id, title: 'x', expenseDate: '2026-11-10', supplyAmount: 1 };
+            await http().post( url ).set( auth( memberToken ) ).send({ ...valid, supplyAmount: 0 }).expect( 400 );
+            await http().post( url ).set( auth( memberToken ) ).send({ ...valid, supplyAmount: 10.5 }).expect( 400 );
+            await http().post( url ).set( auth( memberToken ) ).send({ ...valid, vatRate: 101 }).expect( 400 );
+            await http().post( url ).set( auth( memberToken ) ).send({ ...valid, expenseDate: '2026/11/10' }).expect( 400 );
+
+            const fileId = ( await http().post( '/common/files/attachments' ).set( auth( memberToken ) ).attach( 'file', Buffer.from( 'receipt' ), 'receipt.pdf' ).expect( 201 ) ).body.id;
+            const expense = await createExpense( project.id, { categoryId: category.id, attachmentIds: [ fileId ] } );
+            expect( ( await budget( project.id ) ).expenses[0].files.map( ( f: { id: number } ) => f.id ) ).toEqual([ fileId ]);
+            await http().get( `${url}/${expense.id}/files/${fileId}` ).set( auth( memberToken ) ).expect( 200 );
+            await http().get( `${url}/${expense.id}/files/${fileId}` ).set( auth( outsiderToken ) ).expect( 403 );
+        });
+
+        it('전사 통계: 관리자만, 이번 달 매출·지출과 거래처 순위에 반영되고 삭제된 프로젝트는 빠진다', async () => {
+            await http().get( '/projects/stats' ).set( auth( memberToken ) ).expect( 403 );
+            const stats = async () => ( await http().get( '/projects/stats' ).set( auth( adminToken ) ).expect( 200 ) ).body;
+            const today = kstDateString( new Date() );
+            const thisMonth = ( rows: { month: string; amount: string }[] ) => BigInt( rows.find( ( r ) => r.month === today.slice( 0, 7 ) )!.amount );
+
+            const before = await stats();
+            const client = ( await http().post( '/projects/clients' ).set( auth( ownerToken ) ).send({ name: '순위상사' }).expect( 201 ) ).body;
+            const project = await memberProject({ clientId: client.id });
+            const category = await createCategory();
+            await http().post( `/projects/${project.id}/sales` ).set( auth( memberToken ) ).send({ title: '청구', supplyAmount: 1000, billedDate: today }).expect( 201 );
+            await http().post( `/projects/${project.id}/sales` ).set( auth( memberToken ) ).send({ title: '예정', supplyAmount: 9000 }).expect( 201 ); // 청구 예정은 매출이 아니다
+            await createExpense( project.id, { categoryId: category.id, supplyAmount: 300, expenseDate: today } );
+
+            const after = await stats();
+            expect( after.monthlySales ).toHaveLength( 12 );
+            expect( thisMonth( after.monthlySales ) - thisMonth( before.monthlySales ) ).toBe( BigInt( 1100 ) );
+            expect( thisMonth( after.monthlyExpenses ) - thisMonth( before.monthlyExpenses ) ).toBe( BigInt( 300 ) );
+            expect( after.topClients ).toEqual( expect.arrayContaining([ expect.objectContaining({ clientId: client.id, name: '순위상사', amount: '1100' }) ]) );
+            expect( after.categories ).toEqual( expect.arrayContaining([ expect.objectContaining({ categoryId: category.id, spentAmount: '300' }) ]) );
+
+            await http().delete( `/projects/${project.id}` ).set( auth( ownerToken ) ).expect( 200 );
+            const removed = await stats();
+            expect( thisMonth( removed.monthlySales ) ).toBe( thisMonth( before.monthlySales ) );
+            expect( removed.topClients.map( ( c: { clientId: number } ) => c.clientId ) ).not.toContain( client.id );
+        });
+
+        it('전사 통계 필터: 지난 연도, 프로젝트, 거래처로 조회하고 기본값은 최근 12개월이다', async () => {
+            const stats = async ( query: Record<string, number> ) =>
+                ( await http().get( '/projects/stats' ).query( query ).set( auth( adminToken ) ).expect( 200 ) ).body;
+            const amountOf = ( rows: { month: string; amount: string }[], month: string ) => rows.find( ( r ) => r.month === month )?.amount;
+            const newClient = async ( name: string ) => ( await http().post( '/projects/clients' ).set( auth( ownerToken ) ).send({ name }).expect( 201 ) ).body;
+
+            const clientA = await newClient( '필터상사A' );
+            const clientB = await newClient( '필터상사B' );
+            const projectA = await memberProject({ clientId: clientA.id });
+            const projectB = await memberProject({ clientId: clientB.id });
+            const category = await createCategory();
+            await http().post( `/projects/${projectA.id}/sales` ).set( auth( memberToken ) ).send({ title: '청구', supplyAmount: 1000, billedDate: '2024-03-15' }).expect( 201 );
+            await http().post( `/projects/${projectB.id}/sales` ).set( auth( memberToken ) ).send({ title: '청구', supplyAmount: 2000, billedDate: '2024-03-20' }).expect( 201 );
+            await createExpense( projectA.id, { categoryId: category.id, supplyAmount: 300, expenseDate: '2024-04-01' } );
+
+            // 연도 + 프로젝트: 그해 1~12월, 그 프로젝트만
+            const byProject = await stats({ year: 2024, projectId: projectA.id });
+            expect( byProject.monthlySales.map( ( r: { month: string } ) => r.month ).slice( 0, 2 ) ).toEqual([ '2024-01', '2024-02' ]);
+            expect( byProject.monthlySales ).toHaveLength( 12 );
+            expect( amountOf( byProject.monthlySales, '2024-03' ) ).toBe( '1100' );
+            expect( amountOf( byProject.monthlyExpenses, '2024-04' ) ).toBe( '300' );
+            expect( byProject.categories ).toEqual([ expect.objectContaining({ categoryId: category.id, spentAmount: '300' }) ]);
+
+            // 연도 + 거래처
+            const byClient = await stats({ year: 2024, clientId: clientB.id });
+            expect( amountOf( byClient.monthlySales, '2024-03' ) ).toBe( '2200' );
+            expect( byClient.topClients ).toEqual([ expect.objectContaining({ clientId: clientB.id, amount: '2200' }) ]);
+
+            // 둘 다 고르면 둘 다 만족하는 것만
+            const none = await stats({ year: 2024, projectId: projectA.id, clientId: clientB.id });
+            expect( amountOf( none.monthlySales, '2024-03' ) ).toBe( '0' );
+
+            // 기본값: 최근 12개월이라 지난 연도의 청구는 보이지 않는다
+            const recent = await stats({ projectId: projectA.id });
+            expect( recent.monthlySales.at( -1 ).month ).toBe( kstDateString( new Date() ).slice( 0, 7 ) );
+            expect( recent.monthlySales.every( ( r: { amount: string } ) => r.amount === '0' ) ).toBe( true );
+
+            // 잘못된 값·권한
+            await http().get( '/projects/stats' ).query({ year: 1999 }).set( auth( adminToken ) ).expect( 400 );
+            await http().get( '/projects/stats' ).query({ projectId: 'abc' }).set( auth( adminToken ) ).expect( 400 );
+            await http().get( '/projects/stats/filters' ).set( auth( memberToken ) ).expect( 403 );
+
+            // 필터 선택지
+            const filters = ( await http().get( '/projects/stats/filters' ).set( auth( adminToken ) ).expect( 200 ) ).body;
+            expect( filters.years ).toEqual( expect.arrayContaining([ 2024, Number( kstDateString( new Date() ).slice( 0, 4 ) ) ]) );
+            expect( filters.projects ).toEqual( expect.arrayContaining([ expect.objectContaining({ id: projectA.id, clientId: clientA.id }) ]) );
+            expect( filters.clients ).toEqual( expect.arrayContaining([ expect.objectContaining({ id: clientB.id, name: '필터상사B' }) ]) );
+        });
+    });
+
     //* 협력사 (하청기업)
     describe('협력사', () => {
         const createClient = async ( name: string ) =>

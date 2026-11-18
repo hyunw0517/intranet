@@ -323,6 +323,87 @@ export interface ConfirmedQuoteBalance {
 
 export interface SaleListResult {
   summary: { billedTotal: string; plannedTotal: string; paidTotal: string; outstanding: string };
+  monthlySales: MonthlyAmount[]; // 최근 12개월, 청구일 기준 (부가세 포함)
   confirmedQuotes: ConfirmedQuoteBalance[];
   sales: ProjectSale[];
+}
+
+// ── 예산 (docs/design/projects.md 5-3장) ───────────────────────────
+// 예산과 지출은 공급가액으로 비교한다. 예산을 넘어도 저장되고 화면에 경고만 한다. 금액은 문자열(Decimal).
+export interface MonthlyAmount {
+  month: string; // "2026-11"
+  amount: string;
+}
+
+export interface BudgetCategory {
+  id: number;
+  name: string;
+}
+
+export interface BudgetCategorySummary {
+  categoryId: number;
+  name: string;
+  deleted: boolean; // 관리자가 숨긴 항목 (이미 쓴 기록에는 이름이 남는다)
+  budgetAmount: string;
+  spentAmount: string;
+  remaining: string; // 넘으면 음수
+  over: boolean;
+}
+
+export interface BudgetPartnerSummary {
+  partnerId: number;
+  name: string;
+  removed: boolean; // 프로젝트에서 빠진 협력사 (지급 기록이 있어 남아 있음)
+  contractAmount: string | null;
+  paidAmount: string; // 공급가액 (계약 금액과 비교하는 기준)
+  paidTotalAmount: string; // 실제 지급액 (부가세 포함)
+  remaining: string | null;
+}
+
+export interface BudgetWarning {
+  budgetAmount: string;
+  spentAmount: string;
+  overAmount: string;
+}
+
+export interface ProjectExpense {
+  id: number;
+  categoryId: number;
+  partnerId: number | null;
+  title: string;
+  expenseDate: string;
+  taxType: QuoteTaxType;
+  vatRate: string; // %
+  supplyAmount: string;
+  vatAmount: string;
+  totalAmount: string;
+  memo: string | null;
+  category: { id: number; name: string; deleted: boolean };
+  partner: { id: number; deleted: boolean; client: { name: string } } | null;
+  files: import("./file").FileInfo[]; // 증빙 파일
+  createdAt: string;
+}
+
+// GET /projects/:id/budgets
+export interface ProjectBudgetResult {
+  summary: { budgetTotal: string; spentTotal: string; remaining: string };
+  categories: BudgetCategorySummary[];
+  partners: BudgetPartnerSummary[];
+  monthlyExpenses: MonthlyAmount[];
+  expenses: ProjectExpense[];
+}
+
+// GET /projects/stats (과제 관리 관리자)
+export interface ProjectCompanyStats {
+  monthlySales: MonthlyAmount[];
+  monthlyExpenses: MonthlyAmount[];
+  topClients: { clientId: number; name: string; amount: string }[];
+  categories: BudgetCategorySummary[];
+}
+
+// GET /projects/stats/filters (과제 관리 관리자)
+export interface ProjectStatsFilters {
+  years: number[]; // 데이터가 있는 연도 + 올해 (최근 연도부터)
+  projects: { id: number; name: string; clientId: number | null }[];
+  clients: { id: number; name: string; deleted: boolean }[];
 }

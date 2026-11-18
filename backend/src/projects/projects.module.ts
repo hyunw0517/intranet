@@ -13,6 +13,10 @@ import { ProjectTasksController } from './tasks/project-tasks.controller';
 import { ProjectTasksService } from './tasks/project-tasks.service';
 import { ProjectQuotesController } from './quotes/project-quotes.controller';
 import { ProjectQuotesService } from './quotes/project-quotes.service';
+import { ProjectBudgetCategoriesController, ProjectBudgetsController, ProjectStatsController } from './budgets/project-budgets.controller';
+import { ProjectBudgetCategoriesService } from './budgets/project-budget-categories.service';
+import { ProjectBudgetsService } from './budgets/project-budgets.service';
+import { ProjectStatsService } from './budgets/project-stats.service';
 import { ProjectSalesController } from './sales/project-sales.controller';
 import { ProjectSalesService } from './sales/project-sales.service';
 
@@ -23,12 +27,15 @@ import { ProjectSalesService } from './sales/project-sales.service';
 //   projects/clients/      거래처 + 담당자
 //   projects/quotes/       견적서 (버전·품목·확정, 결재 연결은 quote-approval.ts → ProjectsApprovalModule)
 //   projects/sales/        매출 (청구 건·분할 청구·부분 수금·세금계산서 첨부)
-//   projects/budgets/      예산 (예정)
+//   projects/budgets/      예산 (비용 항목·항목별 예산·지출·전사 통계)
 // 핵심(common)의 파일·감사 로그·알림을 직접 쓴다. 결재는 import하지 않는다. → 결재 연결은 ProjectsApprovalModule
 @Module({
     imports: [ PrismaModule, CommonModule ],
-    // 거래처 컨트롤러를 먼저 둔다 ('projects/clients'를 'projects/:id'가 먼저 잡지 않게)
-    controllers: [ ProjectClientsController, ProjectsController, ProjectMembersController, ProjectPartnersController, ProjectTasksController, ProjectQuotesController, ProjectSalesController ],
+    // 고정 경로 컨트롤러를 먼저 둔다 ('projects/clients' 등을 'projects/:id'가 먼저 잡지 않게)
+    controllers: [
+        ProjectClientsController, ProjectBudgetCategoriesController, ProjectStatsController,
+        ProjectsController, ProjectMembersController, ProjectPartnersController, ProjectTasksController, ProjectQuotesController, ProjectSalesController, ProjectBudgetsController,
+    ],
     providers: [
         ProjectAccessService,
         ProjectNotifier,
@@ -39,6 +46,9 @@ import { ProjectSalesService } from './sales/project-sales.service';
         ProjectTasksService,
         ProjectQuotesService,
         ProjectSalesService,
+        ProjectBudgetCategoriesService,
+        ProjectBudgetsService,
+        ProjectStatsService,
     ],
     exports: [ ProjectQuotesService ], // 견적서 결재 처리기·상신(ProjectsApprovalModule)이 쓴다
 })

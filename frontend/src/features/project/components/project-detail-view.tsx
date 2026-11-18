@@ -17,6 +17,7 @@ import { MEMBER_ROLE_LABEL, TASK_STATUS_LABEL, TASK_STATUSES, type ProjectDetail
 import { useProject, useProjectMutation, useProjectTasks } from "../hooks/use-projects";
 import { KanbanBoard } from "./kanban-board";
 import { formatPeriod, ProgressBar, ProjectStatusBadge } from "./project-badges";
+import { ProjectBudget } from "./project-budget";
 import { ProjectFormDialog, type ProjectFormState } from "./project-form-dialog";
 import { ProjectMembers } from "./project-members";
 import { ProjectPartners } from "./project-partners";
@@ -24,7 +25,7 @@ import { ProjectQuotes } from "./project-quotes";
 import { ProjectSales } from "./project-sales";
 import { TaskFormDialog, type TaskFormState } from "./task-form-dialog";
 
-// 프로젝트 상세 - 탭: 칸반(기본) / 개요 / 참여자 / 협력사 (2026-11-17 사용자 결정)
+// 프로젝트 상세 - 탭: 칸반(기본) / 개요 / 참여자 / 협력사 / 견적 / 매출 / 예산
 // - 알림 주소 /projects/:id?task=:taskId 로 들어오면 그 과제 창을 연다(담당 지정·마감 임박 알림).
 // - 수정·삭제 버튼은 myAccess.canManage(책임자·관리자)일 때만. 서버도 같은 기준으로 403을 낸다.
 export function ProjectDetailView({ id }: { id: number }) {
@@ -109,14 +110,16 @@ function ProjectDetailContent({
         <ProgressBar progress={project.progress} className="w-64" />
       </div>
 
-      <Tabs defaultValue="board">
-        <TabsList>
-          <TabsTrigger value="board">칸반</TabsTrigger>
+      <Tabs defaultValue="overview">
+        {/* 탭이 7개라 좁은 화면에서는 탭 줄만 가로로 넘긴다 */}
+        <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="overview">개요</TabsTrigger>
+          <TabsTrigger value="board">진척도</TabsTrigger>
           <TabsTrigger value="members">참여자 {project.members.length}</TabsTrigger>
           <TabsTrigger value="partners">협력사</TabsTrigger>
           <TabsTrigger value="quotes">견적</TabsTrigger>
           <TabsTrigger value="sales">매출</TabsTrigger>
+          <TabsTrigger value="budget">예산</TabsTrigger>
         </TabsList>
 
         <TabsContent value="board" className="mt-4">
@@ -152,6 +155,10 @@ function ProjectDetailContent({
 
         <TabsContent value="sales" className="mt-4">
           <ProjectSales projectId={project.id} />
+        </TabsContent>
+
+        <TabsContent value="budget" className="mt-4">
+          <ProjectBudget projectId={project.id} />
         </TabsContent>
       </Tabs>
 

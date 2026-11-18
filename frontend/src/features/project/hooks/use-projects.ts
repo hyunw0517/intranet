@@ -17,6 +17,7 @@ import {
   type ProjectListQuery,
 } from "@/services/api/projects";
 import { fetchQuote, fetchQuotes } from "@/services/api/project-quotes";
+import { fetchBudgetCategories, fetchProjectBudget, fetchProjectStats, fetchProjectStatsFilters, type ProjectStatsQuery } from "@/services/api/project-budgets";
 import { fetchSales } from "@/services/api/project-sales";
 import { searchUsers } from "@/services/api/users";
 
@@ -32,6 +33,10 @@ export const projectKeys = {
   quotes: (id: number) => [...projectKeys.all, "quotes", id] as const,
   quote: (id: number, quoteId: number) => [...projectKeys.all, "quotes", id, quoteId] as const,
   sales: (id: number) => [...projectKeys.all, "sales", id] as const,
+  budget: (id: number) => [...projectKeys.all, "budget", id] as const,
+  budgetCategories: () => [...projectKeys.all, "budget-categories"] as const,
+  stats: (query: ProjectStatsQuery) => [...projectKeys.all, "stats", query] as const,
+  statsFilters: () => [...projectKeys.all, "stats-filters"] as const,
   myTasks: () => [...projectKeys.all, "my-tasks"] as const,
 };
 
@@ -74,6 +79,26 @@ export function useQuote(projectId: number, quoteId: number) {
 // 매출 목록 + 요약 + 확정 견적별 청구 잔액 (projectKeys.all 무효화로 견적 확정·취소 후에도 다시 조회된다)
 export function useSales(projectId: number) {
   return useQuery({ queryKey: projectKeys.sales(projectId), queryFn: () => fetchSales(projectId) });
+}
+
+// 예산 탭 전체 (요약·항목별·협력사별·월별·지출 목록)
+export function useProjectBudget(projectId: number) {
+  return useQuery({ queryKey: projectKeys.budget(projectId), queryFn: () => fetchProjectBudget(projectId) });
+}
+
+// 비용 항목 (전사 공통, 숨긴 항목 제외)
+export function useBudgetCategories() {
+  return useQuery({ queryKey: projectKeys.budgetCategories(), queryFn: fetchBudgetCategories });
+}
+
+// 전사 통계 (과제 관리 관리자)
+export function useProjectStats(query: ProjectStatsQuery) {
+  return useQuery({ queryKey: projectKeys.stats(query), queryFn: () => fetchProjectStats(query), placeholderData: keepPreviousData });
+}
+
+// 통계 필터 선택지 (연도·프로젝트·거래처)
+export function useProjectStatsFilters() {
+  return useQuery({ queryKey: projectKeys.statsFilters(), queryFn: fetchProjectStatsFilters });
 }
 
 export function useMyTasks() {

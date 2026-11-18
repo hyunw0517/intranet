@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { cancelSale, deleteSale } from "@/services/api/project-sales";
 import { formatAmount, PAYMENT_STATUS_LABEL, SALE_STATUS_LABEL, type ProjectSale } from "@/types/project";
 import { useProjectMutation, useSales } from "../hooks/use-projects";
+import { MonthlyAmountChart } from "./charts-lazy";
 import { SaleDetailDialog } from "./sale-detail-dialog";
 import { SaleFormDialog, type SaleFormState } from "./sale-form-dialog";
 
@@ -66,6 +67,11 @@ export function ProjectSales({ projectId }: { projectId: number }) {
           </li>
         ))}
       </ul>
+
+      <section className="grid gap-2 rounded-lg border p-4">
+        <h3 className="text-sm font-medium">월별 매출 (최근 12개월, 청구일 기준, 부가세 포함)</h3>
+        <MonthlyAmountChart data={data.monthlySales} label="매출" emptyMessage="최근 12개월 동안 청구한 매출이 없습니다." />
+      </section>
 
       {data.confirmedQuotes.length > 0 && (
         <section className="grid gap-2">

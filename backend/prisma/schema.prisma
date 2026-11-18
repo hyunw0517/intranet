@@ -61,6 +61,7 @@ enum FileTargetType {
   APPROVAL_DOCUMENT // 전자결재 문서 첨부파일
   CHAT_MESSAGE // 채팅 첨부파일
   PROJECT_SALE // 매출 청구 건의 세금계산서 (외부 발행 파일 첨부, 과제 관리)
+  PROJECT_EXPENSE // 예산 지출 증빙 (영수증·세금계산서, 과제 관리)
 }
 
 //? 알림 대상 구분 -> 모델: Notification (받는 사람이 확인할 대상)
@@ -126,6 +127,9 @@ enum AuditTargetType {
   PROJECT_PARTNER // 프로젝트 협력사 (하청기업)
   PROJECT_QUOTE // 견적서 (버전·품목 변경도 이 대상으로 기록)
   PROJECT_SALE // 매출 청구 건 (수금 기록도 이 대상으로 기록)
+  PROJECT_BUDGET_CATEGORY // 비용 항목 (전사 공통)
+  PROJECT_BUDGET // 프로젝트 항목별 예산 (targetId = 프로젝트 id, 저장 한 번에 1행)
+  PROJECT_EXPENSE // 예산 지출
 }
 
 //? 감사 로그 이벤트 구분 -> 모델: Audit (작업자가 무엇을 했는지)
@@ -1238,6 +1242,8 @@ model Project {
   partners ProjectPartner[] // 협력사 (하청기업, 여러 개)
   quotes   ProjectQuote[] // 견적서
   sales    ProjectSale[] // 매출 (청구 건)
+  budgets  ProjectBudget[] // 항목별 예산
+  expenses ProjectExpense[] // 지출
 
   createdAt DateTime  @default(now()) @map("created_at")
   createdId Int       @map("created_id")
@@ -1299,6 +1305,7 @@ model ProjectPartner {
   project  Project                 @relation(fields: [projectId], references: [id])
   client   ProjectClient           @relation(fields: [clientId], references: [id])
   contacts ProjectPartnerContact[] // 협력사 담당자 (직접 기재, 여러 명)
+  expenses ProjectExpense[] // 이 협력사에 지급한 지출
 
   createdAt DateTime  @default(now()) @map("created_at")
   createdId Int       @map("created_id")
@@ -1497,6 +1504,87 @@ model ProjectSalePayment {
 
   @@index([saleId, deleted])
   @@map("project_sale_payment_model")
+}
+
+//* 비용 항목 (전사 공통) -> 모듈: Projects (애드온, docs/design/projects.md 5-3장)
+// 과제 관리 관리자가 만든다. 삭제는 숨기기(soft) - 새 예산·지출에서는 고를 수 없고 이미 쓴 기록에는 이름이 남는다.
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): 이름은 공백만 불가
+model ProjectBudgetCategory {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(50) // 예: 인건비, 외주비, 장비비
+
+  budgets  ProjectBudget[]
+  expenses ProjectExpense[]
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
+  deletedAt DateTime? @map("deleted_at")
+  deletedId Int?      @map("deleted_id")
+
+  @@unique([name], where: { deleted: false }) // 숨기지 않은 항목끼리 이름 중복 금지
+  @@map("project_budget_category_model")
+}
+
+//* 프로젝트 항목별 예산 -> 모듈: Projects (애드온)
+// 프로젝트 × 비용 항목당 한 행. 참여자 누구나 저장(목록 전체 교체, 변경은 감사 로그). 협력사 계약 금액으로 자동 변경되지 않는다.
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): 금액 >= 0
+model ProjectBudget {
+  id         Int     @id @default(autoincrement())
+  projectId  Int     @map("project_id")
+  categoryId Int     @map("category_id")
+  amount     Decimal @db.Decimal(15, 0) // 예산 (공급가액 기준, 원)
+
+  project  Project               @relation(fields: [projectId], references: [id])
+  category ProjectBudgetCategory @relation(fields: [categoryId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdId Int      @map("created_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedId Int      @map("updated_id")
+
+  @@unique([projectId, categoryId])
+  @@index([categoryId])
+  @@map("project_budget_model")
+}
+
+//* 예산 지출 -> 모듈: Projects (애드온)
+// 참여자 누구나 직접 입력. 금액: 공급가액 입력 + 부가세 자동(매출과 같은 계산), 예산과는 공급가액으로 비교한다.
+// 예산을 넘어도 저장한다(경고만). 협력사는 선택 - 빠진 협력사·숨긴 항목을 이미 쓴 지출은 그대로 유지. 증빙은 Files(targetType = PROJECT_EXPENSE).
+// DB CHECK 제약(마이그레이션 SQL에 직접 작성): 금액 >= 0, 합계 = 공급가액 + 부가세, 부가세율 0~100
+model ProjectExpense {
+  id           Int                 @id @default(autoincrement())
+  projectId    Int                 @map("project_id")
+  categoryId   Int                 @map("category_id")
+  partnerId    Int?                @map("partner_id") // 지급한 협력사 (선택)
+  title        String              @db.VarChar(100) // 지출 내용
+  expenseDate  DateTime            @map("expense_date") @db.Date // 지출일 (월별 그래프 기준)
+  taxType      ProjectQuoteTaxType @default(TAXABLE) @map("tax_type")
+  vatRate      Decimal             @default(10) @map("vat_rate") @db.Decimal(5, 2) // 부가세율(%) - 직접 입력, 기본 10, 면세면 무시
+  supplyAmount Decimal             @map("supply_amount") @db.Decimal(15, 0) // 공급가액 (입력, 예산 비교 기준)
+  vatAmount    Decimal             @map("vat_amount") @db.Decimal(15, 0) // 부가세 (서버 계산)
+  totalAmount  Decimal             @map("total_amount") @db.Decimal(15, 0) // 합계 = 실제 지급액
+  memo         String?
+
+  project  Project               @relation(fields: [projectId], references: [id])
+  category ProjectBudgetCategory @relation(fields: [categoryId], references: [id])
+  partner  ProjectPartner?       @relation(fields: [partnerId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdId Int       @map("created_id")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedId Int       @map("updated_id")
+  deleted   Boolean   @default(false)
+  deletedAt DateTime? @map("deleted_at")
+  deletedId Int?      @map("deleted_id")
+
+  @@index([projectId, deleted, expenseDate])
+  @@index([categoryId, deleted])
+  @@index([partnerId])
+  @@index([expenseDate])
+  @@map("project_expense_model")
 }
 
 //* 견적번호 채번 (연도별 마지막 번호) -> 모듈: Projects (애드온)

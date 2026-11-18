@@ -9,16 +9,10 @@ import { LeaveDayChip } from "@/features/leave/components/leave-day-chip";
 import type { CalendarEvent } from "@/types/calendar";
 import type { LeaveCalendarDay } from "@/types/leave";
 import { eventColorOption } from "../calendar-colors";
-import { eventTimeLabel, todayKst, type CalendarDay } from "../calendar-month";
+import { useHolidayMap } from "@/hooks/use-holidays";
+import { dayColor, eventTimeLabel, todayKst, weekdayColor, type CalendarDay } from "@/lib/calendar-month";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
-
-// 요일 색: 일요일 빨강, 토요일 파랑, 나머지 기본 글자색 (사용자 결정)
-function weekdayColor(weekday: number) {
-  if (weekday === 0) return "text-red-600 dark:text-red-400";
-  if (weekday === 6) return "text-blue-600 dark:text-blue-400";
-  return "text-foreground";
-}
 
 // 칸에 바로 보여 주는 일정 수 (넘치면 "+N개" → 그날 일정 창)
 const VISIBLE_DESKTOP = 3;
@@ -39,6 +33,7 @@ export function CalendarMonthGrid({
   leavesByDate?: Map<string, LeaveCalendarDay>;
 }) {
   const today = todayKst();
+  const holidays = useHolidayMap(weeks);
   const [openDate, setOpenDate] = useState<string | null>(null);
 
   return (
@@ -59,19 +54,21 @@ export function CalendarMonthGrid({
               const leaves = leavesByDate?.get(day.date);
               const hiddenDesktop = events.length - VISIBLE_DESKTOP;
               const hiddenMobile = events.length - VISIBLE_MOBILE;
+              const holiday = holidays.get(day.date);
               return (
                 <div
                   key={day.date}
                   role="gridcell"
-                  aria-label={`${day.date}${events.length ? `, 일정 ${events.length}개` : ""}`}
+                  aria-label={`${day.date}${holiday ? `, ${holiday}` : ""}${events.length ? `, 일정 ${events.length}개` : ""}`}
                   className={cn("min-h-24 min-w-0 border-r p-1 last:border-r-0 sm:min-h-28 sm:p-1.5", !day.inMonth && "bg-muted/20")}
                 >
                   {/* 다른 달 날짜는 숫자·일정 모두 반투명 */}
                   <div className={cn("grid gap-1", !day.inMonth && "opacity-40")}>
                     <span
+                      title={holiday}
                       className={cn(
                         "inline-flex size-6 items-center justify-center rounded-full text-xs font-medium tabular-nums",
-                        weekdayColor(day.weekday),
+                        dayColor(day.weekday, !!holiday),
                         day.date === today && "bg-primary text-primary-foreground",
                       )}
                     >

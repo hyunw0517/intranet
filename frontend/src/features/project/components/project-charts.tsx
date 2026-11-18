@@ -39,7 +39,8 @@ export function MonthlyAmountChart({ data, label, emptyMessage }: { data: Monthl
     <ChartContainer config={config} className="aspect-auto h-60 w-full" role="img" aria-label={`최근 12개월 ${label} 막대 그래프`}>
       <BarChart data={rows} margin={{ left: 4, right: 4, top: 8 }}>
         <CartesianGrid vertical={false} />
-        <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={monthTick} interval={0} fontSize={11} />
+        {/* 폭이 좁으면 겹치는 눈금을 건너뛴다 (대시보드 카드, 모바일) */}
+        <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={monthTick} interval="preserveStart" minTickGap={10} fontSize={11} />
         <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={axisAmount} fontSize={11} />
         <ChartTooltip content={<ChartTooltipContent labelFormatter={(value) => monthLabel(String(value))} formatter={amountRow(config)} />} />
         <Bar dataKey="amount" fill="var(--color-amount)" radius={[3, 3, 0, 0]} maxBarSize={32} />

@@ -84,6 +84,21 @@ export class UsersService {
     );
   }
 
+  //* (관리자) 회원 현황 건수: 가입 승인 대기, 재직, 비활성, 로그인 잠금
+  // 재직·비활성은 승인된 회원만 센다. 잠금은 없는 사번의 시도(userId NULL)를 제외한다.
+  async getUserStats() {
+    const approved = { deleted: false, role: { not: UserRole.GUEST } };
+
+    const [ pending, active, inactive, locked ] = await Promise.all([
+      this.prisma.users.count({ where: { deleted: false, role: UserRole.GUEST, status: UserStatus.ACTIVE } }),
+      this.prisma.users.count({ where: { ...approved, status: UserStatus.ACTIVE } }),
+      this.prisma.users.count({ where: { ...approved, status: UserStatus.INACTIVE } }),
+      this.prisma.loginHistory.count({ where: { userId: { not: null }, lockedUntil: { gt: new Date() } } }),
+    ]);
+
+    return { pending, active, inactive, locked };
+  }
+
   //* 회원 목록 select (일반 조회·소속 정렬 조회 공용)
   private userListSelect( query: PaginateUserQueryDto ) {
     return {

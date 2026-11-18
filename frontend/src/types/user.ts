@@ -11,7 +11,8 @@ export type AdminPermission =
   | "RESERVATIONS"
   | "APPROVAL_LINES"
   | "LEAVES"
-  | "PROJECTS";
+  | "PROJECTS"
+  | "AUDIT";
 
 // 화면 표시 순서 = 관리자 메뉴 순서
 export const ADMIN_PERMISSION_LABEL: Record<AdminPermission, string> = {
@@ -23,6 +24,7 @@ export const ADMIN_PERMISSION_LABEL: Record<AdminPermission, string> = {
   PROJECTS: "과제 관리",
   FACILITIES: "시설 관리",
   RESERVATIONS: "예약 관리",
+  AUDIT: "감사 로그",
 };
 export const ADMIN_PERMISSIONS = Object.keys(ADMIN_PERMISSION_LABEL) as AdminPermission[];
 export type UserStatus = "ACTIVE" | "INACTIVE" | "RESIGNED";

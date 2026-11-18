@@ -9,6 +9,20 @@ export interface CalendarRange {
   end: string;
 }
 
+// 최근 공지: 읽을 수 있는 공지 게시판을 합친 최신 글 (비밀글 제외)
+export interface RecentNotice {
+  id: number;
+  boardId: number;
+  title: string;
+  isPinned: boolean;
+  createdAt: string;
+  board: { name: string };
+}
+
+export function fetchRecentNotices() {
+  return apiFetch<RecentNotice[]>("/boards/recent-notices");
+}
+
 // 캘린더 게시판 하나의 일정 (읽기 권한이 없으면 404, 캘린더 게시판이 아니면 400)
 export function fetchBoardEvents(boardId: number, range: CalendarRange) {
   const params = new URLSearchParams({ start: range.start, end: range.end });

@@ -15,6 +15,16 @@ export class CalendarController {
         private readonly postsService: PostsService,
     ){}
 
+    //* 최근 공지 (대시보드): 읽을 수 있는 공지 게시판을 합친 최신 글
+    // 'recent-notices'도 BoardsController의 ':boardId'보다 먼저 등록되어야 해서 이 컨트롤러에 둔다.
+    @Get('recent-notices')
+    @Roles(UserRole.USER)
+    getRecentNotices(
+        @User() user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
+    ){
+        return this.postsService.findRecentNotices( user );
+    }
+
     //* 통합 캘린더: 볼 수 있는 캘린더 게시판들의 일정
     @Get('events')
     @Roles(UserRole.USER)

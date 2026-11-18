@@ -11,7 +11,7 @@ import {
   LayoutList,
   Network,
   Plane,
-  Settings,
+  ScrollText,
   UserCog,
   UserRound,
   Users,
@@ -58,7 +58,7 @@ export const adminNav: NavGroup[] = [
   {
     label: "관리",
     items: [
-      { title: "관리자 홈", href: "/admin", icon: Settings },
+      { title: "대시보드", href: "/admin", icon: LayoutDashboard },
       { title: "회원 관리", href: "/admin/users", icon: Users, permission: "USERS" },
       { title: "조직 관리", href: "/admin/organization", icon: Network, permission: "ORGANIZATION" },
       { title: "게시판 관리", href: "/admin/boards", icon: LayoutList, permission: "BOARDS" },
@@ -67,6 +67,7 @@ export const adminNav: NavGroup[] = [
       { title: "프로젝트 관리", href: "/admin/projects", icon: FolderCog, addon: "projects", permission: "PROJECTS" }, // 삭제된 프로젝트 복구
       { title: "시설 관리", href: "/admin/facilities", icon: Building, addon: "reservations", permission: "FACILITIES" },
       { title: "예약 관리", href: "/admin/reservations", icon: CalendarRange, addon: "reservations", permission: "RESERVATIONS" },
+      { title: "감사 로그", href: "/admin/audit", icon: ScrollText, permission: "AUDIT" },
     ],
   },
 ];

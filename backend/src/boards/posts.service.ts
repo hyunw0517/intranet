@@ -11,7 +11,7 @@ import { BoardPermission } from "./interface/board-permission.interface";
 import { CreatePostDto } from "./dto/create-post.dto";
 import { OrganizationService } from "src/organization/organization.service";
 import { UpdatePostDto } from "./dto/update-post.dto";
-import { MAX_CALENDAR_RANGE_DAYS, MAX_PINNED_POSTS } from "./const/post.const";
+import { MAX_CALENDAR_RANGE_DAYS, MAX_PINNED_POSTS, RECENT_NOTICE_COUNT } from "./const/post.const";
 import { kstDayEnd, kstDayStart } from "src/common/util/date.util";
 import { extractImageNames, sanitizeEditorHtml } from "src/common/util/sanitize-html.util";
 import { FileInfo, FilesService } from "src/common/files.service";
@@ -133,6 +133,31 @@ export class PostsService {
             ...list,
             data: list.data.map( toItem ),
         };
+    }
+
+    //* 최근 공지 (대시보드): 읽을 수 있는 공지 게시판의 최신 글
+    // 비밀글은 제외하고, 익명 게시판의 작성자가 드러나지 않도록 작성자는 내려주지 않는다.
+    async findRecentNotices( user: Pick<Users, 'id' | 'role' | 'adminPermissions'> ){
+        const navigation = await this.boardAuthService.getUserBoardNavigate( user );
+        const boardIds = navigation.filter( ( b ) => b.type === BoardType.NOTICE ).map( ( b ) => b.id );
+
+        if( boardIds.length === 0 ){
+            return [];
+        }
+
+        return this.prisma.post.findMany({
+            select: {
+                id: true,
+                boardId: true,
+                title: true,
+                isPinned: true,
+                createdAt: true,
+                board: { select: { name: true } },
+            },
+            where: { boardId: { in: boardIds }, deleted: false, isSecret: false },
+            orderBy: [ { createdAt: 'desc' }, { id: 'desc' } ],
+            take: RECENT_NOTICE_COUNT,
+        });
     }
 
     //* 캘린더 일정 조회 (통합 조회 / 게시판 하나)

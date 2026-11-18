@@ -71,6 +71,13 @@ export class UsersController {
   //! ========== 관리자 서비스 로직 ==========
   // 'me', 'bulk'는 ':id' 라우트 아래에 둔다. (':id'가 먼저 선언되면 'me' 요청이 ':id'로 매칭됨)
 
+  //* (관리자) 회원 현황 건수 (대시보드) - ':id'보다 먼저 선언
+  @Get('stats')
+  @RequireAdmin(AdminPermission.USERS)
+  getUserStats() {
+    return this.usersService.getUserStats();
+  }
+
   //* (관리자) 회원 전체 조회
   @Get()
   @RequireAdmin(AdminPermission.USERS)

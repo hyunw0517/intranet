@@ -3,3 +3,6 @@ export const MAX_PINNED_POSTS = 10;
 
 // 캘린더 일정 한 번에 조회할 수 있는 최대 기간 (일). 월간 달력 한 화면은 최대 6주(42일)
 export const MAX_CALENDAR_RANGE_DAYS = 62;
+
+// 대시보드에 보여 줄 최근 공지 개수
+export const RECENT_NOTICE_COUNT = 5;

@@ -22,6 +22,18 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const ymd = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 const ONE_DAY = 24 * 60 * 60 * 1000;
 
+// 요일 색: 일요일 빨강, 토요일 파랑, 나머지 기본 글자색 (사용자 결정)
+export function weekdayColor(weekday: number) {
+  if (weekday === 0) return "text-red-600 dark:text-red-400";
+  if (weekday === 6) return "text-blue-600 dark:text-blue-400";
+  return "text-foreground";
+}
+
+// 날짜 숫자 색: 공휴일은 요일과 관계없이 일요일과 같은 빨강
+export function dayColor(weekday: number, isHoliday: boolean) {
+  return weekdayColor(isHoliday ? 0 : weekday);
+}
+
 // 오늘 (KST)
 export function todayKst(): string {
   return toKstParts(new Date().toISOString()).date;

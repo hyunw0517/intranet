@@ -126,6 +126,18 @@ export interface AdminUpdateUserInput {
 // 입사일은 받지 않는다. 승인 대기 회원은 입사일이 먼저 등록되어 있어야 한다. (없으면 서버 400)
 export type ApprovedRole = Exclude<UserRole, "GUEST">;
 
+// (관리자) 회원 현황 건수 - 가입 승인 대기, 재직, 비활성, 로그인 잠금
+export interface UserStats {
+  pending: number;
+  active: number;
+  inactive: number;
+  locked: number;
+}
+
+export function fetchUserStats() {
+  return apiFetch<UserStats>("/users/stats");
+}
+
 // (관리자) 회원 목록 - 페이지 + 검색·권한·상태 필터, deletedOnly면 삭제된 회원만
 export function fetchUsers(query: UserListQuery) {
   return apiFetch<PageResult<AdminUserListItem>>("/users", { query });

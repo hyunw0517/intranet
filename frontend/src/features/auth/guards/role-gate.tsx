@@ -70,7 +70,7 @@ export function AdminPermissionGate({ permission, children }: { permission: Admi
         description={`${ADMIN_PERMISSION_LABEL[permission]} 기능이 지정되지 않았습니다. 슈퍼관리자에게 요청하세요.`}
         action={
           <Button asChild variant="outline">
-            <Link href="/admin">관리자 홈으로</Link>
+            <Link href="/admin">대시보드로</Link>
           </Button>
         }
       />

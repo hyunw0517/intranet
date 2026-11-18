@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import type { CalendarEvent } from "@/types/calendar";
 import type { PostBoardInfo } from "@/types/post";
 import { eventColorOption } from "../calendar-colors";
-import { addMonths, eventsByDate, eventsInMonth, formatMonthParam, gridRange, monthGrid, parseMonth, type YearMonth } from "../calendar-month";
+import { addMonths, eventsByDate, eventsInMonth, formatMonthParam, gridRange, monthGrid, parseMonth, type YearMonth } from "@/lib/calendar-month";
 import { formatEventRange } from "../event-date";
 import { useBoardEvents } from "../hooks/use-calendar-events";
 import { CalendarMonthGrid } from "./calendar-month-grid";

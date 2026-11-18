@@ -6,7 +6,9 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { FormError, FormField } from "@/components/common/form-field";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { getErrorMessage } from "@/lib/error-message";
 import { useAuth } from "@/providers/auth-provider";
 import { ApiError } from "@/services/api-client";
@@ -22,10 +24,11 @@ export function LoginForm() {
   const { login } = useAuth();
   const [empNo, setEmpNo] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false); // 기본 해제: 체크하지 않으면 브라우저를 닫을 때 로그아웃
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const mutation = useMutation({
-    mutationFn: () => login(empNo.trim(), password),
+    mutationFn: () => login(empNo.trim(), password, rememberMe),
   });
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -82,6 +85,17 @@ export function LoginForm() {
             aria-describedby={fieldErrors.password ? "password-message" : undefined}
           />
         </FormField>
+
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="rememberMe"
+            checked={rememberMe}
+            onCheckedChange={(checked) => setRememberMe(checked === true)}
+          />
+          <Label htmlFor="rememberMe" className="font-normal">
+            로그인 유지
+          </Label>
+        </div>
 
         <Button type="submit" className="mt-2 w-full" disabled={mutation.isPending}>
           {mutation.isPending && <Loader2 className="animate-spin" aria-hidden />}

@@ -33,11 +33,13 @@ function toBasicToken(empNo: string, password: string) {
 }
 
 // 로그인 → { accessToken } + refresh 쿠키(Set-Cookie)
-export function login(empNo: string, password: string) {
+// rememberMe가 false면 서버가 세션 쿠키로 발급해 브라우저를 닫을 때 로그아웃된다.
+export function login(empNo: string, password: string, rememberMe: boolean) {
   return apiFetch<TokenResponse>("/auth/login/emp", {
     method: "POST",
     skipAuth: true,
     headers: { Authorization: `Basic ${toBasicToken(empNo, password)}` },
+    body: { rememberMe },
   });
 }
 

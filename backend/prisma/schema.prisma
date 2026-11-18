@@ -372,6 +372,7 @@ model AuthSession {
   lastUsedAt   DateTime  @default(now()) @map("last_used_at") // 마지막 재발급 시각 (유휴 만료 판단)
   expiresAt    DateTime  @map("expires_at") // 절대 만료 (로그인 + 7일, 재발급해도 늘어나지 않음)
   revokedAt    DateTime? @map("revoked_at") // 폐기 시각 (로그아웃·기기 로그아웃·재사용 감지)
+  rememberMe   Boolean   @default(true) @map("remember_me") // 로그인 유지 (false면 refresh 쿠키를 세션 쿠키로 발급 → 브라우저를 닫으면 사라짐)
 
   user Users @relation(fields: [userId], references: [id])
 

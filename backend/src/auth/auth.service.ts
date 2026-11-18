@@ -162,19 +162,21 @@ export class AuthService {
 
   //* 세션 기준으로 access + refresh 발급
   //    - refreshTokenMaxAge는 컨트롤러가 쿠키 maxAge로 쓴다. (토큰 만료와 쿠키 만료를 맞춤)
+  //    - 로그인 유지를 선택하지 않은 세션은 undefined → maxAge 없는 세션 쿠키가 되어 브라우저를 닫으면 사라진다.
   private issueTokens( user: TokenUser, session: SessionForToken ){
     const refresh = this.signRefreshToken(user, session);
 
     return {
       accessToken: this.signAccessToken(user, session.id),
       refreshToken: refresh.token,
-      refreshTokenMaxAge: refresh.expiresIn,
+      refreshTokenMaxAge: session.rememberMe ? refresh.expiresIn : undefined,
     };
   }
 
   //* 로그인(가입) - 세션을 새로 만들고 토큰 발급
-  async loginUser( user: TokenUser, userAgent?: string ) {
-    const session = await this.authSessionsService.createSession(user, userAgent);
+  //    - rememberMe: 로그인 유지 여부 (가입 직후 자동 로그인은 체크 항목이 없어 유지로 처리)
+  async loginUser( user: TokenUser, userAgent?: string, rememberMe: boolean = true ) {
+    const session = await this.authSessionsService.createSession(user, userAgent, rememberMe);
 
     // 로그인 성공 → 실패 횟수·잠금 단계 초기화 (가입 직후 로그인은 행이 없어 아무것도 하지 않음)
     await this.loginHistoryService.reset(user.empNo);

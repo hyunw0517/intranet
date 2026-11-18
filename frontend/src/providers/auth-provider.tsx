@@ -18,7 +18,7 @@ export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 interface AuthContextValue {
   status: AuthStatus;
   user: CurrentUser | null;
-  login: (empNo: string, password: string) => Promise<void>;
+  login: (empNo: string, password: string, rememberMe: boolean) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (input: ChangePasswordInput) => Promise<void>;
@@ -82,8 +82,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearSession]);
 
   const login = useCallback(
-    async (empNo: string, password: string) => {
-      const { accessToken } = await authApi.login(empNo, password);
+    async (empNo: string, password: string, rememberMe: boolean) => {
+      const { accessToken } = await authApi.login(empNo, password, rememberMe);
       setAccessToken(accessToken);
       await loadUser();
     },

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Headers, Param, ParseIntPipe, ParseUUIDP
 import { AuthService } from './auth.service';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { LoginOptionsDto } from './dto/login-options.dto';
 import { User } from './decorator/user.decorator';
 import { SessionId } from './decorator/session-id.decorator';
 import { RequireAdmin } from 'src/auth/decorator/require-admin.decorator';
@@ -52,15 +53,17 @@ export class AuthController {
 
   //* (개인) 회원 로그인 요청 - 세션(기기) 1개 생성
   //      - ThrottlerGuard(IP당 요청 수 제한)를 BasicTokenGuard(비밀번호 확인)보다 먼저 실행한다. (넘친 요청은 확인·기록 없이 429)
+  //      - 본문의 rememberMe가 false면 refresh 쿠키를 세션 쿠키로 발급한다. (브라우저를 닫으면 로그아웃)
   @Post('login/emp')
   @IsPublic()
   @UseGuards(ThrottlerGuard, BasicTokenGuard)
   async postLoginEmpNo(
     @Request() req: any,
+    @Body() body: LoginOptionsDto,
     @Headers('user-agent') userAgent: string | undefined, // 기기 목록 표시용
     @Res({ passthrough: true }) res: Response, // refreshToken 쿠키 저장용도
   ){
-    const { accessToken, refreshToken, refreshTokenMaxAge } = await this.authService.loginUser( req.user, userAgent );
+    const { accessToken, refreshToken, refreshTokenMaxAge } = await this.authService.loginUser( req.user, userAgent, body?.rememberMe ?? true );
 
     setRefreshTokenCookie(res, refreshToken, refreshTokenMaxAge);
 

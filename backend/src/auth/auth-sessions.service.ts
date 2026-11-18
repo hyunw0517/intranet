@@ -8,12 +8,13 @@ import { REFRESH_REUSE_GRACE, REFRESH_TOKEN_EXPIRES_IN, SESSION_MAX_AGE } from '
 import { AuditService, TargetAudit } from 'src/common/audit.service';
 
 //* 토큰 발급에 필요한 세션 정보
-export type SessionForToken = Pick<AuthSession, 'id' | 'currentJti' | 'expiresAt'>;
+export type SessionForToken = Pick<AuthSession, 'id' | 'currentJti' | 'expiresAt' | 'rememberMe'>;
 
 const SESSION_FOR_TOKEN_SELECT = {
   id: true,
   currentJti: true,
   expiresAt: true,
+  rememberMe: true,
 } as const;
 
 type SessionUser = Pick<Users, 'id' | 'tokenVersion'>;
@@ -42,7 +43,8 @@ export class AuthSessionsService {
 
   //* 세션 생성 (로그인, 가입)
   //  - 만들기 전에 그 사용자의 끝난 세션을 지운다. (스케줄러 없이 테이블이 계속 쌓이지 않게)
-  async createSession(user: SessionUser, userAgent?: string): Promise<SessionForToken> {
+  //  - rememberMe: 로그인 유지 여부. 재발급 때도 같은 쿠키 방식을 쓰도록 세션에 저장한다.
+  async createSession(user: SessionUser, userAgent: string | undefined, rememberMe: boolean): Promise<SessionForToken> {
     await this.deleteDeadSessions(user);
 
     return this.prisma.authSession.create({
@@ -52,6 +54,7 @@ export class AuthSessionsService {
         currentJti: randomUUID(),
         userAgent: userAgent?.slice(0, 500) || null,
         expiresAt: new Date(Date.now() + SESSION_MAX_AGE * 1000),
+        rememberMe,
       },
       select: SESSION_FOR_TOKEN_SELECT,
     });
@@ -95,7 +98,7 @@ export class AuthSessionsService {
         });
 
         if( count === 1 ){
-          return { id: session.id, currentJti: newJti, expiresAt: session.expiresAt };
+          return { id: session.id, currentJti: newJti, expiresAt: session.expiresAt, rememberMe: session.rememberMe };
         }
 
         continue; // 다른 요청이 먼저 교체 → 다시 읽어서 ②인지 확인
@@ -107,7 +110,7 @@ export class AuthSessionsService {
         session.rotatedAt &&
         now.getTime() - session.rotatedAt.getTime() <= REFRESH_REUSE_GRACE * 1000
       ){
-        return { id: session.id, currentJti: session.currentJti, expiresAt: session.expiresAt };
+        return { id: session.id, currentJti: session.currentJti, expiresAt: session.expiresAt, rememberMe: session.rememberMe };
       }
 
       // ③ 재사용 감지 - 정상 사용자와 탈취자 중 누가 옛 토큰을 냈는지 서버는 구분할 수 없으므로 세션 전체를 끊는다.
@@ -135,6 +138,7 @@ export class AuthSessionsService {
   //  - tokenVersion이 올라간 뒤 호출된다. 현재 세션의 jti와 tokenVersion을 새로 맞춘다.
   //  - 직전 jti는 남기지 않는다. (옛 refresh token은 tokenVersion이 달라 어차피 가드에서 거부됨)
   //  - 현재 세션을 찾지 못하면(세션 도입 전 토큰, 이미 만료) 새 세션을 만든다.
+  //    이때는 사용자의 선택을 알 수 없으므로 브라우저를 닫으면 끝나는 쪽(rememberMe: false)으로 만든다.
   async renewSession(sessionId: string | undefined, user: SessionUser, userAgent?: string): Promise<SessionForToken> {
     if( sessionId ){
       const newJti = randomUUID();
@@ -164,7 +168,7 @@ export class AuthSessionsService {
       }
     }
 
-    return this.createSession(user, userAgent);
+    return this.createSession(user, userAgent, false);
   }
 
   //* 세션 폐기 (로그아웃, 기기 로그아웃, 재사용 감지)

@@ -5,8 +5,12 @@ export interface TokenResponse {
   accessToken: string;
 }
 
+// 동의 항목 (백엔드 ConsentType enum)
+export type ConsentType = "TERMS_OF_SERVICE" | "PRIVACY_COLLECTION";
+
 // POST /auth/register/emp (RegisterUserDto)
 export interface RegisterInput {
+  consents: { type: ConsentType; version: string }[];
   empNo: string;
   email: string;
   password: string;
@@ -41,6 +45,11 @@ export function login(empNo: string, password: string, rememberMe: boolean) {
     headers: { Authorization: `Basic ${toBasicToken(empNo, password)}` },
     body: { rememberMe },
   });
+}
+
+// 회원가입 동의 화면 정보 (로그인 전 공개 API)
+export function getConsentInfo() {
+  return apiFetch<{ companyName: string }>("/auth/consent-info", { skipAuth: true });
 }
 
 // 회원가입 → 가입 즉시 GUEST로 로그인 (토큰 + 쿠키 발급)

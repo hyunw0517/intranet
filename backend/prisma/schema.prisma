@@ -45,6 +45,18 @@ enum UserStatus {
   RESIGNED // 퇴사
 }
 
+//? 동의 항목 구분 -> 모델: UserConsent
+enum ConsentType {
+  TERMS_OF_SERVICE // 이용약관
+  PRIVACY_COLLECTION // 개인정보 수집·이용
+}
+
+//? 동의 행위 구분 -> 모델: UserConsent
+enum ConsentAction {
+  AGREE // 동의
+  WITHDRAW // 동의 철회
+}
+
 //? 게시판 구분 -> 모델: Board
 enum BoardType {
   CATEGORY // 카테고리(게시판 묶는 용도)
@@ -300,7 +312,8 @@ model Users {
 
   position              Position?                  @relation(fields: [positionId], references: [id]) // 직급
   departments           UserDepartment[] // 소속 목록 (겸직 시 여러 개)
-  notifications         Notification[]             @relation("NotificationRecipient") // 받은 알림 목록
+  consents              UserConsent[] // 이용약관·개인정보 동의 이력
+  notifications        Notification[]             @relation("NotificationRecipient") // 받은 알림 목록
   sentNotifications     Notification[]             @relation("NotificationSender") // 보낸 알림 목록
   audits                Audit[]                    @relation("AuditActor") // 작업한 감사 로그
   posts                 Post[]                     @relation("PostAuthor") // 작성한 게시글 목록
@@ -333,6 +346,23 @@ model Users {
   @@unique([empNo], where: { deleted: false }) // 삭제되지 않은 계정만 사번이 겹치지 않도록 설정
   @@index([positionId, deleted])
   @@map("users_model")
+}
+
+//* 회원 동의 이력 -> 모듈: Auth, Users
+//  - 동의·철회할 때마다 행을 추가만 한다. (수정·삭제하지 않음, 항목별 최신 행이 현재 상태)
+model UserConsent {
+  id      Int           @id @default(autoincrement())
+  userId  Int           @map("user_id")
+  type    ConsentType // 동의 항목
+  action  ConsentAction // 동의 / 철회
+  version String        @db.VarChar(20) // 동의한 문서 버전
+
+  user Users @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, type, createdAt(sort: Desc)])
+  @@map("user_consent_model")
 }
 
 //* 로그인 세션 -> 모듈: Auth

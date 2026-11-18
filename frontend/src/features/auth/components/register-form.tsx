@@ -3,11 +3,17 @@
 import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { FormError, FormField } from "@/components/common/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  INITIAL_CONSENT_FLAGS,
+  RegisterConsentStep,
+  type ConsentFlags,
+} from "@/features/auth/components/register-consent-step";
+import { CONSENT_VERSIONS } from "@/features/auth/consent-documents";
 import { getErrorMessage } from "@/lib/error-message";
 import { useAuth } from "@/providers/auth-provider";
 import {
@@ -50,16 +56,24 @@ function validate(v: Values): Errors {
   return Object.fromEntries(Object.entries(errors).filter(([, msg]) => msg)) as Errors;
 }
 
-// 본인 가입 → 즉시 GUEST로 로그인 → 관리자가 승인하면 USER
+// 필수 동의 → 가입 정보 입력 → 즉시 GUEST로 로그인 → 관리자가 승인하면 USER
 // 가입 성공 후 이동은 GuestOnlyGate가 처리한다. (/ 로 이동 → PendingApprovalGate가 승인 대기 화면 표시)
 export function RegisterForm() {
   const { register } = useAuth();
+  const [step, setStep] = useState<"consent" | "form">("consent");
+  // 입력 화면에서 이전으로 돌아와도 유지되도록 동의 단계 밖에서 보관한다.
+  const [consentChecks, setConsentChecks] = useState<ConsentFlags>(INITIAL_CONSENT_FLAGS);
+  const [consentViewed, setConsentViewed] = useState<ConsentFlags>(INITIAL_CONSENT_FLAGS);
   const [values, setValues] = useState<Values>(INITIAL);
   const [errors, setErrors] = useState<Errors>({});
 
   const mutation = useMutation({
     mutationFn: () =>
       register({
+        consents: [
+          { type: "TERMS_OF_SERVICE", version: CONSENT_VERSIONS.TERMS_OF_SERVICE },
+          { type: "PRIVACY_COLLECTION", version: CONSENT_VERSIONS.PRIVACY_COLLECTION },
+        ],
         empNo: values.empNo.trim(),
         name: values.name.trim(),
         email: values.email.trim(),
@@ -95,6 +109,18 @@ export function RegisterForm() {
     "aria-invalid": !!errors[key],
     "aria-describedby": `${key}-message`,
   });
+
+  if (step === "consent") {
+    return (
+      <RegisterConsentStep
+        checks={consentChecks}
+        onChange={setConsentChecks}
+        viewed={consentViewed}
+        onViewedChange={setConsentViewed}
+        onNext={() => setStep("form")}
+      />
+    );
+  }
 
   return (
     <div className="grid gap-6">
@@ -147,10 +173,22 @@ export function RegisterForm() {
           </div>
         </fieldset>
 
-        <Button type="submit" className="mt-2 w-full" disabled={mutation.isPending}>
-          {mutation.isPending && <Loader2 className="animate-spin" aria-hidden />}
-          가입 신청
-        </Button>
+        <div className="mt-2 grid gap-2">
+          <Button type="submit" className="w-full" disabled={mutation.isPending}>
+            {mutation.isPending && <Loader2 className="animate-spin" aria-hidden />}
+            가입 신청
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            disabled={mutation.isPending}
+            onClick={() => setStep("consent")}
+          >
+            <ArrowLeft aria-hidden />
+            이전
+          </Button>
+        </div>
       </form>
 
       <p className="text-center text-muted-foreground">

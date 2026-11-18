@@ -9,6 +9,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CURRENT_CONSENT_VERSIONS } from 'src/users/const/consent.const';
 import { createTestApp } from './utils/app';
 import { createTestUser, TEST_PASSWORD } from './utils/auth';
 import { resetDatabase } from './utils/reset-database';
@@ -136,7 +137,13 @@ describe('로그인 유지', () => {
     it('회원가입 직후 자동 로그인은 유지한다', async () => {
         const res = await request( app.getHttpServer() )
             .post( '/auth/register/emp' )
-            .send({ empNo: '2699001', email: 'remember@test.com', password: 'Register1234!', name: '가입자' })
+            .send({
+                empNo: '2699001',
+                email: 'remember@test.com',
+                password: 'Register1234!',
+                name: '가입자',
+                consents: Object.entries( CURRENT_CONSENT_VERSIONS ).map( ( [type, version] ) => ({ type, version }) ),
+            })
             .expect( 201 );
 
         expect( refreshCookieOf( res ) ).toMatch( /Max-Age=86400/i );

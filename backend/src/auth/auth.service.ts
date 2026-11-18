@@ -3,10 +3,11 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersService } from 'src/users/users.service';
 import * as bcrypt from 'bcrypt';
 import { randomInt, randomUUID } from 'crypto';
-import { RegisterUserDto } from './dto/register-user.dto';
+import { RegisterConsentDto, RegisterUserDto } from './dto/register-user.dto';
+import { CURRENT_CONSENT_VERSIONS } from 'src/users/const/consent.const';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ConfigService } from '@nestjs/config';
-import { ENV_HASH_ROUNDS_KEY, ENV_JWT_SECRET } from 'src/common/const/env-keys.const';
+import { ENV_COMPANY_NAME_KEY, ENV_HASH_ROUNDS_KEY, ENV_JWT_SECRET } from 'src/common/const/env-keys.const';
 import { AuditActionType, AuditTargetType, Users, UserStatus } from 'src/generated/prisma/client';
 import { ACCESS_TOKEN_EXPIRES_IN, REFRESH_TOKEN_EXPIRES_IN } from './const/token-const';
 import { JwtPayload } from './types/jwt-payload.type';
@@ -399,11 +400,29 @@ export class AuthService {
     );
   }
 
+  //* 동의 화면에 표시할 정보 - 개인정보처리자를 밝혀야 하므로 값이 없으면 오류로 처리한다.
+  getConsentInfo(){
+    return { companyName: this.configService.getOrThrow<string>(ENV_COMPANY_NAME_KEY) };
+  }
+
+  //* 필수 동의 확인 - 모든 항목을 현재 시행 중인 버전으로 동의해야 가입할 수 있다.
+  private assertAgreedToCurrentConsents( consents: RegisterConsentDto[] ){
+    const agreedAll = Object.entries(CURRENT_CONSENT_VERSIONS).every( ([type, version]) =>
+      consents.some( (consent) => consent.type === type && consent.version === version )
+    );
+
+    if( !agreedAll ){
+      throw new BadRequestException('필수 약관에 동의해 주세요. 약관이 변경된 경우 새로고침 후 다시 동의해 주세요.');
+    }
+  }
+
   //* 회원가입
   async registerWithEmpNo(
     user: RegisterUserDto,
     userAgent?: string,
   ){
+
+    this.assertAgreedToCurrentConsents(user.consents);
 
     const hash = await this.hashPassword(user.password);
 

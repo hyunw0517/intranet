@@ -133,6 +133,13 @@ export class AuthController {
     return true;
   }
 
+  //* 회원가입 동의 화면 정보 (로그인 전 화면이라 공개)
+  @Get('consent-info')
+  @IsPublic()
+  getConsentInfo(){
+    return this.authService.getConsentInfo();
+  }
+
   //* (개인) 회원가입 - 가입 즉시 로그인 (세션 생성)
   @Post('register/emp')
   @IsPublic()

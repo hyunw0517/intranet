@@ -5,7 +5,8 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
-import { AdminPermission, AuditActionType, AuditTargetType, Prisma, UserRole, Users, UserStatus } from 'src/generated/prisma/client';
+import { AdminPermission, AuditActionType, AuditTargetType, ConsentAction, ConsentType, Prisma, UserRole, Users, UserStatus } from 'src/generated/prisma/client';
+import { CURRENT_CONSENT_VERSIONS } from './const/consent.const';
 import { PaginateUserQueryDto, UserSortBy } from './dto/paginate-user-query.dto';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
@@ -744,6 +745,16 @@ export class UsersService {
           hp: user.hp,
           tel: user.tel,
         },
+      });
+
+      // 동의 이력: 필수 동의 확인은 AuthService가 끝냈으므로 현재 버전으로 기록한다. (가입과 함께 성공·실패)
+      await tx.userConsent.createMany({
+        data: ( Object.entries(CURRENT_CONSENT_VERSIONS) as [ConsentType, string][] ).map( ([type, version]) => ({
+          userId: newUser.id,
+          type,
+          action: ConsentAction.AGREE,
+          version,
+        }) ),
       });
 
       // 가입은 로그인 전 요청이라 작업자를 가입한 회원으로 명시

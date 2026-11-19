@@ -77,10 +77,7 @@ export function ProfileImageField({ user }: { user: CurrentUser }) {
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              업로드 제한: {Math.round(MAX_IMAGE_SIZE / 1024 / 1024)}MB 이하, png·jpg·gif·webp 확장자 파일
-            </p>
-            <p className="text-sm text-muted-foreground">
-              확장자: png·jpg·gif·webp
+              업로드 제한: {Math.round(MAX_IMAGE_SIZE / 1024 / 1024)}MB 이하 png·jpg·gif·webp 파일
             </p>
             <input
               ref={inputRef}

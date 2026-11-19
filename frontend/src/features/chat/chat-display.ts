@@ -43,6 +43,15 @@ export function messageTime(value: string) {
   return toKstParts(value).time;
 }
 
+// 같은 사람이 같은 날 같은 분에 이어 보낸 메시지인지 (화면은 묶음의 마지막 메시지에만 시각을 쓴다, 2026-11-19 사용자 요청)
+// 보낸 사람을 알 수 없거나 사이에 시스템 메시지가 있으면 묶지 않는다.
+export function sameMinuteGroup(a: ChatMessage, b: ChatMessage) {
+  if (a.type === "SYSTEM" || b.type === "SYSTEM" || !a.sender || !b.sender || a.sender.id !== b.sender.id) return false;
+  const pa = toKstParts(a.createdAt);
+  const pb = toKstParts(b.createdAt);
+  return pa.date === pb.date && pa.time === pb.time;
+}
+
 // 복사용 시각: 오전/오후 h:mm (KST)
 export function messageTime12h(value: string) {
   const [hour, minute] = toKstParts(value).time.split(":");

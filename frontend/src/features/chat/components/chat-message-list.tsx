@@ -22,7 +22,7 @@ import {
   type ChatRoomDetail,
 } from "@/services/api/chats";
 import { buildChatCopyText } from "../chat-copy";
-import { messageDate, messageTime, unreadReaders } from "../chat-display";
+import { messageDate, messageTime, sameMinuteGroup, unreadReaders } from "../chat-display";
 import { chatKeys, patchMessageInCache, useChatMessages } from "../hooks/use-chats";
 import { ChatFileContent } from "./chat-file-content";
 
@@ -151,6 +151,9 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
         const mine = message.sender?.id === userId;
         const showName =
           !mine && message.type !== "SYSTEM" && (showDate || !prev || prev.type === "SYSTEM" || prev.sender?.id !== message.sender?.id);
+        // 같은 사람이 같은 분에 이어 보냈으면 마지막 메시지에만 시각을 쓴다
+        const next = messages[i + 1];
+        const showTime = !next || !sameMinuteGroup(message, next);
         // 본인 메시지, 보낸 뒤 5분 이내: 텍스트는 수정·삭제, 파일은 삭제만 (이미지 묶음은 통째로)
         const deletable =
           mine && message.type !== "SYSTEM" && !message.deleted && now - new Date(message.createdAt).getTime() < CHAT_EDIT_LIMIT_MS;
@@ -177,6 +180,7 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
                 message={message}
                 mine={mine}
                 showName={showName}
+                showTime={showTime}
                 senderImageUrl={message.sender ? profileImageUrls.get(message.sender.id) : undefined}
                 unread={unreadReaders(message, room.members)}
                 actions={
@@ -226,6 +230,7 @@ function MessageBubble({
   message,
   mine,
   showName,
+  showTime,
   senderImageUrl,
   unread,
   actions,
@@ -233,6 +238,7 @@ function MessageBubble({
   message: ChatMessage;
   mine: boolean;
   showName: boolean;
+  showTime: boolean;
   senderImageUrl: string | null | undefined;
   unread: number;
   actions: React.ReactNode;
@@ -271,7 +277,7 @@ function MessageBubble({
             </span>
           )}
           {message.editedAt && !message.deleted && <span>수정됨</span>}
-          <time dateTime={message.createdAt}>{messageTime(message.createdAt)}</time>
+          {showTime && <time dateTime={message.createdAt}>{messageTime(message.createdAt)}</time>}
         </span>
         {actions}
       </div>

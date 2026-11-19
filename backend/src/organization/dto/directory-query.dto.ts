@@ -1,0 +1,11 @@
+import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { PagePaginationDto } from 'src/common/dto/page-pagination.dto';
+
+//* 사원 검색 (?search= 이름·사번·부서명, page, take) - 정렬은 이름순 고정 (order는 쓰지 않는다)
+export class DirectoryQueryDto extends PagePaginationDto {
+
+    @IsString()
+    @MaxLength(50)
+    @IsOptional()
+    search?: string;
+}

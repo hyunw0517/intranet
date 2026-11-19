@@ -9,11 +9,13 @@ import { JobTitlesService } from './job-titles.service';
 import { JobTitlesController } from './job-titles.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { CommonModule } from 'src/common/common.module';
+import { OrgChartController } from './org-chart.controller';
+import { OrgChartService } from './org-chart.service';
 
 @Module({
   imports: [
     PrismaModule,
-    CommonModule, // 감사 로그 (AuditService)
+    CommonModule, // 감사 로그 (AuditService), 프로필 사진 주소 (FilesService)
   ],
   exports: [OrganizationService],
   controllers: [
@@ -21,12 +23,14 @@ import { CommonModule } from 'src/common/common.module';
     DepartmentsController,
     PositionsController,
     JobTitlesController,
+    OrgChartController, // 사용자용 조직도·사원 검색
   ],
   providers: [
     OrganizationService,
     DepartmentsService,
     PositionsService,
     JobTitlesService,
+    OrgChartService,
   ],
 })
 export class OrganizationModule {}

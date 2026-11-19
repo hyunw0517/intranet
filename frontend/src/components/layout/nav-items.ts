@@ -40,6 +40,7 @@ export const mainNav: NavGroup[] = [
     label: "업무",
     items: [
       { title: "대시보드", href: "/", icon: LayoutDashboard },
+      { title: "조직도", href: "/organization", icon: Network }, // 하위 탭: 조직도 / 사원 검색
       { title: "전자결재", href: "/approvals", icon: FileCheck, addon: "approvals" },
       { title: "과제 관리", href: "/projects", icon: FolderKanban, addon: "projects" }, // 하위 탭: 프로젝트 / 내 할 일 / 거래처
       { title: "시설 예약", href: "/reservations", icon: CalendarClock, addon: "reservations" },

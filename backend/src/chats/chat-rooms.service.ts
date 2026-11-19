@@ -121,17 +121,23 @@ export class ChatRoomsService {
         const fileMessageIds = memberships.flatMap( ( m ) => m.chatRoom.messages ).filter( ( msg ) => msg.type === ChatMessageType.FILE ).map( ( msg ) => msg.id );
         const filesByMessage = await this.filesService.listByTargets( FileTargetType.CHAT_MESSAGE, fileMessageIds );
 
-        return memberships.map( ( { role, joinedAt, customName, chatRoom: room } ) => {
+        const directOthers = memberships.map( ( { chatRoom: room } ) =>
+            room.type === ChatRoomType.DIRECT ? room.members.find( ( m ) => m.userId !== userId ) : undefined,
+        );
+        // 1:1 상대의 프로필 사진 (목록의 Avatar) - 쿼리 1번
+        const profileImageUrls = await this.filesService.findProfileImageUrls( directOthers.flatMap( ( m ) => m ? [ m.userId ] : [] ) );
+
+        return memberships.map( ( { role, joinedAt, customName, chatRoom: room }, i ) => {
             const last = room.messages[0];
             const activeMembers = room.members.filter( ( m ) => m.leftAt === null );
-            const other = room.type === ChatRoomType.DIRECT ? room.members.find( ( m ) => m.userId !== userId ) : undefined;
+            const other = directOthers[i];
 
             return {
                 id: room.id,
                 type: room.type,
                 name: room.name,                                        // 방 기본 이름 (그룹, OWNER가 정함)
                 myName: customName,                                     // 나만 보는 이름 (화면 표시: myName ?? name ?? 1:1 상대 이름)
-                otherUser: other ? toChatUser( other.user ) : null,     // 1:1 상대 (그룹은 null)
+                otherUser: other ? toChatUser( other.user, profileImageUrls ) : null, // 1:1 상대 (그룹은 null)
                 memberCount: activeMembers.length,
                 myRole: role,
                 lastMessage: last && last.createdAt >= joinedAt ? toChatMessage( last, filesByMessage.get( last.id ) ) : null, // 참여 전 메시지는 미리보기에도 보이지 않게
@@ -193,7 +199,9 @@ export class ChatRoomsService {
             select: chatUserSelect,
         });
 
-        return users.map( toChatUser );
+        const profileImageUrls = await this.filesService.findProfileImageUrls( users.map( ( u ) => u.id ) );
+
+        return users.map( ( u ) => toChatUser( u, profileImageUrls ) );
     }
 
     //* 방 상세 - 메시지별 안 읽은 사람 수는 화면이 members의 lastReadMessageId·joinedAt으로 계산한다 (features.md 8.5)
@@ -209,7 +217,9 @@ export class ChatRoomsService {
 
         const activeMembers = members.filter( ( m ) => m.leftAt === null );
         const other = room.type === ChatRoomType.DIRECT ? members.find( ( m ) => m.user.id !== userId ) : undefined;
-        const otherUser = other ? toChatUser( other.user ) : null;
+        // 참여자(나간 1:1 상대 포함)의 프로필 사진 - 메시지 목록의 보낸 사람 Avatar도 이 값을 쓴다
+        const profileImageUrls = await this.filesService.findProfileImageUrls( members.map( ( m ) => m.user.id ) );
+        const otherUser = other ? toChatUser( other.user, profileImageUrls ) : null;
 
         return {
             id: room.id,
@@ -221,7 +231,7 @@ export class ChatRoomsService {
             // 1:1 상대가 퇴사·비활성·삭제면 읽기 전용 (그룹은 남은 사람끼리 계속 보낸다)
             readOnly: room.type === ChatRoomType.DIRECT && !otherUser?.active,
             members: activeMembers.map( ( m ) => ({
-                ...toChatUser( m.user ),
+                ...toChatUser( m.user, profileImageUrls ),
                 role: m.role,
                 joinedAt: m.joinedAt,
                 lastReadMessageId: m.lastReadMessageId,

@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { UserAvatar } from "@/components/common/user-avatar";
 import { ErrorState, LoadingState } from "@/components/common/data-state";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -41,6 +42,12 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
   const messages = useMemo(() => (query.data?.pages.flatMap((page) => page.data) ?? []).reverse(), [query.data]);
   const newest = messages.at(-1);
   const oldestId = messages[0]?.id;
+  // 보낸 사람 프로필 사진: 방 상세의 참여자(+ 나간 1:1 상대)에서 찾는다. 나간 그룹 참여자는 이름 첫 글자
+  const profileImageUrls = useMemo(() => {
+    const map = new Map<number, string | null>();
+    for (const u of [...room.members, ...(room.otherUser ? [room.otherUser] : [])]) map.set(u.id, u.profileImageUrl);
+    return map;
+  }, [room.members, room.otherUser]);
 
   // ── 읽음 ────────────────────────────────────────────
   const myLastRead = room.members.find((m) => m.id === userId)?.lastReadMessageId ?? 0;
@@ -170,6 +177,7 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
                 message={message}
                 mine={mine}
                 showName={showName}
+                senderImageUrl={message.sender ? profileImageUrls.get(message.sender.id) : undefined}
                 unread={unreadReaders(message, room.members)}
                 actions={
                   deletable ? (
@@ -218,18 +226,25 @@ function MessageBubble({
   message,
   mine,
   showName,
+  senderImageUrl,
   unread,
   actions,
 }: {
   message: ChatMessage;
   mine: boolean;
   showName: boolean;
+  senderImageUrl: string | null | undefined;
   unread: number;
   actions: React.ReactNode;
 }) {
   return (
     <div data-copy-message={message.id} className={cn("group mt-1 flex flex-col", mine ? "items-end" : "items-start", showName && "mt-3")}>
-      {showName && <p className="mb-1 px-1 text-xs text-muted-foreground select-none">{message.sender?.name ?? "(알 수 없음)"}</p>}
+      {showName && (
+        <p className="mb-1 flex items-center gap-1.5 px-1 text-xs text-muted-foreground select-none">
+          <UserAvatar name={message.sender?.name ?? "?"} imageUrl={senderImageUrl} className="size-6" />
+          {message.sender?.name ?? "(알 수 없음)"}
+        </p>
+      )}
       <div className={cn("flex max-w-[85%] items-end gap-1.5", mine && "flex-row-reverse")}>
         {message.type === "FILE" && !message.deleted ? (
           <ChatFileContent message={message} mine={mine} />

@@ -7,8 +7,9 @@ import { useAuth } from "@/providers/auth-provider";
 import { ROLE_LABEL } from "@/types/user";
 import { ChangePasswordForm } from "./change-password-form";
 import { ProfileForm } from "./profile-form";
+import { ProfileImageField } from "./profile-image-field";
 
-// 마이페이지: 계정 정보(읽기 전용) + 내 정보 수정 + 비밀번호 변경
+// 마이페이지: 계정 정보(읽기 전용) + 프로필 사진 + 내 정보 수정 + 비밀번호 변경
 // GUEST(승인 대기)도 접근 가능하다.
 export function MypageView() {
   const { user } = useAuth();
@@ -29,6 +30,10 @@ export function MypageView() {
           <InfoItem label="입사일" value={formatDate(user.joinAt)} />
           <InfoItem label="가입일" value={formatDate(user.createdAt)} />
         </dl>
+      </Section>
+
+      <Section title="프로필 사진" description="사진을 등록하면 다른 사용자에게 표시됩니다.">
+        <ProfileImageField user={user} />
       </Section>
 
       <Section title="내 정보" description="이름, 연락처 등 개인 정보를 수정합니다.">

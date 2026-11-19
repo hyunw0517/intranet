@@ -25,6 +25,17 @@ export function updateMe(input: UpdateMeInput) {
   return apiFetch<CurrentUser>("/users/me", { method: "PATCH", body: input });
 }
 
+// 프로필 사진 등록·변경 (USER 이상) → 내 정보
+// 이미지는 uploadImage(POST /common/files/images)로 먼저 올리고 그 id를 보낸다. 기존 사진은 서버가 지운다.
+export function setMyProfileImage(fileId: number) {
+  return apiFetch<CurrentUser>("/users/me/profile-image", { method: "PUT", body: { fileId } });
+}
+
+// 프로필 사진 삭제 (USER 이상) → 내 정보
+export function deleteMyProfileImage() {
+  return apiFetch<CurrentUser>("/users/me/profile-image", { method: "DELETE" });
+}
+
 // GET /users/search - 회원을 고르는 화면용 공용 검색 (USER 이상, 재직 중인 승인 회원만, 최대 20명)
 // 이메일·연락처 등 개인정보는 오지 않는다. 검색어가 없으면 이름순 앞 20명.
 // 사용처: 과제 관리 참여자 추가, 결재자 선택 (결재 전용 /approvals/approvers는 2026-11-17에 이것으로 합침)

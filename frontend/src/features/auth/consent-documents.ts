@@ -16,7 +16,7 @@ export interface PrivacyRow {
 
 export const CONSENT_VERSIONS: Record<ConsentType, string> = {
   TERMS_OF_SERVICE: "1.0",
-  PRIVACY_COLLECTION: "1.0",
+  PRIVACY_COLLECTION: "1.1", // 1.1(2026-11-19): 선택 항목에 프로필 사진 추가
 };
 
 export const CONSENT_EFFECTIVE_DATE = "2026년 11월 19일";
@@ -111,7 +111,7 @@ export const PRIVACY_ROWS: PrivacyRow[] = [
   },
   {
     purpose: "프로필 표시 및 임직원 간 연락",
-    items: "(선택) 닉네임, 생년월일, 휴대폰 번호, 전화번호",
+    items: "(선택) 닉네임, 생년월일, 휴대폰 번호, 전화번호, 프로필 사진",
     retention: `${RETENTION} 또는 회원이 해당 항목을 삭제할 때까지`,
   },
   {

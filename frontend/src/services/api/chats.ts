@@ -16,6 +16,7 @@ export interface ChatUser {
   positionName: string | null;
   departmentName: string | null;
   active: boolean; // 재직(ACTIVE)이고 삭제되지 않음. 1:1 상대가 false면 읽기 전용
+  profileImageUrl: string | null; // 프로필 사진 썸네일 공개 주소 (없으면 null)
 }
 
 // 파일 메시지의 파일 (백엔드 ChatFileView, 종류는 확장자 기준)

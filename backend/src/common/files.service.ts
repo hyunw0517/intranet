@@ -203,6 +203,14 @@ export class FilesService {
         return new Map( rows.map( row => [ row.targetId!, this.toFileInfo( row ) ] ) );
     }
 
+    //* 회원별 프로필 사진 주소 → userId별 썸네일 공개 주소 (사진이 없는 회원은 Map에 없음)
+    // 프로필 사진은 본문 이미지와 같은 images/ 공개 파일이고, 회원당 1개라 order = 0이다. 화면은 작은 원형이라 썸네일 주소를 준다.
+    async findProfileImageUrls( userIds: number[] ): Promise<Map<number, string>> {
+        const files = await this.findFirstByTargets( FileTargetType.USER_PROFILE, [ ...new Set( userIds ) ] );
+
+        return new Map( [ ...files ].map( ( [ userId, file ] ) => [ userId, file.thumbnailUrl! ] ) );
+    }
+
     //* 대상별 파일 개수 → targetId별 개수 (파일이 없는 대상은 Map에 없음)
     // 앨범 그리드의 "+추가 이미지 수" 표시에 쓴다. 목록 한 페이지당 쿼리 1번 (GROUP BY target_id).
     async countByTargets(

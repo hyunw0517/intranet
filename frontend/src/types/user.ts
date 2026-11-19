@@ -59,6 +59,7 @@ export interface CurrentUser {
   adminPermissions: AdminPermission[]; // ADMIN만 값이 있다
   status: UserStatus;
   positionId: number | null;
+  profileImageUrl: string | null; // 프로필 사진 썸네일 공개 주소 (없으면 null)
   createdAt: string;
   updatedAt: string;
 }

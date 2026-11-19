@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { LogOut, UserRound } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/common/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,9 +30,7 @@ export function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-2 px-1.5" aria-label="사용자 메뉴">
-          <Avatar className="size-7">
-            <AvatarFallback className="text-xs">{user.name.slice(0, 1)}</AvatarFallback>
-          </Avatar>
+          <UserAvatar name={user.name} imageUrl={user.profileImageUrl} className="size-7" />
           <span className="hidden max-w-32 truncate sm:inline">{user.name}</span>
         </Button>
       </DropdownMenuTrigger>

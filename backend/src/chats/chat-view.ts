@@ -24,15 +24,18 @@ export interface ChatUserView {
     positionName: string | null;
     departmentName: string | null;
     active: boolean;            // ACTIVE이고 삭제되지 않음 (1:1 읽기 전용 판단, 화면 표시)
+    profileImageUrl: string | null; // 프로필 사진 썸네일 공개 주소 (없으면 null → 화면은 이름 첫 글자)
 }
 
-export function toChatUser( user: ChatUserRow ): ChatUserView {
+// profileImageUrls: FilesService.findProfileImageUrls 결과 (회원 여러 명을 쿼리 1번으로)
+export function toChatUser( user: ChatUserRow, profileImageUrls: Map<number, string> ): ChatUserView {
     return {
         id: user.id,
         name: user.name,
         positionName: user.position?.name ?? null,
         departmentName: user.departments[0]?.department.name ?? null,
         active: user.status === 'ACTIVE' && !user.deleted,
+        profileImageUrl: profileImageUrls.get( user.id ) ?? null,
     };
 }
 

@@ -5,7 +5,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
-import { AdminPermission, AuditActionType, AuditTargetType, ConsentAction, ConsentType, Prisma, UserRole, Users, UserStatus } from 'src/generated/prisma/client';
+import { AdminPermission, AuditActionType, AuditTargetType, ConsentAction, ConsentType, FileTargetType, Prisma, UserRole, Users, UserStatus } from 'src/generated/prisma/client';
 import { CURRENT_CONSENT_VERSIONS } from './const/consent.const';
 import { PaginateUserQueryDto, UserSortBy } from './dto/paginate-user-query.dto';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
@@ -17,6 +17,8 @@ import { AuditService, TargetAudit } from 'src/common/audit.service';
 import { batchChanges, diffChanges } from 'src/common/util/audit-detail.util';
 import { UserNotifier } from './user-notifier';
 import { isAdminRole } from 'src/auth/util/admin-permission.util';
+import { FilesService } from 'src/common/files.service';
+import { FileKind } from 'src/common/const/file.const';
 
 //* 감사 로그 요약에 쓰는 회원 표시 (이름(사번))
 const userLabel = ( user: Pick<Users, 'name' | 'empNo'> ) => `${user.name}(${user.empNo})`;
@@ -34,6 +36,7 @@ export class UsersService {
     private readonly configService: ConfigService,
     auditService: AuditService,
     private readonly userNotifier: UserNotifier,
+    private readonly filesService: FilesService,
   ){
     this.audit = auditService.target( AuditTargetType.USER );
   }
@@ -814,7 +817,7 @@ export class UsersService {
       birthday: ( body.birthday ) ? new Date(body.birthday) : body.birthday,
     };
 
-    return await this.prisma.$transaction( async (tx) => {
+    const updated = await this.prisma.$transaction( async (tx) => {
       const before = await tx.users.findUniqueOrThrow({
         where: { id: user.id },
       });
@@ -836,6 +839,9 @@ export class UsersService {
 
       return updatedUser;
     });
+
+    // 화면이 응답으로 현재 사용자를 바꾸므로 GET /users/me와 같은 형태로 준다
+    return { ...updated, profileImageUrl: await this.profileImageUrl( user.id ) };
   }
 
   //* 이메일로 회원 조회
@@ -950,7 +956,49 @@ export class UsersService {
       throw new UnauthorizedException('존재하지 않는 사용자입니다.');
     }
 
-    return user;
+    return { ...user, profileImageUrl: await this.profileImageUrl( id ) };
+  }
+
+  //* 내 프로필 사진 주소 (썸네일 공개 주소, 없으면 null)
+  private async profileImageUrl( userId: number ){
+    return ( await this.filesService.findProfileImageUrls( [ userId ] ) ).get( userId ) ?? null;
+  }
+
+  //* 내 프로필 사진 등록·변경 (PUT /users/me/profile-image)
+  //  - 이미지는 POST /common/files/images로 먼저 올리고 그 id를 연결한다. (게시글 본문 이미지와 같은 공개 uuid 주소)
+  //  - 회원당 1장: syncTargetFiles가 기존 사진은 soft delete하고, 내가 올린 미연결 이미지만 연결한다(아니면 400).
+  async setMyProfileImage( userId: number, fileId: number ){
+    await this.syncMyProfileImage( userId, [ fileId ], '프로필 사진 변경' );
+    return this.getMyInfo( userId );
+  }
+
+  //* 내 프로필 사진 삭제 (DELETE /users/me/profile-image) - 사진이 없어도 성공
+  async deleteMyProfileImage( userId: number ){
+    await this.syncMyProfileImage( userId, [], '프로필 사진 삭제' );
+    return this.getMyInfo( userId );
+  }
+
+  //* 프로필 사진 파일 연결 + 감사 로그 (한 트랜잭션)
+  private async syncMyProfileImage( userId: number, fileIds: number[], action: string ){
+    await this.prisma.$transaction( async (tx) => {
+      const before = await tx.files.findFirst({
+        select: { id: true },
+        where: { targetType: FileTargetType.USER_PROFILE, targetId: userId, deleted: false },
+      });
+
+      await this.filesService.syncTargetFiles( tx, {
+        kind: FileKind.IMAGE,
+        targetType: FileTargetType.USER_PROFILE,
+        targetId: userId,
+        fileIds,
+        userId,
+      });
+
+      const user = await tx.users.findUniqueOrThrow({ where: { id: userId }, select: { name: true, empNo: true } });
+      await this.audit.updated( tx, userId, `${action}: ${ userLabel(user) }`, {
+        profileImageFileId: { before: before?.id ?? null, after: fileIds[0] ?? null },
+      });
+    });
   }
 
   //* 회원 삭제 (soft delete)

@@ -1,4 +1,5 @@
-import { Controller, Get, Body, Patch, Param, Delete, Query, ParseIntPipe, Res } from '@nestjs/common';
+import { Controller, Get, Body, Patch, Param, Delete, Query, ParseIntPipe, Res, Put } from '@nestjs/common';
+import { SetProfileImageDto } from './dto/set-profile-image.dto';
 import { UsersService } from './users.service';
 import { User } from 'src/auth/decorator/user.decorator';
 import { AdminPermission, UserRole, type Users } from 'src/generated/prisma/client';
@@ -56,6 +57,26 @@ export class UsersController {
     clearRefreshTokenCookie(res);
 
     return true;
+  }
+
+  //* (개인) 프로필 사진 등록·변경 → 내 정보 (GET /users/me와 같은 형태)
+  //  - 업로드(POST /common/files/images)가 USER 이상이라 연결도 USER 이상 (승인 대기 회원은 사진을 등록할 수 없다)
+  @Put('me/profile-image')
+  @Roles(UserRole.USER)
+  putMyProfileImage(
+    @User() user: Pick<Users, 'id'>,
+    @Body() body: SetProfileImageDto,
+  ) {
+    return this.usersService.setMyProfileImage(user.id, body.fileId);
+  }
+
+  //* (개인) 프로필 사진 삭제 → 내 정보
+  @Delete('me/profile-image')
+  @Roles(UserRole.USER)
+  deleteMyProfileImage(
+    @User() user: Pick<Users, 'id'>,
+  ) {
+    return this.usersService.deleteMyProfileImage(user.id);
   }
 
 

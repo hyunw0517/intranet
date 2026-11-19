@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FileText, Image as ImageIcon, SquarePen, Users, Video } from "lucide-react";
 import { ErrorState, LoadingState } from "@/components/common/data-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/common/user-avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatListDate } from "@/lib/format";
@@ -98,9 +99,14 @@ function ChatRoomRow({
           selected && "bg-muted hover:bg-muted",
         )}
       >
-        <Avatar className="size-9">
-          <AvatarFallback className="text-sm">{isGroup ? <Users className="size-4" aria-hidden /> : title.slice(0, 1)}</AvatarFallback>
-        </Avatar>
+        {room.otherUser ? (
+          // 1:1: 상대 프로필 사진 (없으면 방 이름 첫 글자 - 내가 붙인 이름일 수 있으므로 title 기준)
+          <UserAvatar name={title} imageUrl={room.otherUser.profileImageUrl} className="size-9" fallbackClassName="text-sm" />
+        ) : (
+          <Avatar className="size-9">
+            <AvatarFallback className="text-sm">{isGroup ? <Users className="size-4" aria-hidden /> : title.slice(0, 1)}</AvatarFallback>
+          </Avatar>
+        )}
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-1.5">
             <span className={cn("truncate text-sm", room.unreadCount > 0 && "font-medium")}>{title}</span>

@@ -46,6 +46,11 @@ export function fetchDepartmentMembers(departmentId: number) {
   return apiFetch<DirectoryUser[]>(`/organization/chart/${departmentId}/members`);
 }
 
+// 사원 한 명 - id만 아는 화면(채팅 보낸 사람)의 상세 창. 재직 중이 아니면 404
+export function fetchDirectoryUser(userId: number) {
+  return apiFetch<DirectoryUser>(`/organization/directory/${userId}`);
+}
+
 // 사원 검색 - 이름순 페이지
 export function fetchDirectory(query: DirectoryQuery) {
   return apiFetch<PageResult<DirectoryUser>>("/organization/directory", { query });

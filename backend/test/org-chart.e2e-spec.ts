@@ -27,6 +27,7 @@ describe('조직도·사원 검색', () => {
     let prisma: PrismaService;
     let token = '';
     let guestToken = '';
+    let resignedId = 0;
     const dept = { hq: 0, team: 0, other: 0 };
     const user = { lead: 0, senior: 0, junior: 0, concurrent: 0 };
 
@@ -74,6 +75,7 @@ describe('조직도·사원 검색', () => {
         const resigned = await createTestUser( prisma, UserRole.USER );
         await prisma.users.update({ where: { id: resigned.id }, data: { status: UserStatus.RESIGNED } });
         await link( resigned.id, team.id, true );
+        resignedId = resigned.id;
         const guest = await createTestUser( prisma, UserRole.GUEST );
         await link( guest.id, team.id, true );
 
@@ -132,10 +134,24 @@ describe('조직도·사원 검색', () => {
         expect( ( res.body.data as DirectoryUser[] ).map( ( u ) => u.id ) ).toEqual( [ user.senior ] );
     });
 
+    it('사원 한 명: 목록과 같은 공개 범위, 재직 중이 아니면 404', async () => {
+        const res = await get( `/organization/directory/${user.concurrent}` ).expect( 200 );
+        const found = res.body as DirectoryUser & Record<string, unknown>;
+
+        expect( found.name ).toBe( '다겸직' );
+        expect( found.departments.map( ( d ) => d.departmentName ) ).toEqual( [ '영업팀', '인사팀' ] );
+        expect( found.hp ).toBeUndefined();
+        expect( found.birthday ).toBeUndefined();
+
+        await get( `/organization/directory/${resignedId}` ).expect( 404 );
+        await get( '/organization/directory/999999' ).expect( 404 );
+    });
+
     it('승인 대기(GUEST)는 403', async () => {
         const as = ( url: string ) => http().get( url ).set( 'Authorization', `Bearer ${guestToken}` ).expect( 403 );
         await as( '/organization/chart' );
         await as( `/organization/chart/${dept.team}/members` );
         await as( '/organization/directory' );
+        await as( `/organization/directory/${user.lead}` );
     });
 });

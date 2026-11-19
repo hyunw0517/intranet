@@ -11,6 +11,7 @@ import {
   type ChatMessage,
   type ChatRoomDetail,
 } from "@/services/api/chats";
+import { fetchDirectoryUser } from "@/services/api/org-chart";
 import type { CursorResult } from "@/types/pagination";
 
 // 채팅 queryKey - 모두 "chats" 접두사라 다시 연결할 때 한 번에 새로 받을 수 있다.
@@ -22,7 +23,18 @@ export const chatKeys = {
   messages: (roomId: number) => [...chatKeys.all, "messages", roomId] as const,
   files: (roomId: number) => [...chatKeys.all, "files", roomId] as const,
   users: (search: string) => [...chatKeys.all, "users", search] as const,
+  profile: (userId: number) => [...chatKeys.all, "profile", userId] as const,
 };
+
+// 보낸 사람 기본 정보 (메시지 위 사진·이름을 눌렀을 때) - 조직도의 사원 한 명 API를 쓴다
+export function useChatUserProfile(userId: number | null) {
+  return useQuery({
+    queryKey: chatKeys.profile(userId ?? 0),
+    queryFn: () => fetchDirectoryUser(userId!),
+    enabled: userId !== null,
+    retry: false, // 퇴사 등으로 404면 다시 시도하지 않는다
+  });
+}
 
 // 헤더 배지: 전체 안 읽은 수
 // - 실시간 갱신은 소켓 이벤트가 이 키를 무효화해서 한다(use-chat-socket). 소켓이 끊긴 동안을 대비해 창으로 돌아올 때도 다시 받는다.

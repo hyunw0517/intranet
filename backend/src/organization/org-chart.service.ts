@@ -144,6 +144,21 @@ export class OrgChartService {
         return { ...page, data: await this.toDirectoryUsers( page.data ) };
     }
 
+    //* 사원 한 명 (채팅 보낸 사람 등 id만 아는 화면의 상세 창) - 목록과 같은 대상 조건·공개 범위
+    // 퇴사·비활성·승인 대기·삭제된 회원은 404
+    async getDirectoryUser( userId: number ): Promise<DirectoryUser> {
+        const row = await this.prisma.users.findFirst({
+            select: directoryUserSelect,
+            where: { ...directoryUserWhere, id: userId },
+        });
+        if ( !row ) {
+            throw new NotFoundException('재직 중인 직원 정보를 찾을 수 없습니다.');
+        }
+
+        const [ user ] = await this.toDirectoryUsers( [ row ] );
+        return user;
+    }
+
     //* 행 → 응답 (프로필 사진은 쿼리 1번으로 붙인다)
     private async toDirectoryUsers( rows: DirectoryUserRow[] ): Promise<DirectoryUser[]> {
         const profileImageUrls = await this.filesService.findProfileImageUrls( rows.map( ( r ) => r.id ) );

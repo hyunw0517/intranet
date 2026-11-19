@@ -25,6 +25,7 @@ import { buildChatCopyText } from "../chat-copy";
 import { messageDate, messageTime, sameMinuteGroup, unreadReaders } from "../chat-display";
 import { chatKeys, patchMessageInCache, useChatMessages } from "../hooks/use-chats";
 import { ChatFileContent } from "./chat-file-content";
+import { ChatUserProfileDialog } from "./chat-user-profile-dialog";
 
 // 맨 아래에서 이만큼 안쪽이면 "맨 아래를 보고 있다"로 본다 (새 메시지가 오면 따라 내려간다)
 const STICK_THRESHOLD = 80;
@@ -42,6 +43,7 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
   const messages = useMemo(() => (query.data?.pages.flatMap((page) => page.data) ?? []).reverse(), [query.data]);
   const newest = messages.at(-1);
   const oldestId = messages[0]?.id;
+  const [profileUserId, setProfileUserId] = useState<number | null>(null); // 사진·이름을 누른 보낸 사람
   // 보낸 사람 프로필 사진: 방 상세의 참여자(+ 나간 1:1 상대)에서 찾는다. 나간 그룹 참여자는 이름 첫 글자
   const profileImageUrls = useMemo(() => {
     const map = new Map<number, string | null>();
@@ -182,6 +184,7 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
                 showName={showName}
                 showTime={showTime}
                 senderImageUrl={message.sender ? profileImageUrls.get(message.sender.id) : undefined}
+                onSenderClick={setProfileUserId}
                 unread={unreadReaders(message, room.members)}
                 actions={
                   deletable ? (
@@ -221,6 +224,7 @@ export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId
         pending={remove.isPending}
         onConfirm={() => deleting && remove.mutate(deleting.id)}
       />
+      <ChatUserProfileDialog userId={profileUserId} onClose={() => setProfileUserId(null)} />
     </div>
   );
 }
@@ -232,6 +236,7 @@ function MessageBubble({
   showName,
   showTime,
   senderImageUrl,
+  onSenderClick,
   unread,
   actions,
 }: {
@@ -240,17 +245,30 @@ function MessageBubble({
   showName: boolean;
   showTime: boolean;
   senderImageUrl: string | null | undefined;
+  onSenderClick: (userId: number) => void;
   unread: number;
   actions: React.ReactNode;
 }) {
   return (
     <div data-copy-message={message.id} className={cn("group mt-1 flex flex-col", mine ? "items-end" : "items-start", showName && "mt-3")}>
-      {showName && (
-        <p className="mb-1 flex items-center gap-1.5 px-1 text-xs text-muted-foreground select-none">
-          <UserAvatar name={message.sender?.name ?? "?"} imageUrl={senderImageUrl} className="size-6" />
-          {message.sender?.name ?? "(알 수 없음)"}
-        </p>
-      )}
+      {showName &&
+        (message.sender ? (
+          // 사진·이름을 누르면 보낸 사람 기본 정보 (조직도 사원 상세와 같은 창)
+          <button
+            type="button"
+            onClick={() => onSenderClick(message.sender!.id)}
+            className="mb-1 flex items-center gap-1.5 rounded-md px-1 text-xs text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`${message.sender.name} 정보 보기`}
+          >
+            <UserAvatar name={message.sender.name} imageUrl={senderImageUrl} className="size-6" />
+            {message.sender.name}
+          </button>
+        ) : (
+          <p className="mb-1 flex items-center gap-1.5 px-1 text-xs text-muted-foreground select-none">
+            <UserAvatar name="?" imageUrl={null} className="size-6" />
+            (알 수 없음)
+          </p>
+        ))}
       <div className={cn("flex max-w-[85%] items-end gap-1.5", mine && "flex-row-reverse")}>
         {message.type === "FILE" && !message.deleted ? (
           <ChatFileContent message={message} mine={mine} />

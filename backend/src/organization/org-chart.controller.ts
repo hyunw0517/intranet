@@ -34,4 +34,13 @@ export class OrgChartController {
   ) {
     return this.orgChartService.searchDirectory(query);
   }
+
+  //* 사원 한 명 (채팅 메시지의 보낸 사람 등 id만 아는 화면의 상세 창) - 재직 중이 아니면 404
+  @Get('directory/:userId')
+  @Roles(UserRole.USER)
+  getDirectoryUser(
+    @Param('userId', ParseIntPipe) userId: number,
+  ) {
+    return this.orgChartService.getDirectoryUser(userId);
+  }
 }

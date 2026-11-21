@@ -107,6 +107,7 @@
 - **Date**는 ISO 문자열로 나간다.
 - **페이지네이션**: `common/dto`의 `PagePaginationDto` / `CursorPaginationDto`가 요청 쪽이다. 응답(목록 + 전체 개수 / 다음 커서)은 **모듈별 응답 클래스**로 둔다(예: `UserListResponse`). 대상 모듈이 3개뿐이라 공통 제네릭(`ApiExtraModels` + `getSchemaPath`)은 쓰지 않는다.
 - enum(`UserRole`, `UserStatus`, `BoardType` 등)은 `@ApiProperty({ enum: ..., enumName: ... })`로 이름을 붙여 스키마에서 재사용되게 한다.
+- **기본값이 있는 필드**(`page: number = 1`처럼 `?` 없이 초기값만 있는 필드)는 플러그인이 필수로 표시한다. 실제로는 생략할 수 있으므로 `@ApiProperty({ required: false, default: ... })`를 붙인다. 공통 페이지 DTO(`take`·`order`·`page`)는 2026-11-21에 처리했고, 모듈 DTO의 `order`·`scope` 등은 그 모듈 차례에 같은 규칙으로 처리한다.
 
 ## 4. 작업 순서
 
@@ -117,6 +118,9 @@
 3. ✅ 인증 스킴(Bearer 전역 / Basic) 등록, `@IsPublic()` 해제 처리, `@Roles`·`@RequireAdmin` 권한 표시 (2026-11-21: 238개 중 공개 9 · 로그인만 9 · USER 이상 149 · ADMIN 71, 경고 없음. `POST /auth/login/emp`만 Basic. UI에서 로그인 → 토큰 넣고 호출은 브라우저 확인 필요)
 4. 모듈 단위로 진행: `auth` → `users` → `organization` → `boards` → `common` → 애드온(`reservations` → `approvals` → `chats` → `projects`)
    - 모듈마다 DTO 필드 주석 `/** */` 변환 → `@ApiTags`·`@ApiOperation` → (대상 모듈만) 응답 클래스 → 에러 응답 순서
+   - ✅ `auth` (2026-11-21): 12개 라우트 태그·summary·에러, 응답 클래스 `auth/dto/auth-response.dto.ts`(컨트롤러 반환 타입으로 지정), DTO 필드 설명. 회원가입이 쓰는 `users/dto/create-user.dto.ts`는 주석이 없어 검증 규칙으로 확인되는 설명을 새로 썼다. `GET /`("Hello World!")는 `@ApiExcludeEndpoint()`로 문서에서 숨김(라우트·e2e는 유지)
+   - 참고: 이 저장소에서 사용자 입력 오류·없는 회원은 대부분 400(`BadRequestException`)이다(중복 사번·이메일, 존재하지 않는 회원 포함). 문서도 실제 코드대로 400으로 적는다
+   - ✅ `users` (2026-11-21): 17개 라우트, 응답 클래스 `users/dto/user-response.dto.ts`(내 정보·목록·상세·현황·검색), 페이지 meta는 users·boards 공용 `common/dto/page-meta-response.dto.ts`. 요청 DTO enum에 이름(`UserRole`·`UserStatus`·`AdminPermission`·`UserSortBy`·`SortOrder`)
 5. 모듈마다 생성된 스키마가 실제 DTO·응답과 맞는지 UI에서 요청을 보내 확인한다 (참고 프로젝트처럼 문서와 코드가 어긋나지 않도록)
 6. 하네스 검사 추가: `@ApiOperation`이 없는 라우트를 찾는다(라우트 권한 데코레이터 검사와 같은 방식). `harness/rules.json`에 새 태그로 등록하고 [harness.md](harness.md)에 반영한다
 7. 공통 규약 가이드를 이 문서 5장에 작성한다

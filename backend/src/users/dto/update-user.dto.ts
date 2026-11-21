@@ -6,7 +6,7 @@ export class UpdateUserDto {
     @IsNotEmpty()
     email: string;
 
-    // 본인 확인용 현재 비밀번호 (변경할 비밀번호 아님)
+    /** 본인 확인용 현재 비밀번호 (변경할 비밀번호 아님) */
     @IsString()
     @IsNotEmpty()
     currentPassword: string;

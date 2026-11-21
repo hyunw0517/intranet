@@ -1,6 +1,6 @@
 # API 문서화 (Swagger) 작업 명세
 
-> 상태: **진행 중** (2026-11-01 작성, 2026-11-21 결정 반영·착수). 도입은 2026-11-21 사용자 확인(AGENTS.md 18장 기준). 진행 상황은 4장.
+> 상태: **구현 완료, 브라우저 확인 남음** (2026-11-01 작성, 2026-11-21 착수, 2026-11-22 4장 1~7 완료). 도입은 2026-11-21 사용자 확인(AGENTS.md 18장 기준). 남은 것: 6장 "Try it out으로 로그인 → 보호된 API 호출" 확인.
 > API 문서 작업을 요청받으면 이 문서를 먼저 읽고 그 규칙을 따른다.
 
 ## 0. 결정 사항 (2026-11-21)
@@ -134,20 +134,126 @@
    - 발견(코드는 그대로 둠): `ProjectListQueryDto` 클래스 주석은 "scope=all: 전체 (과제 관리 관리자만)"이지만, 코드와 projects.md(11/17 결정)는 USER 이상 누구나 전체 목록을 본다. 문서는 실제 동작대로 적었다
 5. 모듈마다 생성된 스키마가 실제 DTO·응답과 맞는지 UI에서 요청을 보내 확인한다 (참고 프로젝트처럼 문서와 코드가 어긋나지 않도록)
 6. ✅ 하네스 검사 추가 (2026-11-22): `harness/checks/api-docs.mjs` - `@ApiOperation` 없는 라우트, `@ApiTags` 없는 컨트롤러를 오류로 잡는다(`@ApiExcludeEndpoint`·`@ApiExcludeController`는 제외). 규칙 R-DOC-04로 `harness/rules.json`에 등록, [harness.md](harness.md) 4장 반영. 만들다가 공용 컨트롤러 파서가 문자열 안의 괄호(Swagger 설명의 `[from, to)`)를 데코레이터 괄호로 세어 **라우트 5개가 R-AUTH-01 검사에서도 빠지던 문제**를 발견해 고쳤다(문자열 내용을 지운 뒤 파싱)
-7. 공통 규약 가이드를 이 문서 5장에 작성한다
+7. ✅ 공통 규약 가이드를 이 문서 5장에 작성한다 (2026-11-22: 호출 경로, 인증 흐름, 에러 응답·상태 코드 관례, 페이지·커서 목록, 일괄 처리, 값 형식, 파일, 채팅 소켓, 애드온)
 
-## 5. 공통 규약 가이드 (작업 시 작성)
+## 5. 공통 규약 가이드
 
-Swagger로 표현하기 어려운 내용을 여기에 정리한다. 작성할 항목:
+Swagger(`/api/docs`)의 라우트별 설명으로 표현하기 어려운 공통 규칙. 값은 2026-11-22 코드 기준이다.
 
-- 호출 경로 규칙: 브라우저는 `/api/*`, rewrite·Nginx가 `/api` 제거
-- 인증 흐름: 로그인(Basic) → access(메모리, 10분) / refresh(HttpOnly 쿠키, 로그인 유지 선택에 따라 세션 쿠키 또는 기간 쿠키) → 401 시 재발급 → 403은 재발급 금지. 상세는 [frontend/fe-01-auth.md](frontend/fe-01-auth.md)
-- 로그인·가입 IP 요청 수 제한(429), 로그인 실패 계정 잠금
-- 채팅 Socket.IO: 연결 방법(handshake 토큰, access token 만료 시 서버가 끊음 → 새 토큰으로 재연결)과 서버 → 클라이언트 이벤트 이름·payload 표
-- 에러 응답 형식: NestJS 기본 `{ statusCode, message, error }`, 검증 실패 시 `message`가 배열
-- 일괄 처리 API(`ids` 배열)는 하나라도 실패하면 전체 롤백
-- 페이지네이션 요청·응답 형식
-- BigInt id는 문자열, 날짜는 ISO 문자열
+### 5.1 호출 경로
+
+- 브라우저는 같은 출처의 **`/api/*`** 로 호출한다. 개발은 Next.js rewrite(`frontend/next.config.ts`), 운영은 Nginx가 `/api`를 떼고 NestJS(3100)로 넘긴다. NestJS에는 global prefix가 없다.
+  - 예: 브라우저 `GET /api/users/me` → NestJS `GET /users/me`. Swagger 문서의 경로는 NestJS 기준(`/users/me`)이고 서버 주소가 `/api`다.
+- 같은 출처라 CORS 설정이 없고, NestJS가 내려주는 refresh 쿠키(`Set-Cookie`)가 그대로 저장된다.
+- `/api` 자체로 들어오면 `/api/docs`로 이동한다(개발은 `next.config.ts`의 redirect, 운영은 Nginx).
+
+### 5.2 인증 흐름
+
+| 토큰 | 전달 | 유효시간 | 검증 |
+|---|---|---|---|
+| access token | 응답 본문 `{ accessToken }` → 요청 헤더 `Authorization: Bearer` | 10분 | stateless (서명·만료만, DB를 보지 않음) |
+| refresh token | HttpOnly 쿠키 `refreshToken`(`Path=/api/auth`, `SameSite=Lax`, https면 `Secure`) | 유휴 1일(재발급마다 연장), 세션 절대 7일 | stateful (기기 세션 `AuthSession`, 재발급마다 교체) |
+
+1. **로그인** `POST /auth/login/emp`: `Authorization: Basic base64(사번:비밀번호)`, 본문 `{ rememberMe }`. `rememberMe: false`면 refresh 쿠키가 세션 쿠키(브라우저를 닫으면 사라짐)다.
+2. 이후 요청은 access token을 `Authorization: Bearer`로 보낸다. 프론트는 access token을 **메모리에만** 둔다(localStorage에 저장하지 않음).
+3. **401**이면 `POST /auth/token/access`로 한 번 재발급하고(쿠키는 브라우저가 자동 전송) 원래 요청을 한 번 다시 보낸다. 재발급도 401이면 로그인이 만료된 것이다.
+   - 재발급 때 refresh token도 새 것으로 바뀐다(rotation). 이미 바뀐 직전 토큰이 다시 오면 탈취로 보고 그 세션을 끊는다. 단, 교체 후 1분 안의 직전 토큰은 다른 탭의 동시 재발급으로 보고 허용한다.
+4. **403**은 권한 문제라 재발급해도 결과가 같다. 재발급하지 않는다.
+5. 권한 변경·퇴사·비밀번호 변경·모든 기기 로그아웃은 `tokenVersion`을 올려 기존 토큰을 무효로 만든다. access token은 stateless라 **최대 10분** 뒤에 반영된다.
+- 로그인·회원가입은 **IP당 1분 10회**를 넘으면 429(`@nestjs/throttler`). 로그인 실패는 계정 기준으로 **5회마다 10분 → 30분 → 1시간** 잠기고(429), 성공하거나 관리자가 해제하면 초기화된다. 실패 메시지는 원인(없는 사번·틀린 비밀번호)을 구분하지 않는다.
+- 상세와 프론트 구현은 [frontend/fe-01-auth.md](frontend/fe-01-auth.md), [backend/jwt-auth.md](backend/jwt-auth.md).
+
+### 5.3 에러 응답
+
+NestJS 기본 형식 그대로다(전역 예외 필터는 5xx 로그만 남기고 형식은 바꾸지 않는다).
+
+```json
+{ "statusCode": 400, "message": "이미 사용 중인 사원번호입니다.", "error": "Bad Request" }
+```
+
+- **입력 검증 실패**(ValidationPipe)는 `message`가 **문자열 배열**이다. DTO에 없는 필드를 보내도 400(`forbidNonWhitelisted`).
+- 5xx는 내부 정보를 숨기고 `{ "statusCode": 500, "message": "Internal server error" }`.
+- 상태 코드 사용 (이 프로젝트의 관례)
+
+| 코드 | 쓰는 경우 |
+|---|---|
+| 400 | 입력 검증 실패, 업무 규칙 위반. **중복(이미 사용 중인 사번·이메일)·존재하지 않는 회원·부서 등도 400인 곳이 많다** (라우트 설명의 400 항목 참고) |
+| 401 | 토큰 없음·만료, 로그인 실패 |
+| 403 | 권한 없음 (재발급하지 않는다) |
+| 404 | 대상이 없음. **볼 권한이 없는 대상을 숨길 때도 404** (게시판 읽기 권한, 결재 문서 열람, 채팅방) |
+| 409 | 동시 처리 충돌(조건부 UPDATE 0행, DB 제약), 이미 처리됨, 상태가 맞지 않음 |
+| 413 | 업로드 용량 초과 |
+| 429 | 요청 수 제한, 로그인 잠금 |
+
+### 5.4 목록 (페이지네이션)
+
+| 방식 | 요청 | 응답 | 쓰는 곳 |
+|---|---|---|---|
+| 페이지 | `page`(기본 1), `take`(기본 20, 최대 100), `order`(`asc`·`desc`, 기본 `desc` - 목록마다 다를 수 있음), 도메인별 `sortBy` | `{ data: [...], meta: { page, take, total, totalPages, hasNext, hasPrevious } }` | 관리자 회원 목록, 게시글, 예약 등 |
+| 커서 | `cursor`(마지막으로 받은 id, 첫 요청은 생략), `take` | `{ data: [...], meta: { take, nextCursor, hasNext } }` | 알림, 감사 로그, 채팅 메시지·파일 |
+
+- 커서 목록은 항상 최신순(id 내림차순)이라 `order`를 받지만 쓰지 않는다.
+- 정렬 값이 같은 행은 마지막에 `id`로 순서를 고정한다(페이지 경계에서 누락·중복 방지).
+- 쿼리 문자열의 날짜·시각에 들어가는 `+09:00`은 `%2B09:00`으로 인코딩한다(`+`는 공백으로 바뀐다).
+
+### 5.5 일괄 처리
+
+- `ids` 배열을 받는 API(회원 권한·상태·삭제, 예약 취소·삭제·시간 변경 등)는 단건 API와 **같은 서비스**를 쓴다.
+- **한 건이라도 처리할 수 없으면 전체 실패**(트랜잭션 롤백). 처리 중 다른 요청이 대상을 바꿨으면(조건부 UPDATE 건수가 다르면) 400 또는 409로 실패한다.
+- 개수 제한은 API마다 다르다(회원 200, 예약 100).
+
+### 5.6 값 형식
+
+| 값 | 형식 |
+|---|---|
+| BigInt id (`Notification`, `Audit`, `ApprovalDocumentHistory`) | **문자열** (JSON에 BigInt가 없어 서버가 바꿔 보낸다) |
+| 금액 (과제 관리, `Decimal(15,0)` 원화 정수) | 요청은 숫자, 응답은 **문자열**. 합계는 문자열을 `BigInt`로 바꿔 더한다 |
+| 날짜·시각 (`DateTime`) | ISO 문자열 (UTC, 예: `2026-11-22T01:00:00.000Z`). 화면은 KST로 표시 |
+| 날짜만 (생일·입사일·견적일 등) | 요청은 `YYYY-MM-DD`, 응답은 그날 UTC 자정의 ISO 문자열 |
+| 시각 입력 (예약·캘린더 조회) | 시간대가 있는 ISO 문자열 (`2026-11-12T10:00:00+09:00`). 업무 판단(요일·하루 안·운영 시간)은 KST |
+| 시간대 범위 | `[시작, 종료)` - 끝나는 시각에 시작하는 것은 겹치지 않는다 |
+
+### 5.7 파일
+
+- **본문 이미지**(게시글·프로필): `POST /common/files/images`로 먼저 올리고(multipart, 필드 `file`) 본문 HTML에 공개 주소(`/api/common/files/images/<uuid>`)를 넣거나 id를 보낸다. 로그인 없이 열리는 uuid 주소다.
+- **첨부**(게시글·결재·매출·지출): `POST /common/files/attachments`로 먼저 올리고 저장할 때 `attachmentIds`로 연결한다. 공개 주소가 없고, 연결된 대상의 다운로드 API가 권한을 확인한 뒤 내려준다. `<a href>`로는 Bearer 헤더를 보낼 수 없어 fetch로 받는다.
+- **채팅 파일**은 업로드와 메시지 생성이 한 요청이다(`POST /chats/:roomId/images`·`/files`).
+- 올렸지만 연결하지 않은 파일은 쓰이지 않는다. 내가 올린 미연결 파일만 연결할 수 있다.
+
+### 5.8 채팅 Socket.IO
+
+**보내기·수정·삭제·읽음·방 관리는 모두 REST**이고, 소켓은 서버 → 클라이언트 푸시만 한다(클라이언트 → 서버 이벤트 없음). 서비스가 트랜잭션 커밋 후 푸시하고, 푸시가 실패해도 업무는 성공이다(화면은 재연결·새로고침 때 REST로 다시 받는다).
+
+연결:
+
+```ts
+io('/chats', {
+  path: '/api/socket.io',                                // 운영·개발 모두 /api/socket.io → NestJS /socket.io/
+  auth: (cb) => cb({ token: getAccessToken() ?? '' }),   // handshake에 access token
+});
+```
+
+- handshake에서 토큰(서명·만료)과 회원(삭제 안 됨·`tokenVersion`·재직·USER 이상)을 DB로 한 번 확인한다. 실패하면 `connect_error`에 메시지가 온다(토큰 만료면 재발급 후 다시 연결).
+- 연결되면 자기 `user:{id}` room에 들어간다. 채팅방 room은 없고, 서버가 매번 DB의 활성 참여자를 골라 각자의 room으로 보낸다.
+- **access token 만료 시각에 서버가 연결을 끊는다.** disconnect 이유가 `io server disconnect`면 클라이언트가 최신 토큰으로 다시 `connect()`한다. 권한 변경·퇴사·로그아웃이 REST와 같이 최대 10분 안에 반영된다.
+
+서버 → 클라이언트 이벤트 (namespace `/chats`):
+
+| 이벤트 | 받는 사람 | payload |
+|---|---|---|
+| `message:created` | 방의 활성 참여자 | 메시지 (`ChatMessageView` - 메시지 목록 API의 한 행과 같은 형태, 시스템 메시지 포함) |
+| `message:updated` | 〃 | 수정된 메시지 |
+| `message:deleted` | 〃 | `{ roomId, messageId }` |
+| `room:read` | 〃 | `{ roomId, userId, lastReadMessageId }` - 화면이 메시지별 안 읽은 사람 수를 다시 계산 |
+| `room:updated` | 〃 (새로 들어온 사람 포함). 나만 보는 이름 변경·1:1 열기는 본인(다른 탭)에게만 | `{ roomId }` - 방 정보·참여자가 바뀜(생성·초대·내보내기·나가기·방장 변경·이름 변경). 화면이 방 상세를 다시 받는다 |
+| `room:removed` | 내보내진 사람, 나간 본인(다른 탭) | `{ roomId }` - 목록에서 제거 |
+
+규칙 원본은 [design/features.md](design/features.md) 8장.
+
+### 5.9 애드온
+
+- 서버 `.env`의 `ADDONS`로 켠 애드온만 API가 있다. 꺼진 애드온의 API는 404이고 Swagger 문서에도 없다.
+- 프론트는 `GET /common/addons`의 `{ enabled }`로 메뉴·화면을 정한다. 상세는 [design/addons.md](design/addons.md).
 
 ## 6. 완료 기준
 

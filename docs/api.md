@@ -125,6 +125,7 @@
    - ✅ `boards` (2026-11-21): 컨트롤러 5개(게시판·게시판 권한·게시글·댓글·캘린더) 27개 라우트, 응답 클래스 `boards/dto/board-response.dto.ts`·`post-response.dto.ts`·`comment-response.dto.ts`(익명 게시판·삭제 댓글처럼 형태가 갈리는 응답도 typecheck 통과). 첨부 다운로드는 `@ApiProduces('application/octet-stream')` + binary 응답.
    - 발견 후 수정(2026-11-21 사용자 결정): 게시판명 길이가 생성 1~50자·수정 1~100자로 달라 1~100자로 맞췄다(백엔드 `CreateBoardDto`, 프론트 `board-form-dialog.tsx` 검사). `CreateBoardDto`의 `isAnonymous`·`allowSecret`에 `?`를 붙여 타입과 `@IsOptional`을 맞췄다(동작 변화 없음, 생략 시 DB 기본값 false)
    - 발견 후 수정(2026-11-21 사용자 결정): 댓글 목록은 API가 페이지 없이 전체 트리를 주고 화면(`comment-section.tsx`)이 스레드 단위로 페이지를 나누는데, 컨트롤러 주석은 "(페이지)", 서비스 메서드는 `paginateComment`였다. 주석을 실제 동작으로 고치고 메서드 이름을 `getCommentTree`로 바꿨다
+   - ✅ `common` (2026-11-21): 컨트롤러 5개(파일·알림·감사 로그·공휴일·애드온) 13개 라우트. 업로드 2개는 `@ApiConsumes('multipart/form-data')` + `@ApiBody`(multipart 예외), 공개 이미지·썸네일은 binary 응답. 감사 로그 enum 이름(`AuditActionType`·`AuditTargetType`). 라우트가 없는 `CommonController`는 손대지 않았다. **핵심 모듈 완료, 남은 것: 애드온 4개(141개 라우트)**
 5. 모듈마다 생성된 스키마가 실제 DTO·응답과 맞는지 UI에서 요청을 보내 확인한다 (참고 프로젝트처럼 문서와 코드가 어긋나지 않도록)
 6. 하네스 검사 추가: `@ApiOperation`이 없는 라우트를 찾는다(라우트 권한 데코레이터 검사와 같은 방식). `harness/rules.json`에 새 태그로 등록하고 [harness.md](harness.md)에 반영한다
 7. 공통 규약 가이드를 이 문서 5장에 작성한다

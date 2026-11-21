@@ -121,6 +121,7 @@
    - ✅ `auth` (2026-11-21): 12개 라우트 태그·summary·에러, 응답 클래스 `auth/dto/auth-response.dto.ts`(컨트롤러 반환 타입으로 지정), DTO 필드 설명. 회원가입이 쓰는 `users/dto/create-user.dto.ts`는 주석이 없어 검증 규칙으로 확인되는 설명을 새로 썼다. `GET /`("Hello World!")는 `@ApiExcludeEndpoint()`로 문서에서 숨김(라우트·e2e는 유지)
    - 참고: 이 저장소에서 사용자 입력 오류·없는 회원은 대부분 400(`BadRequestException`)이다(중복 사번·이메일, 존재하지 않는 회원 포함). 문서도 실제 코드대로 400으로 적는다
    - ✅ `users` (2026-11-21): 17개 라우트, 응답 클래스 `users/dto/user-response.dto.ts`(내 정보·목록·상세·현황·검색), 페이지 meta는 users·boards 공용 `common/dto/page-meta-response.dto.ts`. 요청 DTO enum에 이름(`UserRole`·`UserStatus`·`AdminPermission`·`UserSortBy`·`SortOrder`)
+   - ✅ `organization` (2026-11-21): 컨트롤러 5개(부서·직급·직책·회원 소속·조직도) 27개 라우트, 태그는 컨트롤러별. 응답 스키마 대상 아님. 직급·직책 목록의 `sortBy`·`order`(기본 ASC) 기본값 표시
 5. 모듈마다 생성된 스키마가 실제 DTO·응답과 맞는지 UI에서 요청을 보내 확인한다 (참고 프로젝트처럼 문서와 코드가 어긋나지 않도록)
 6. 하네스 검사 추가: `@ApiOperation`이 없는 라우트를 찾는다(라우트 권한 데코레이터 검사와 같은 방식). `harness/rules.json`에 새 태그로 등록하고 [harness.md](harness.md)에 반영한다
 7. 공통 규약 가이드를 이 문서 5장에 작성한다

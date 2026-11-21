@@ -6,6 +6,7 @@ import { CreateDepartmentDto } from './create-department.dto';
 // PartialType이 붙이는 IsOptional은 재선언해도 상속되어 남으므로, OmitType으로 name을 제외한 뒤 다시 선언
 export class UpdateDepartmentDto extends PartialType(OmitType(CreateDepartmentDto, ['name'] as const)) {
 
+    /** 부서명 (1~50자, 같은 상위 부서 안에서 중복 불가) */
     @IsString()
     @Length(1, 50)
     @IsNotEmpty()

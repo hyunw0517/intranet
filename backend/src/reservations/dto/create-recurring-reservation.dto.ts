@@ -9,18 +9,19 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 // 이미 예약된 날짜·사용 불가 기간·운영하지 않는 요일·이미 지난 시각은 건너뛰고 응답에 이유를 담는다.
 export class CreateRecurringReservationDto {
 
+    /** 시설 id */
     @StringToNumber()
     @IsInt()
     facilityId: number;
 
-    // "2026-11-12" (KST 날짜, 종료일 포함)
+    /** "2026-11-12" (KST 날짜, 종료일 포함) */
     @Matches( DATE_REGEX, { message: 'startDate는 YYYY-MM-DD 형식이어야 합니다.' } )
     startDate: string;
 
     @Matches( DATE_REGEX, { message: 'endDate는 YYYY-MM-DD 형식이어야 합니다.' } )
     endDate: string;
 
-    // 반복할 요일 (ISO: 1 = 월 … 7 = 일, 모두 고르면 매일)
+    /** 반복할 요일 (ISO: 1 = 월 … 7 = 일, 모두 고르면 매일) */
     @IsArray()
     @ArrayNotEmpty()
     @ArrayMaxSize(7)
@@ -30,19 +31,21 @@ export class CreateRecurringReservationDto {
     @Max(7, { each: true })
     weekdays: number[];
 
-    // 매번 같은 시간대 ("10:00" ~ "11:00")
+    /** 매번 같은 시간대 ("10:00" ~ "11:00") */
     @Matches( HM_REGEX, { message: 'startTime은 HH:mm 형식이어야 합니다.' } )
     startTime: string;
 
     @Matches( HM_REGEX, { message: 'endTime은 HH:mm 형식이어야 합니다.' } )
     endTime: string;
 
+    /** 예약 제목 (모든 날짜에 같은 제목) */
     @IsString()
     @MaxLength(100)
     @IsOptional()
     @EmptyToNull()
     title?: string | null;
 
+    /** 설명 */
     @IsString()
     @MaxLength(500)
     @IsOptional()

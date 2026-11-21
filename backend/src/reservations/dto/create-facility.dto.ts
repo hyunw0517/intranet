@@ -6,22 +6,25 @@ import { StringToNumber } from 'src/common/decorator/string-to-number.decorator'
 //* 시설 생성 (관리자)
 export class CreateFacilityDto {
 
+    /** 시설 분류 id (필수, 분류가 예약 규칙을 정한다) */
     @StringToNumber()
     @IsInt()
     categoryId: number;
 
+    /** 시설명 (1~50자, 같은 분류 안에서 중복 불가) */
     @IsString()
     @IsNotEmpty()
     @Length(1, 50)
     name: string;
 
+    /** 위치 */
     @IsString()
     @MaxLength(100)
     @IsOptional()
     @EmptyToNull()
     location?: string | null;
 
-    // 최대 인원 (회의실 등, 없으면 NULL)
+    /** 최대 인원 (회의실 등, 없으면 NULL) */
     @StringToNumber()
     @IsInt()
     @Min(1)
@@ -30,13 +33,14 @@ export class CreateFacilityDto {
     @EmptyToNull()
     capacity?: number | null;
 
+    /** 설명 */
     @IsString()
     @MaxLength(500)
     @IsOptional()
     @EmptyToNull()
     description?: string | null;
 
-    // 사용 여부 (false면 새 예약을 받지 않는다. 기존 예약은 유지)
+    /** 사용 여부 (false면 새 예약을 받지 않는다. 기존 예약은 유지) */
     @StringToBoolean()
     @IsBoolean()
     @IsOptional()

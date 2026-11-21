@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { IsDate, IsEnum, IsInt, IsOptional } from 'class-validator';
 import { PagePaginationDto } from 'src/common/dto/page-pagination.dto';
 import { StringToDate } from 'src/common/decorator/string-to-date.decorator';
@@ -8,6 +9,8 @@ import { FacilityReservationStatus } from 'src/generated/prisma/client';
 // from·to: 시작 시각이 [from, to)인 예약 (둘 다 선택)
 export class MyReservationListQueryDto extends PagePaginationDto {
 
+    /** 예약 상태 */
+    @ApiProperty({ enum: FacilityReservationStatus, enumName: 'FacilityReservationStatus', required: false })
     @IsEnum( FacilityReservationStatus )
     @IsOptional()
     status?: FacilityReservationStatus;

@@ -1,4 +1,4 @@
-import { PartialType } from '@nestjs/mapped-types';
+import { PartialType } from '@nestjs/swagger';
 import { CreateBoardAuthDto } from './create-board-auth.dto';
 
 //* 게시판 권한 규칙 수정 DTO (모든 필드 선택, 생략한 필드는 기존 값 유지)

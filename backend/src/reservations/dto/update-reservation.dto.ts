@@ -1,4 +1,4 @@
-import { OmitType, PartialType } from '@nestjs/mapped-types';
+import { OmitType, PartialType } from '@nestjs/swagger';
 import { CreateReservationDto } from './create-reservation.dto';
 
 //* 예약 수정 (보낸 항목만) - 시설은 바꿀 수 없다. (바꾸려면 취소 후 다시 예약, 2026-11-09 사용자 결정)

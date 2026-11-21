@@ -1,4 +1,4 @@
-import { OmitType } from '@nestjs/mapped-types';
+import { OmitType } from '@nestjs/swagger';
 import { IsDateString, IsOptional } from 'class-validator';
 import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
 import { CreateUserDto } from './create-user.dto';

@@ -1,4 +1,4 @@
-import { PickType } from "@nestjs/mapped-types";
+import { PickType } from '@nestjs/swagger';
 import { IsNotEmpty, IsString,  MaxLength } from "class-validator";
 import { CreateCommentDto } from "./create-comment.dto";
 

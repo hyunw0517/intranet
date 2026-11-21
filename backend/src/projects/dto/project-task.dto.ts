@@ -1,4 +1,4 @@
-import { OmitType, PartialType } from '@nestjs/mapped-types';
+import { OmitType, PartialType } from '@nestjs/swagger';
 import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, MaxLength, Min } from 'class-validator';
 import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
 import { StringToNumber } from 'src/common/decorator/string-to-number.decorator';

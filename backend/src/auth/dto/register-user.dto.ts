@@ -1,4 +1,4 @@
-import { PickType } from "@nestjs/mapped-types";
+import { PickType } from '@nestjs/swagger';
 import { Type } from "class-transformer";
 import { IsArray, IsEnum, IsNotEmpty, IsString, MaxLength, ValidateNested } from "class-validator";
 import { ConsentType } from "src/generated/prisma/client";

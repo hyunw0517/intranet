@@ -32,6 +32,8 @@ EC2
     └── Backend Container
 ```
 
+> 첫 배포에서 인트라넷 DB는 EC2의 `postgres18` 컨테이너가 아니라 **RDS(PostgreSQL 18, Single-AZ, 비공개)** 를 쓴다(2026-11-22 결정). 크레딧으로 덮이지 않는 청구가 처음 생긴 달에 위 그림처럼 EC2 Docker로 옮긴다. 설정·이전 절차는 `need_list.md`(비공개) 1장.
+
 운영 배포 시에는 하나의 `docker-compose.prod.yaml`에서 전체 서비스를 관리할 수 있다.
 
 예상 서비스: `postgres17`, `postgres18`, `sns-backend`, `sns-frontend`, `intranet-backend`, `intranet-frontend`, `nginx`

@@ -12,9 +12,20 @@ const HTTP = new Set(['Get', 'Post', 'Put', 'Patch', 'Delete', 'All', 'Options',
 const METHOD_SIG = /^\s*(?:(?:public|private|protected|static|override|readonly)\s+)*(?:async\s+)?\*?\s*([A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\(/;
 const CLASS_SIG = /^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/;
 
+// 한 줄 문자열 리터럴의 내용을 공백으로 바꾼다 (따옴표는 남김).
+// 문자열 안의 괄호("[from, to)")가 데코레이터 괄호 깊이 계산을, 문자열 안의 "//"("http://")가 주석 제거를 망가뜨리지 않게 한다.
+// (2026-11-22: Swagger 설명의 "[start, end)" 때문에 라우트 5개가 이 검사에서 빠진 것을 api-docs 검사를 만들다 발견)
+const STRING_LITERAL = /'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\\n])*`/g;
+export function maskStrings(line) {
+  return line.replace(STRING_LITERAL, (s) => s[0] + ' '.repeat(s.length - 2) + s[s.length - 1]);
+}
+
 /** 컨트롤러 소스 → [{ className, method, line, http, decorators:Set, classDecorators:Set }] */
 export function parseController(text) {
-  const lines = text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).split(/\r?\n/);
+  const lines = text
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .split(/\r?\n/)
+    .map(maskStrings);
   const routes = [];
   let pending = [];
   let className = null;

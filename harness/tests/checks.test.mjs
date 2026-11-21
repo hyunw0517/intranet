@@ -7,7 +7,8 @@ import { ctx, makeRepo } from './helpers.mjs';
 
 const EXAMPLE = JSON.parse(fs.readFileSync(path.join(DEFAULT_ROOT, 'harness/examples/intranet.config.json'), 'utf8'));
 import importBoundaries, { extractImports } from '../checks/import-boundaries.mjs';
-import routeGuards, { parseController } from '../checks/route-guards.mjs';
+import routeGuards, { maskStrings, parseController } from '../checks/route-guards.mjs';
+import apiDocs from '../checks/api-docs.mjs';
 import rulesRegistry from '../checks/rules-registry.mjs';
 import docLinks from '../checks/doc-links.mjs';
 import docPaths from '../checks/doc-paths.mjs';
@@ -177,6 +178,82 @@ test('route-guards: allowlist는 통과, 없어진 allowlist 항목은 경고', 
   assert.deepEqual(r.errors, []);
   assert.equal(r.warnings.length, 1);
   assert.match(r.warnings[0], /UsersController\.removed/);
+});
+
+test('parseController: 문자열 안의 괄호·"//"는 데코레이터 범위와 주석 제거에 영향을 주지 않는다', () => {
+  // Swagger 설명의 "[start, end)" 때문에 뒤의 라우트를 놓치던 문제 (2026-11-22)
+  const src = [
+    "@Controller('r')",
+    'export class RController {',
+    "  @Get('a')",
+    "  @ApiOperation({ summary: '기간', description: '범위는 [from, to) 최대 31일' })",
+    '  a() {}',
+    "  @Get('b')",
+    "  @ApiOperation({ summary: '링크', description: 'http://example.com 참고' })",
+    "  @Roles(UserRole.USER)",
+    '  b() {}',
+    '}',
+  ].join('\n');
+  assert.deepEqual(parseController(src).map((r) => [r.method, [...r.decorators].sort().join(',')]), [
+    ['a', 'ApiOperation,Get'],
+    ['b', 'ApiOperation,Get,Roles'],
+  ]);
+  assert.equal(maskStrings("x('a)b') // c"), "x('   ') // c");
+});
+
+// ── api-docs ──────────────────────────────────────────────────
+
+test('api-docs: @ApiOperation 없는 라우트, @ApiTags 없는 컨트롤러는 오류', () => {
+  const root = makeRepo({
+    'backend/src/boards/posts.controller.ts': `@Controller('posts')
+export class PostsController {
+  @Get()
+  @ApiOperation({ summary: '목록' })
+  list() {}
+
+  @Post()
+  create() {}
+}
+`,
+  });
+  const r = apiDocs.run(ctx(root));
+  assert.equal(r.errors.length, 2);
+  assert.match(r.errors.join('\n'), /\[R-DOC-04\] PostsController\.create \(@Post\) — @ApiOperation/);
+  assert.match(r.errors.join('\n'), /\[R-DOC-04\] PostsController — 컨트롤러에 @ApiTags/);
+});
+
+test('api-docs: 다 붙어 있으면 통과, @ApiExcludeEndpoint·@ApiExcludeController는 검사에서 뺀다', () => {
+  const root = makeRepo({
+    'backend/src/boards/posts.controller.ts': `@ApiTags('Posts (게시글)')
+@Controller('posts')
+export class PostsController {
+  @Get()
+  @ApiOperation({ summary: '목록' })
+  list() {}
+
+  @Get('health')
+  @ApiExcludeEndpoint()
+  health() {}
+}
+`,
+    'backend/src/app.controller.ts': `@ApiExcludeController()
+@Controller()
+export class AppController {
+  @Get()
+  hello() {}
+}
+`,
+  });
+  const r = apiDocs.run(ctx(root));
+  assert.deepEqual(r.errors, []);
+  assert.match(r.notes[0], /라우트 3개 확인 · 문서 제외 2개/);
+});
+
+test('api-docs: 설정이 없으면 건너뛴다', () => {
+  const root = makeRepo({});
+  const c = ctx(root);
+  delete c.config.apiDocs;
+  assert.match(apiDocs.run(c).notes[0], /apiDocs 설정 없음/);
 });
 
 // ── rules-registry ────────────────────────────────────────────

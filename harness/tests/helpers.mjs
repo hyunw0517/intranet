@@ -33,7 +33,7 @@ export function ctx(root, extra = {}) {
     root,
     config: JSON.parse(fs.readFileSync(path.join(root, 'harness/harness.config.json'), 'utf8')),
     rules: JSON.parse(fs.readFileSync(path.join(root, 'harness/rules.json'), 'utf8')).rules,
-    checkIds: ['agents-size', 'doc-links', 'doc-paths', 'rules-registry', 'import-boundaries', 'route-guards'],
+    checkIds: ['agents-size', 'doc-links', 'doc-paths', 'rules-registry', 'import-boundaries', 'route-guards', 'api-docs'],
     ...extra,
   };
 }

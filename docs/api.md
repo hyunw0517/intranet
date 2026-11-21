@@ -86,7 +86,7 @@
 | 데코레이터 | 규칙 |
 |---|---|
 | `@ApiTags('Users (회원)')` | 컨트롤러 클래스마다. 영어 + 괄호 안 한글. 모듈 하나에 컨트롤러가 여러 개(`organization`, `boards`)면 컨트롤러별로 태그를 나눈다 |
-| `@ApiOperation({ summary, description })` | 모든 라우트(하네스 검사 대상). 한국어. summary는 한 줄, description에는 **상태 제약, 트랜잭션 동작** 등 코드만 봐서는 모르는 규칙을 적는다. 권한 조건은 손으로 쓰지 않는다(아래) |
+| `@ApiOperation({ summary, description })` | [R-DOC-04] 모든 라우트(하네스 `api-docs` 검사, 컨트롤러의 `@ApiTags`도 함께 검사). 한국어. summary는 한 줄, description에는 **상태 제약, 트랜잭션 동작** 등 코드만 봐서는 모르는 규칙을 적는다. 권한 조건은 손으로 쓰지 않는다(아래) |
 | 권한 표시 | **문서 생성 직후 `setupSwagger`의 `applyAccessRules`가 자동으로 붙인다**(2026-11-21 구현). 라우트마다 `@IsPublic`·`@Roles`·`@RequireAdmin` 값을 가드와 같은 방식(`getAllAndOverride`, 메서드 → 클래스)으로 읽어 설명 맨 앞에 "**권한**: ADMIN 이상 + 관리자 기능 `USERS`" 등을 붙이고, 401(로그인 필요)·403(권한 없음) 응답을 넣는다. 권한 데코레이터는 고치지 않아 인증 코드는 Swagger를 모르고, 문서와 실제 검사가 어긋나지 않는다. 문서 라우트와 메서드는 operationId(`컨트롤러클래스_메서드`)로 짝지으므로 **컨트롤러 클래스 이름은 겹치면 안 된다**(짝을 못 찾으면 시작 로그에 경고) |
 | `@ApiOkResponse` / `@ApiCreatedResponse({ type })` | 응답 스키마 대상 모듈(`auth`·`users`·`boards`)만. 응답 타입 클래스를 지정한다 (3.4) |
 | 에러 응답 | 401(Bearer)·403(권한 데코레이터)은 자동으로 붙인다. 라우트 고유 에러(400 검증 외 조건, 404, 409, 429)만 그 라우트에 붙이고 어떤 경우인지 설명을 적는다 |
@@ -133,7 +133,7 @@
    - ✅ `projects` (2026-11-22): 파일 7개에 컨트롤러 11개(프로젝트·협력사·참여자·과제·거래처·견적서·견적 결재 상신·매출·비용 항목·전사 통계·예산) 61개 라우트. 설명은 docs/design/projects.md(권한 표, 견적 버전·확정, 매출 청구·수금, 예산·지출)와 서비스 검사로 썼다. 목록 `scope`는 기본값 표시. **4단계 완료: 문서의 237개 라우트(숨긴 `GET /` 제외) 모두 summary·태그 있음**
    - 발견(코드는 그대로 둠): `ProjectListQueryDto` 클래스 주석은 "scope=all: 전체 (과제 관리 관리자만)"이지만, 코드와 projects.md(11/17 결정)는 USER 이상 누구나 전체 목록을 본다. 문서는 실제 동작대로 적었다
 5. 모듈마다 생성된 스키마가 실제 DTO·응답과 맞는지 UI에서 요청을 보내 확인한다 (참고 프로젝트처럼 문서와 코드가 어긋나지 않도록)
-6. 하네스 검사 추가: `@ApiOperation`이 없는 라우트를 찾는다(라우트 권한 데코레이터 검사와 같은 방식). `harness/rules.json`에 새 태그로 등록하고 [harness.md](harness.md)에 반영한다
+6. ✅ 하네스 검사 추가 (2026-11-22): `harness/checks/api-docs.mjs` - `@ApiOperation` 없는 라우트, `@ApiTags` 없는 컨트롤러를 오류로 잡는다(`@ApiExcludeEndpoint`·`@ApiExcludeController`는 제외). 규칙 R-DOC-04로 `harness/rules.json`에 등록, [harness.md](harness.md) 4장 반영. 만들다가 공용 컨트롤러 파서가 문자열 안의 괄호(Swagger 설명의 `[from, to)`)를 데코레이터 괄호로 세어 **라우트 5개가 R-AUTH-01 검사에서도 빠지던 문제**를 발견해 고쳤다(문자열 내용을 지운 뒤 파싱)
 7. 공통 규약 가이드를 이 문서 5장에 작성한다
 
 ## 5. 공통 규약 가이드 (작업 시 작성)

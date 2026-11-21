@@ -41,6 +41,7 @@ hook·skill 설치는 사용자가 한 번 직접 실행한다(원격 도구는 
 | R-ARCH-01 | 핵심 → 애드온, common → 업무 모듈, 애드온 → 애드온 import 금지 (auth 데코레이터·토큰 타입은 기반 기능이라 허용, 선언한 의존은 `allow`) | import-boundaries 검사 |
 | R-ARCH-02 | `backend/src` 바로 아래 모든 모듈은 경계 설정에 분류 (규칙 from/to 또는 `unrestricted` + 이유). 2026-11-17 추가 - `projects`가 빠져 있던 사례 | import-boundaries 검사 (`requireClassified`) |
 | R-DOC-01~03 | AGENTS.md 30KB, 문서 링크·경로 실재, 규칙 대장 | 검사 |
+| R-DOC-04 | API 라우트에 `@ApiOperation`, 컨트롤러에 `@ApiTags` (문서 제외는 `@ApiExcludeEndpoint`·`@ApiExcludeController`). 2026-11-22 추가 - Swagger 도입 | api-docs 검사 (컨트롤러 파서는 route-guards와 공용) |
 | R-SEC-01, R-DB-01~02, R-GIT-01 | 위험한 파일·명령 | 가드 hook |
 | R-VER-01 | 끝내기 전 검증 | Stop hook |
 | R-PROC-01~02, R-FE-01 | 업무 결정은 묻기, 지어내지 않기, 프론트 작업 중 백엔드 수정 금지 | 판단 (자동화하지 않은 이유는 rules.json) |

@@ -20,8 +20,9 @@ import docPaths from './checks/doc-paths.mjs';
 import rulesRegistry from './checks/rules-registry.mjs';
 import importBoundaries from './checks/import-boundaries.mjs';
 import routeGuards from './checks/route-guards.mjs';
+import apiDocs from './checks/api-docs.mjs';
 
-export const CHECKS = [agentsSize, docLinks, docPaths, rulesRegistry, importBoundaries, routeGuards];
+export const CHECKS = [agentsSize, docLinks, docPaths, rulesRegistry, importBoundaries, routeGuards, apiDocs];
 
 export function parseArgs(argv) {
   const opts = { quick: false, changed: false, stop: false, json: false, only: null, scripts: null };

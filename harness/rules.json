@@ -70,6 +70,16 @@
       ]
     },
     {
+      "id": "R-DOC-04",
+      "title": "API 라우트에는 @ApiOperation(summary), 컨트롤러에는 @ApiTags를 붙인다 (문서에서 뺄 것은 @ApiExcludeEndpoint·@ApiExcludeController)",
+      "enforcedBy": [
+        {
+          "type": "check",
+          "id": "api-docs"
+        }
+      ]
+    },
+    {
       "id": "R-SEC-01",
       "title": ".env는 사용자 확인 후에만(Edit·Write로, 셸 명령으로 쓰지 않음), lock 파일은 에이전트가 고치지 않는다",
       "enforcedBy": [

@@ -216,6 +216,11 @@
       }
     ]
   },
+  "apiDocs": {
+    "$comment": "[R-DOC-04] Swagger 문서 누락 검사 (harness/checks/api-docs.mjs, docs/api.md 3.3)",
+    "srcRoot": "backend/src",
+    "fileSuffix": ".controller.ts"
+  },
   "guards": {
     "protectedFiles": [
       {

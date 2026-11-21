@@ -1,7 +1,7 @@
 # Intranet Portfolio Project Context
 
 > 상위 설계 문서 (Source of Truth) · Claude Code, Codex 등 모든 코딩 에이전트가 공통으로 읽는다.
-> 버전: v1.93 · 최종 갱신: 2026-11-21
+> 버전: v1.94 · 최종 갱신: 2026-11-22
 > 기능·구조가 바뀌면 이 문서(또는 해당 `docs/design/` 문서)를 먼저 갱신하고 [docs/design/changelog.md](docs/design/changelog.md)에 기록한다.
 > **이 파일은 30KB 이하로 유지한다**(Codex 기본 읽기 한도 32KiB). 기능 상세는 [docs/design/features.md](docs/design/features.md)에 쓰고 여기에는 요약만 둔다. [R-DOC-01]
 > 규칙 앞의 `[R-XXX-00]` 태그는 규칙 대장 [harness/rules.json](harness/rules.json)과 짝이다. 무엇이 강제하는지는 [docs/harness.md](docs/harness.md). [R-DOC-03]
@@ -206,6 +206,7 @@ intranet/backend/
   - 먼저 업로드(`POST /common/files/images` 공개 uuid 주소 / `attachments` 비공개)하고 저장 시 연결한다. 저장 위치는 `FileStorage` 추상 클래스 뒤(현재 로컬 `UPLOAD_ROOT=../uploads`, 운영 S3는 구현체만 추가). 경로 규칙·업로드 흐름은 [docs/backend/files.md](docs/backend/files.md).
 - 게시글 하위 리소스(댓글·첨부)의 경로는 `boards/:boardId/posts/:postId/...`로 통일하고, 권한은 `PostsService.checkPost`(URL의 게시판 권한 → 그 게시판의 글인지 확인)를 재사용한다.
 - 정기 작업(`@Cron`)은 그 일을 하는 서비스에 둔다(애드온이 꺼지면 함께 빠진다). 한눈에 보는 목록은 [docs/backend/cron-jobs.md](docs/backend/cron-jobs.md)이고, 새 작업을 추가하면 그 표도 고친다.
+- [R-DOC-04] API 문서는 Swagger(`/api/docs`): 새 라우트에는 `@ApiOperation`(한국어 summary), 컨트롤러에는 `@ApiTags`를 붙인다. 권한은 데코레이터에서 자동 표시. 규칙은 [docs/api.md](docs/api.md) 3장.
 
 각 업무 모듈은 `users/` = `users.module.ts`·`users.controller.ts`·`users.service.ts`·`dto/`처럼 구성한다. 최상위에서 controller/service/entity 형식으로 나누지 않고 도메인을 기준으로 분리한다.
 

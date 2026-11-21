@@ -223,8 +223,9 @@ describe('시설 예약', () => {
         });
 
         // 평일만 운영하는 분류에 매일 반복 → 주말은 NOT_OPERATING_DAY로 건너뜀
+        // 다다음 주 월요일을 쓴다: 다음 월요일이면 토·일에 실행할 때 시작일(월 − 2일)이 오늘·어제가 되어 PAST가 섞인다
         it('운영하지 않는 요일은 건너뛴다', async () => {
-            const monday = nextWeekday( 1 );
+            const monday = addKstDays( nextWeekday( 1 ), 7 );
             const res = await http().post( '/reservations/recurring' ).set( auth( userToken ) ).send({
                 facilityId: weekdayRoom, startDate: addKstDays( monday, -2 ), endDate: monday, weekdays: [ 1, 2, 3, 4, 5, 6, 7 ], startTime: '11:00', endTime: '12:00',
             }).expect( 201 );

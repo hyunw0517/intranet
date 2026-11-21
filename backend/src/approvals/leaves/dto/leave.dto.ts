@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from "class-transformer";
 import { ArrayMaxSize, IsArray, IsDate, IsEnum, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from "class-validator";
 import { PagePaginationDto } from "src/common/dto/page-pagination.dto";
@@ -15,30 +16,37 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 // 제목은 서버가 유형·기간으로 만든다. 결재라인은 비워 둘 수 있다(상신할 때 검사).
 export class CreateLeaveDto {
 
+    /** 휴가 유형 */
+    @ApiProperty({ enum: LeaveType, enumName: 'LeaveType' })
     @IsEnum(LeaveType)
     type: LeaveType;
 
+    /** 단위 (FULL 종일 = 달력 일수 / HALF 반차 0.5일 / QUARTER 반반차 0.25일, 반차·반반차는 하루 안) */
+    @ApiProperty({ enum: LeaveUnit, enumName: 'LeaveUnit' })
     @IsEnum(LeaveUnit)
     unit: LeaveUnit;
 
+    /** 시작일 (YYYY-MM-DD, KST. 지난 날짜도 신청할 수 있다, 한 신청은 한 연도 안) */
     @Matches(DATE_PATTERN, { message: '시작일은 YYYY-MM-DD 형식이어야 합니다.' })
     startDate: string;
 
-    // 종일만 사용 (비우면 시작일 하루)
+    /** 종일만 사용 (비우면 시작일 하루) */
     @Matches(DATE_PATTERN, { message: '종료일은 YYYY-MM-DD 형식이어야 합니다.' })
     @IsOptional()
     endDate?: string | null;
 
-    // 반차·반반차만 사용 (30분 단위, 종료 시각은 서버가 채움)
+    /** 반차·반반차만 사용 (30분 단위, 종료 시각은 서버가 채움) */
     @Matches(TIME_PATTERN, { message: '시작 시각은 HH:mm 형식이어야 합니다.' })
     @IsOptional()
     startTime?: string | null;
 
+    /** 사유 (최대 500자) */
     @IsString()
     @MaxLength(500)
     @IsOptional()
     reason?: string | null;
 
+    /** 결재라인 (결재 문서와 같은 형식, 상신할 때 검사) */
     @IsArray()
     @ArrayMaxSize(MAX_APPROVAL_STEPS)
     @ValidateNested({ each: true })
@@ -46,11 +54,12 @@ export class CreateLeaveDto {
     @IsOptional()
     steps?: ApprovalStepInputDto[];
 
+    /** 불러온 결재라인 템플릿 id (기록용) */
     @IsInt()
     @IsOptional()
     approvalLineTemplateId?: number | null;
 
-    // 먼저 업로드한 첨부 id (진단서 등)
+    /** 먼저 업로드한 첨부 id (진단서 등) */
     @IsArray()
     @ArrayMaxSize(MAX_ATTACHMENTS_PER_TARGET)
     @IsInt({ each: true })
@@ -62,14 +71,19 @@ export class CreateLeaveDto {
 // 휴가 항목(type·unit·startDate·endDate·startTime)은 보낸 값과 저장된 값을 합쳐 다시 검사한다.
 export class UpdateLeaveDto {
 
+    /** 휴가 유형 */
+    @ApiProperty({ enum: LeaveType, enumName: 'LeaveType', required: false })
     @IsEnum(LeaveType)
     @IsOptional()
     type?: LeaveType;
 
+    /** 단위 (FULL 종일 = 달력 일수 / HALF 반차 0.5일 / QUARTER 반반차 0.25일, 반차·반반차는 하루 안) */
+    @ApiProperty({ enum: LeaveUnit, enumName: 'LeaveUnit', required: false })
     @IsEnum(LeaveUnit)
     @IsOptional()
     unit?: LeaveUnit;
 
+    /** 시작일 (YYYY-MM-DD, KST. 지난 날짜도 신청할 수 있다, 한 신청은 한 연도 안) */
     @Matches(DATE_PATTERN, { message: '시작일은 YYYY-MM-DD 형식이어야 합니다.' })
     @IsOptional()
     startDate?: string;
@@ -82,11 +96,13 @@ export class UpdateLeaveDto {
     @IsOptional()
     startTime?: string | null;
 
+    /** 사유 (최대 500자) */
     @IsString()
     @MaxLength(500)
     @IsOptional()
     reason?: string | null;
 
+    /** 결재라인 (결재 문서와 같은 형식, 상신할 때 검사) */
     @IsArray()
     @ArrayMaxSize(MAX_APPROVAL_STEPS)
     @ValidateNested({ each: true })
@@ -94,6 +110,7 @@ export class UpdateLeaveDto {
     @IsOptional()
     steps?: ApprovalStepInputDto[];
 
+    /** 불러온 결재라인 템플릿 id (기록용) */
     @IsInt()
     @IsOptional()
     approvalLineTemplateId?: number | null;
@@ -108,6 +125,7 @@ export class UpdateLeaveDto {
 //* 연도 조회 (비우면 올해, KST)
 export class LeaveYearQueryDto {
 
+    /** 연도 (비우면 올해, KST) */
     @StringToNumber()
     @IsInt()
     @Min(2000)
@@ -120,10 +138,12 @@ export class LeaveYearQueryDto {
 // 화면이 달력 칸 범위를 게시판 일정 조회와 똑같이 보내면 된다. KST 날짜로 바꿔 쓴다.
 export class LeaveCalendarQueryDto {
 
+    /** 조회 시작 (포함, 시간대 있는 ISO 문자열, 게시판 캘린더와 같은 형식) */
     @StringToDate()
     @IsDate()
     start: Date;
 
+    /** 조회 종료 (미포함) */
     @StringToDate()
     @IsDate()
     end: Date;
@@ -132,6 +152,7 @@ export class LeaveCalendarQueryDto {
 //* 관리자 연차 현황 목록
 export class LeaveGrantListQueryDto extends PagePaginationDto {
 
+    /** 연도 (비우면 올해, KST) */
     @StringToNumber()
     @IsInt()
     @Min(2000)
@@ -139,7 +160,7 @@ export class LeaveGrantListQueryDto extends PagePaginationDto {
     @IsOptional()
     year?: number;
 
-    // 이름·사번 검색
+    /** 이름·사번 검색 */
     @IsString()
     @IsOptional()
     search?: string;
@@ -148,32 +169,32 @@ export class LeaveGrantListQueryDto extends PagePaginationDto {
 //* 관리자 조정 (올해, 또는 12월에 미리 만든 다음 해) - 조정값은 누적이 아니라 그 연도의 조정 총합
 export class AdjustLeaveGrantDto {
 
-    // 비우면 올해
+    /** 비우면 올해 */
     @IsInt()
     @Min(2000)
     @Max(2100)
     @IsOptional()
     year?: number;
 
-    // 매년 초기화되는 조정값 (그 연도 행에만, 새해에는 0) - 이월·포상·차감, 입사한 해의 월 단위 보정
+    /** 매년 초기화되는 조정값 (그 연도 행에만, 새해에는 0) - 이월·포상·차감, 입사한 해의 월 단위 보정 */
     @IsNumber({ maxDecimalPlaces: 2 })
     @Min(-99)
     @Max(99)
     adjustDays: number;
 
-    // 0이 아니면 사유 필수 (서비스에서 검사)
+    /** 0이 아니면 사유 필수 (서비스에서 검사) */
     @IsString()
     @MaxLength(200)
     @IsOptional()
     adjustReason?: string | null;
 
-    // 영구 조정값 (매년 더함, 올해부터 반영) - 임원 전입 등 근속 인정. 입사한 해에는 적용하지 않는다
+    /** 영구 조정값 (매년 더함, 올해부터 반영) - 임원 전입 등 근속 인정. 입사한 해에는 적용하지 않는다 */
     @IsNumber({ maxDecimalPlaces: 2 })
     @Min(-99)
     @Max(99)
     permanentDays: number;
 
-    // 0이 아니면 사유 필수
+    /** 0이 아니면 사유 필수 */
     @IsString()
     @MaxLength(200)
     @IsOptional()

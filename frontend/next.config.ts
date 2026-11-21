@@ -6,6 +6,17 @@ import type { NextConfig } from "next";
 const apiServerUrl = process.env.API_SERVER_URL ?? "http://localhost:3100";
 
 const nextConfig: NextConfig = {
+  // /api 로 직접 들어오면 API 문서(Swagger, docs/api.md)로 보낸다. redirect는 rewrite보다 먼저 확인된다.
+  // 정확히 /api 만 해당하고 /api/* 호출은 아래 rewrite 그대로. (운영은 Nginx에 같은 규칙)
+  async redirects() {
+    return [
+      {
+        source: "/api",
+        destination: "/api/docs",
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     return [
       // 채팅 소켓 (Socket.IO). 서버 주소는 끝 슬래시가 있어야 하는데(/socket.io/), Next는 끝 슬래시 주소를 308로 지운다.

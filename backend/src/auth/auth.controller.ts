@@ -13,6 +13,7 @@ import { BasicTokenGuard } from './guard/basic-token.guard';
 import type { Response } from 'express';
 import { clearRefreshTokenCookie, setRefreshTokenCookie } from './const/refresh-cookie-const';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { ApiBasicAuth } from '@nestjs/swagger';
 
 @Controller('auth')
 export class AuthController {
@@ -56,6 +57,7 @@ export class AuthController {
   //      - 본문의 rememberMe가 false면 refresh 쿠키를 세션 쿠키로 발급한다. (브라우저를 닫으면 로그아웃)
   @Post('login/emp')
   @IsPublic()
+  @ApiBasicAuth('basic') // 문서: Authorization: Basic base64(사번:비밀번호)
   @UseGuards(ThrottlerGuard, BasicTokenGuard)
   async postLoginEmpNo(
     @Request() req: any,

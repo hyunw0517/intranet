@@ -1,6 +1,6 @@
 # API 문서화 (Swagger) 작업 명세
 
-> 상태: **착수 전, 결정 완료** (2026-11-01 작성, 2026-11-21 결정 반영). 도입은 2026-11-21 사용자 확인(AGENTS.md 18장 기준).
+> 상태: **진행 중** (2026-11-01 작성, 2026-11-21 결정 반영·착수). 도입은 2026-11-21 사용자 확인(AGENTS.md 18장 기준). 진행 상황은 4장.
 > API 문서 작업을 요청받으면 이 문서를 먼저 읽고 그 규칙을 따른다.
 
 ## 0. 결정 사항 (2026-11-21)
@@ -12,7 +12,7 @@
 | 운영 노출 | 운영에도 열고 **Nginx Basic 인증**으로 막는다(사이트 회원 계정과 별개인 `.htpasswd`) | 3.2 |
 | 애드온 | 켜진 애드온의 API만 문서에 나온다(등록된 모듈만 스캔) | 3.2 |
 | Bearer | 문서 전역에 걸고 `@IsPublic()` 라우트만 해제 | 3.1 |
-| 권한 표시 | `@Roles`·`@RequireAdmin`이 문서에도 권한을 자동으로 표시 | 3.3 |
+| 권한 표시 | `@IsPublic`·`@Roles`·`@RequireAdmin` 값을 문서 생성 직후 읽어 자동 표시(데코레이터는 그대로) | 3.3 |
 | 응답 클래스 | `dto/*-response.dto.ts` + 컨트롤러 반환 타입 `Promise<응답 클래스>`로 typecheck가 서비스와 맞는지 검사 | 3.4 |
 | 에러 | 401/403은 자동, 라우트 고유 400 조건·404·409·429만 그 라우트에 | 3.3 |
 | 필드 설명 | DTO 필드 위 `//` 주석을 `/** */`로 바꿔 `introspectComments`로 읽는다 | 3.1 |
@@ -60,11 +60,11 @@
   - 플러그인은 `nest build`·`nest start`에서만 적용된다. `tsc`(typecheck)와 jest(ts-jest)에는 적용되지 않지만 이 둘은 문서가 필요 없다.
 - **`@nestjs/mapped-types` → `@nestjs/swagger`로 교체했다(2026-11-21, 19개 파일).** `OmitType`·`PartialType` 등을 mapped-types에서 가져오면 Swagger 정보가 상속되지 않아, 상속받은 필드가 문서에서 빠진다. (예: `AdminUpdateUserDto extends OmitType(CreateUserDto, ...)`) package.json의 직접 의존성에서도 뺐다(`@nestjs/swagger`가 내부적으로 가지고 있다). 새 DTO도 `@nestjs/swagger`에서 가져온다.
 - 설치 버전: `@nestjs/swagger@^11.4.8`(NestJS 11용, 12.x는 NestJS 12용).
-- 문서 설정은 `main.ts`에 직접 쓰지 말고 `src/config/swagger.ts`(예정) 같은 함수로 분리해 `main.ts`에서 호출한다.
+- 문서 설정은 `main.ts`에 직접 쓰지 말고 `backend/src/config/swagger.ts`(`setupSwagger`)로 분리해 `main.ts`에서 호출한다.
   - e2e가 쓰는 `configureApp`(`src/app.setup.ts`)에는 넣지 않는다. 테스트에는 문서가 필요 없다.
 - **인증 스킴 등록**
   - `.addBearerAuth()` + 문서 전역 보안 요구(`addSecurityRequirements`). 코드의 가드 구조(전역 `AccessTokenGuard`가 기본으로 막고 `@IsPublic()`만 예외)와 같게 만들어, 새 컨트롤러에서 표시가 빠지지 않게 한다.
-  - `@IsPublic()`이 문서에서도 전역 요구를 해제하도록 바꾼다(OpenAPI의 라우트별 `security: []`). 구현 방법은 착수 시 확인한다.
+  - `@IsPublic()` 라우트는 문서에서 전역 요구를 해제한다(라우트별 `security: []`). Swagger 데코레이터로는 해제를 표현할 수 없어 문서 생성 직후 처리한다(`applyAccessRules`, 3.3).
   - `.addBasicAuth()` → `POST /auth/login/emp`에 `@ApiBasicAuth()`
   - refresh 토큰은 HttpOnly 쿠키(`Path=/api/auth`)라 Swagger UI에서 직접 다루지 않는다. 설명(`@ApiOperation.description`)으로 "브라우저 쿠키로 자동 전송"이라고 적는다.
 
@@ -79,6 +79,7 @@
   - 문서를 열어도 API 자체의 인증·권한 검사는 그대로다. "Try it out"도 로그인 토큰이 있어야 동작한다. 막는 이유는 관리자 API를 포함한 목록이 드러나지 않게 하는 것이다.
   - 막을 경로는 UI와 JSON 스펙(`/api/docs`, `/api/docs-json`) 모두다. 운영 할 일은 `docs/design/need_list.md`(비공개)에 있다.
 - **애드온**: 꺼진 애드온은 모듈이 등록되지 않으므로 문서에도 나오지 않는다. 문서가 실제 서버(꺼진 애드온은 404)와 일치한다. 착수 시 `ADDONS`를 바꿔 실제로 빠지는지 확인한다.
+- **`/api` → `/api/docs` 이동**: 브라우저에서 `/api`로 들어오면 문서로 보낸다(2026-11-21). 개발은 `frontend/next.config.ts`의 `redirects`(rewrite보다 먼저 확인, 정확히 `/api`만), 운영은 Nginx에 같은 규칙(`docs/design/need_list.md`(비공개)). 백엔드 `GET /`("Hello World!")와 e2e는 그대로 둔다.
 
 ### 3.3 컨트롤러에 붙일 데코레이터
 
@@ -86,7 +87,7 @@
 |---|---|
 | `@ApiTags('Users (회원)')` | 컨트롤러 클래스마다. 영어 + 괄호 안 한글. 모듈 하나에 컨트롤러가 여러 개(`organization`, `boards`)면 컨트롤러별로 태그를 나눈다 |
 | `@ApiOperation({ summary, description })` | 모든 라우트(하네스 검사 대상). 한국어. summary는 한 줄, description에는 **상태 제약, 트랜잭션 동작** 등 코드만 봐서는 모르는 규칙을 적는다. 권한 조건은 손으로 쓰지 않는다(아래) |
-| 권한 표시 | `@Roles`·`@RequireAdmin`이 문서 정보도 함께 붙인다(예: 설명 앞에 "권한: ADMIN(USERS)"). 손으로 쓰면 권한이 바뀔 때 문서와 어긋나기 때문이다. 두 데코레이터는 클래스·메서드 양쪽에 붙으므로 둘 다 처리한다. 구현 방법(설명에 붙이기 / `x-` 확장 필드 + 문서 후처리)은 착수 시 확인한다 |
+| 권한 표시 | **문서 생성 직후 `setupSwagger`의 `applyAccessRules`가 자동으로 붙인다**(2026-11-21 구현). 라우트마다 `@IsPublic`·`@Roles`·`@RequireAdmin` 값을 가드와 같은 방식(`getAllAndOverride`, 메서드 → 클래스)으로 읽어 설명 맨 앞에 "**권한**: ADMIN 이상 + 관리자 기능 `USERS`" 등을 붙이고, 401(로그인 필요)·403(권한 없음) 응답을 넣는다. 권한 데코레이터는 고치지 않아 인증 코드는 Swagger를 모르고, 문서와 실제 검사가 어긋나지 않는다. 문서 라우트와 메서드는 operationId(`컨트롤러클래스_메서드`)로 짝지으므로 **컨트롤러 클래스 이름은 겹치면 안 된다**(짝을 못 찾으면 시작 로그에 경고) |
 | `@ApiOkResponse` / `@ApiCreatedResponse({ type })` | 응답 스키마 대상 모듈(`auth`·`users`·`boards`)만. 응답 타입 클래스를 지정한다 (3.4) |
 | 에러 응답 | 401(Bearer)·403(권한 데코레이터)은 자동으로 붙인다. 라우트 고유 에러(400 검증 외 조건, 404, 409, 429)만 그 라우트에 붙이고 어떤 경우인지 설명을 적는다 |
 | `@ApiExcludeEndpoint()` | 문서에 노출하지 않을 라우트 (예: `app.controller`의 헬스 체크) |
@@ -111,9 +112,9 @@
 
 브랜치는 `feature/swagger` 하나에서 진행한다.
 
-1. `@nestjs/swagger` 설치 (NestJS 11 호환 버전 확인), `nest-cli.json` 플러그인 설정, `@nestjs/mapped-types` import 교체
-2. `src/config/swagger.ts`(예정) 작성 → `main.ts`에서 호출, `/api/docs` 접근 확인, `ADDONS`를 바꿔 꺼진 애드온이 빠지는지 확인
-3. 인증 스킴(Bearer 전역 / Basic) 등록, `@IsPublic()` 해제 처리, `@Roles`·`@RequireAdmin` 권한 표시. 로그인 → 토큰 넣고 보호된 API 호출이 UI에서 되는지 확인
+1. ✅ `@nestjs/swagger` 설치 (NestJS 11 호환 버전 확인), `nest-cli.json` 플러그인 설정, `@nestjs/mapped-types` import 교체
+2. ✅ `backend/src/config/swagger.ts` 작성 → `main.ts`에서 호출, `/api/docs` 접근 확인, `ADDONS`를 바꿔 꺼진 애드온이 빠지는지 확인 (2026-11-21: 전부 켬 238개 라우트 / 전부 끔 97개, 토큰 없이 문서 200·API 401, 화면 파일은 상대 경로 `./docs/...`라 `/api/docs`에서도 맞다. 브라우저에서 `/api/docs` 직접 확인은 아직)
+3. ✅ 인증 스킴(Bearer 전역 / Basic) 등록, `@IsPublic()` 해제 처리, `@Roles`·`@RequireAdmin` 권한 표시 (2026-11-21: 238개 중 공개 9 · 로그인만 9 · USER 이상 149 · ADMIN 71, 경고 없음. `POST /auth/login/emp`만 Basic. UI에서 로그인 → 토큰 넣고 호출은 브라우저 확인 필요)
 4. 모듈 단위로 진행: `auth` → `users` → `organization` → `boards` → `common` → 애드온(`reservations` → `approvals` → `chats` → `projects`)
    - 모듈마다 DTO 필드 주석 `/** */` 변환 → `@ApiTags`·`@ApiOperation` → (대상 모듈만) 응답 클래스 → 에러 응답 순서
 5. 모듈마다 생성된 스키마가 실제 DTO·응답과 맞는지 UI에서 요청을 보내 확인한다 (참고 프로젝트처럼 문서와 코드가 어긋나지 않도록)

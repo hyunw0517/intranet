@@ -2,6 +2,26 @@
 
 > [AGENTS.md](../../AGENTS.md) 3장(PostgreSQL 구성 원칙)의 상세. DB 초기화·계정 추가·이관 작업 시 참고한다.
 
+## 1. 폴더 구성
+
+`D:\VScode_Workspace\portfolio\infra-db\` (이 저장소 밖, AGENTS.md 2장에서 옮김 2026-11-21)
+
+```text
+infra-db\
+├── docker-compose.yaml           # postgres17 / postgres18 서비스
+├── .env                          # git 제외
+├── .env.example
+├── .gitignore / .gitattributes   # .sh 파일은 LF 강제
+├── init\
+│   └── 01-create-project-dbs.sh  # 프로젝트 DB/계정 생성 (멱등)
+├── scripts\
+│   └── migrate-sns.sh            # 1회성 SNS 데이터 이관 (완료)
+├── postgres17-data\              # git 제외
+└── postgres18-data\              # git 제외
+```
+
+## 2. 환경변수
+
 `infra-db/.env`는 PostgreSQL 컨테이너 실행과 초기화(프로젝트 DB/계정 생성)를 위한 환경변수만 관리한다.
 
 예:

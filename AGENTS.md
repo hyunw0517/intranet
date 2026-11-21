@@ -1,7 +1,7 @@
 # Intranet Portfolio Project Context
 
 > 상위 설계 문서 (Source of Truth) · Claude Code, Codex 등 모든 코딩 에이전트가 공통으로 읽는다.
-> 버전: v1.92 · 최종 갱신: 2026-11-21
+> 버전: v1.93 · 최종 갱신: 2026-11-21
 > 기능·구조가 바뀌면 이 문서(또는 해당 `docs/design/` 문서)를 먼저 갱신하고 [docs/design/changelog.md](docs/design/changelog.md)에 기록한다.
 > **이 파일은 30KB 이하로 유지한다**(Codex 기본 읽기 한도 32KiB). 기능 상세는 [docs/design/features.md](docs/design/features.md)에 쓰고 여기에는 요약만 둔다. [R-DOC-01]
 > 규칙 앞의 `[R-XXX-00]` 태그는 규칙 대장 [harness/rules.json](harness/rules.json)과 짝이다. 무엇이 강제하는지는 [docs/harness.md](docs/harness.md). [R-DOC-03]
@@ -34,18 +34,7 @@ Windows 개발 환경 (`infra-db`에 PostgreSQL 전용 `docker-compose.yaml`을 
 
 ```text
 D:\VScode_Workspace\portfolio\
-├── infra-db\                         # SNS·Intranet 공용 PostgreSQL 컨테이너 관리
-│   ├── docker-compose.yaml           # postgres17 / postgres18 서비스
-│   ├── .env                          # git 제외
-│   ├── .env.example
-│   ├── .gitignore / .gitattributes   # .sh 파일은 LF 강제
-│   ├── init\
-│   │   └── 01-create-project-dbs.sh  # 프로젝트 DB/계정 생성 (멱등)
-│   ├── scripts\
-│   │   └── migrate-sns.sh            # 1회성 SNS 데이터 이관 (완료)
-│   ├── postgres17-data\              # git 제외
-│   └── postgres18-data\              # git 제외
-│
+├── infra-db\                         # SNS·Intranet 공용 PostgreSQL (폴더 구성: infra-db.md 1장)
 ├── NestJS_SNS\                       # 기존 SNS 프로젝트
 │   ├── backend\
 │   └── frontend\
@@ -202,21 +191,14 @@ intranet/backend/
 │   ├── reservations/
 │   ├── approvals/        # 전자결재 (approval-lines 포함) + 옵션 leaves/ (휴가, 결재가 켜져 있을 때만)
 │   ├── chats/
+│   ├── projects/         # 과제 관리
 │   ├── common/           # 공용 데코레이터·DTO·유틸 + 파일·알림·감사 로그 (핵심, 업무 권한은 모름)
 │   ├── config/
 │   ├── prisma/
 │   ├── app.module.ts
 │   └── main.ts
-│
-├── prisma/
-│   ├── schema.prisma
-│   ├── migrations/
-│   └── seed.ts
-│
-├── test/
-├── Dockerfile
-├── package.json
-└── .env
+├── prisma/               # 11장
+└── test/                 # e2e
 ```
 
 - 함께 생기고 함께 사라지는 데이터는 한 모듈로 묶는다. (조직 마스터 데이터 → `organization`, 게시판·글·댓글 → `boards`)
@@ -225,17 +207,7 @@ intranet/backend/
 - 게시글 하위 리소스(댓글·첨부)의 경로는 `boards/:boardId/posts/:postId/...`로 통일하고, 권한은 `PostsService.checkPost`(URL의 게시판 권한 → 그 게시판의 글인지 확인)를 재사용한다.
 - 정기 작업(`@Cron`)은 그 일을 하는 서비스에 둔다(애드온이 꺼지면 함께 빠진다). 한눈에 보는 목록은 [docs/backend/cron-jobs.md](docs/backend/cron-jobs.md)이고, 새 작업을 추가하면 그 표도 고친다.
 
-각 업무 모듈은 다음처럼 구성한다.
-
-```text
-users/
-├── users.module.ts
-├── users.controller.ts
-├── users.service.ts
-└── dto/
-```
-
-최상위에서 controller/service/entity 형식으로 나누지 않고 도메인을 기준으로 분리한다.
+각 업무 모듈은 `users/` = `users.module.ts`·`users.controller.ts`·`users.service.ts`·`dto/`처럼 구성한다. 최상위에서 controller/service/entity 형식으로 나누지 않고 도메인을 기준으로 분리한다.
 
 ## 10.1 핵심 모듈과 애드온 (ON/OFF)
 
@@ -247,19 +219,12 @@ users/
 | 애드온 | `reservations`(시설 예약), `approvals`(전자결재), `chats`, `projects`(과제 관리) |
 | 애드온의 옵션 | 휴가(연차) = **결재의 옵션**. 결재가 켜져 있을 때만 켤 수 있고, 코드는 `approvals/leaves/`(결재 본체와 별도 서비스·테이블) |
 
-- **의존 방향**
-  - 애드온 → 핵심: 허용 (예: 시설 예약이 `FilesService`·알림·감사 로그 서비스를 직접 호출)
-  - [R-ARCH-01] 핵심 → 애드온: 금지. 핵심은 애드온 모듈을 import하지 않는다.
-  - [R-ARCH-01] 애드온 → 애드온: 선언한 경우만 허용 (현재 휴가 옵션 → 결재, 과제 관리 ↔ 결재 연결 모듈). 결재 최종 승인 → 연차 반영은 **문서 유형별 처리기 등록 + 같은 트랜잭션**으로 연결한다(features.md 7.4). 결재 본체는 휴가를 import하지 않는다.
-  - [R-ARCH-02] 새 모듈 폴더를 만들면 `harness/harness.config.json` `boundaries`에 핵심·애드온으로 분류해 넣는다(분류는 사용자에게 확인). 빠지면 그 모듈은 의존 방향 검사에서 빠진다.
-- **켜고 끄기 (배포 설정)**: `backend/.env`의 `ADDONS`(쉼표 목록, 예: `ADDONS=reservations,approvals,leaves`)로 `AppModule`에 애드온 모듈을 등록할지 정한다. 변수가 없거나 비면 **전부 꺼짐**. 관리자 화면 실시간 전환은 하지 않는다. (2026-11-09 사용자 결정)
-  - 이름 목록·옵션의 본체는 `src/config/addons.config.ts`(`ADDONS`, `parseAddons`), 등록은 `AppModule` imports에 `addonModule('reservations', ReservationsModule)` — `ConditionalModule.registerWhen`(`.env` 로드 후 판단)
-  - 꺼진 애드온은 모듈이 등록되지 않아 **API 자체가 없다(404)**. 데이터는 지우지 않고 그대로 둔다(다시 켜면 그대로 사용).
-  - 모르는 이름이거나 옵션의 본체가 꺼져 있으면(결재를 끄고 휴가만 켬) 서버가 **시작 단계에서 오류**를 낸다(`AddonsService` 생성자).
-  - 프론트는 `GET /common/addons`(USER 이상, 응답 `{ enabled: [...] }`)로 메뉴·페이지·관리자 화면·대시보드 카드를 제어한다. 꺼진 애드온 주소로 직접 들어오면 **일반 404 페이지**.
-- **핵심이 애드온 데이터를 확인해야 할 때** (아직 사용처 없음 - 결재는 핵심 삭제를 막지 않고 조회에서 숨기기로 함, features.md 7.5): 핵심이 **등록 지점**(Nest provider 배열)을 열어 두고 애드온이 자기 확인 로직을 등록한다. 꺼진 애드온은 등록되지 않으므로 자동으로 빠진다. 핵심은 애드온 테이블을 직접 조회하지 않는다.
-- **허용한 타협**: Prisma 스키마는 하나라 애드온 테이블도 항상 만들어지고, 핵심의 enum(`FileTargetType`의 `APPROVAL_DOCUMENT`·`CHAT_MESSAGE`, `AuditTargetType`의 `FACILITY`·`LEAVE` 등)에 애드온 값이 있어도 된다. **코드 의존만 끊는다.**
-- 과설계 방지: 플러그인 로더처럼 모듈을 동적으로 찾아 불러오는 구조는 만들지 않는다. 등록 여부는 `AppModule`에서 목록으로 결정한다.
+> 상세(켜고 끄기 동작, 등록 지점, 허용한 타협)는 [docs/design/addons.md](docs/design/addons.md).
+
+- **의존 방향**: 애드온 → 핵심 허용. [R-ARCH-01] 핵심 → 애드온 금지(import하지 않음), 애드온 → 애드온은 선언한 경우만(휴가 → 결재, 과제 관리 ↔ 결재 연결 모듈). [R-ARCH-02] 새 모듈 폴더는 `harness/harness.config.json` `boundaries`에 분류해 넣는다(분류는 사용자에게 확인).
+- **켜고 끄기**: `backend/.env`의 `ADDONS`(쉼표 목록)로 `AppModule`에 등록할지 정한다(`addonModule(...)`, 목록은 `src/config/addons.config.ts`). 없거나 비면 전부 꺼짐. 꺼진 애드온은 API가 없고(404) 데이터는 그대로 둔다. 모르는 이름·본체 없는 옵션은 시작 단계 오류. 프론트는 `GET /common/addons`로 메뉴·화면을 제어한다.
+- **등록 지점**: 핵심이 애드온 데이터를 확인해야 하면 핵심이 provider 배열을 열고 애드온이 등록한다(아직 사용처 없음). 핵심은 애드온 테이블을 직접 조회하지 않는다.
+- **허용한 타협**: 스키마는 하나라 애드온 테이블·핵심 enum의 애드온 값은 있어도 된다. **코드 의존만 끊는다.** 플러그인 로더 같은 동적 로딩은 만들지 않는다.
 
 ---
 

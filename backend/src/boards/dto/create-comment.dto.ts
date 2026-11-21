@@ -5,12 +5,14 @@ import { StringToNumber } from "src/common/decorator/string-to-number.decorator"
 //* 게시판 입력 기준 DTO (Update 등은 이 클래스에서 파생)
 export class CreateCommentDto {
 
+    /** 부모 댓글 id (대댓글일 때, 깊이 제한 없음) */
     @IsInt()
     @IsOptional()
     @StringToNumber()
     @EmptyToNull()
     parentCommentId?: number | null;
 
+    /** 댓글 내용 (최대 1000자) */
     @IsString()
     @IsNotEmpty()
     @MaxLength(1000)

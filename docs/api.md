@@ -122,6 +122,9 @@
    - 참고: 이 저장소에서 사용자 입력 오류·없는 회원은 대부분 400(`BadRequestException`)이다(중복 사번·이메일, 존재하지 않는 회원 포함). 문서도 실제 코드대로 400으로 적는다
    - ✅ `users` (2026-11-21): 17개 라우트, 응답 클래스 `users/dto/user-response.dto.ts`(내 정보·목록·상세·현황·검색), 페이지 meta는 users·boards 공용 `common/dto/page-meta-response.dto.ts`. 요청 DTO enum에 이름(`UserRole`·`UserStatus`·`AdminPermission`·`UserSortBy`·`SortOrder`)
    - ✅ `organization` (2026-11-21): 컨트롤러 5개(부서·직급·직책·회원 소속·조직도) 27개 라우트, 태그는 컨트롤러별. 응답 스키마 대상 아님. 직급·직책 목록의 `sortBy`·`order`(기본 ASC) 기본값 표시
+   - ✅ `boards` (2026-11-21): 컨트롤러 5개(게시판·게시판 권한·게시글·댓글·캘린더) 27개 라우트, 응답 클래스 `boards/dto/board-response.dto.ts`·`post-response.dto.ts`·`comment-response.dto.ts`(익명 게시판·삭제 댓글처럼 형태가 갈리는 응답도 typecheck 통과). 첨부 다운로드는 `@ApiProduces('application/octet-stream')` + binary 응답.
+   - 발견 후 수정(2026-11-21 사용자 결정): 게시판명 길이가 생성 1~50자·수정 1~100자로 달라 1~100자로 맞췄다(백엔드 `CreateBoardDto`, 프론트 `board-form-dialog.tsx` 검사). `CreateBoardDto`의 `isAnonymous`·`allowSecret`에 `?`를 붙여 타입과 `@IsOptional`을 맞췄다(동작 변화 없음, 생략 시 DB 기본값 false)
+   - 발견 후 수정(2026-11-21 사용자 결정): 댓글 목록은 API가 페이지 없이 전체 트리를 주고 화면(`comment-section.tsx`)이 스레드 단위로 페이지를 나누는데, 컨트롤러 주석은 "(페이지)", 서비스 메서드는 `paginateComment`였다. 주석을 실제 동작으로 고치고 메서드 이름을 `getCommentTree`로 바꿨다
 5. 모듈마다 생성된 스키마가 실제 DTO·응답과 맞는지 UI에서 요청을 보내 확인한다 (참고 프로젝트처럼 문서와 코드가 어긋나지 않도록)
 6. 하네스 검사 추가: `@ApiOperation`이 없는 라우트를 찾는다(라우트 권한 데코레이터 검사와 같은 방식). `harness/rules.json`에 새 태그로 등록하고 [harness.md](harness.md)에 반영한다
 7. 공통 규약 가이드를 이 문서 5장에 작성한다

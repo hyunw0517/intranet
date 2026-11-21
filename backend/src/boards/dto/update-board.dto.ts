@@ -6,6 +6,7 @@ import { CreateBoardDto } from './create-board.dto';
 // PartialType이 붙이는 IsOptional은 재선언해도 상속되어 남으므로, OmitType으로 name을 제외한 뒤 다시 선언
 export class UpdateBoardDto extends PartialType(OmitType(CreateBoardDto, ['name'] as const)) {
 
+    /** 게시판명 (1~100자, 같은 상위 게시판 안에서 중복 불가) */
     @IsString()
     @IsNotEmpty()
     @Length(1, 100)

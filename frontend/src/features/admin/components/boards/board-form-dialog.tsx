@@ -94,7 +94,7 @@ function BoardForm({
     const trimmedDescription = description.trim();
     const nextErrors: typeof errors = {};
     if (!trimmedName) nextErrors.name = "게시판명을 입력해 주세요.";
-    else if (trimmedName.length > 50) nextErrors.name = "게시판명은 50자 이하로 입력해 주세요.";
+    else if (trimmedName.length > 100) nextErrors.name = "게시판명은 100자 이하로 입력해 주세요.";
     if (trimmedDescription.length > 250) nextErrors.description = "설명은 250자 이하로 입력해 주세요.";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;

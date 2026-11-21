@@ -27,8 +27,8 @@ export class CommentsService {
         this.audit = auditService.target( AuditTargetType.COMMENT );
     }
 
-    //* 댓글 조회
-    async paginateComment(
+    //* 댓글 조회 (전체 트리, 페이지 없음 - 화면이 스레드 단위로 나눠 보여 준다)
+    async getCommentTree(
         user: Pick<Users, 'id' | 'role' | 'adminPermissions'>, 
         boardId: number, 
         postId: number

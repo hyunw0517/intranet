@@ -1,0 +1,10 @@
+#!/bin/sh
+# [R-VER-01] 커밋 전 검증. 설치: node harness/install-git-hooks.mjs (core.hooksPath를 이 폴더로 지정)
+# Claude Code 밖(직접 커밋, 다른 에이전트)에서도 같은 검증을 거치게 하는 마지막 관문이다.
+node harness/verify.mjs --stop
+status=$?
+if [ $status -ne 0 ]; then
+  echo ""
+  echo "[하네스] 검증 실패로 커밋을 멈췄다. 위 오류를 고친 뒤 다시 커밋한다."
+  exit 1
+fi

@@ -1,0 +1,284 @@
+{
+  "$comment": "예시: 인트라넷(NestJS 핵심/애드온 구조 + Next.js features)의 실제 설정. 2026-11-17 기준(v0.4): 패키지별 Stop hook 스크립트, 세션 시작 설정, 이력 문서 제외, 모듈 분류(requireClassified·unrestricted), 애드온 간 선언 의존(allow), .env·마이그레이션 ask. 필요한 부분만 harness.config.json에 옮긴다.",
+  "packages": [
+    "backend",
+    "frontend"
+  ],
+  "packageScripts": [
+    "typecheck",
+    "lint:check",
+    "test"
+  ],
+  "stopHook": {
+    "$comment": "backend lint는 기존 오류 43개(auth 가드·데코레이터, no-unsafe-*)가 정리될 때까지 제외 (2026-11-11 사용자 결정). 정리 후 backend에 \"lint:check\"를 추가한다.",
+    "scripts": {
+      "backend": [
+        "typecheck"
+      ],
+      "frontend": [
+        "typecheck",
+        "lint:check"
+      ]
+    },
+    "watch": [
+      "backend/",
+      "frontend/",
+      "harness/",
+      "docs/",
+      "AGENTS.md",
+      "CLAUDE.md",
+      ".claude/"
+    ]
+  },
+  "sessionStart": {
+    "plan": "docs/Plan.md",
+    "planSection": "처리할 작업",
+    "devlog": "docs/devlog",
+    "maxLines": 15,
+    "maxChars": 2000
+  },
+  "agentsSize": {
+    "AGENTS.md": {
+      "maxBytes": 30000,
+      "warnBytes": 28000
+    },
+    "CLAUDE.md": {
+      "maxBytes": 4000
+    }
+  },
+  "docs": {
+    "rootFiles": [
+      "AGENTS.md",
+      "CLAUDE.md",
+      "README.md"
+    ],
+    "dirs": [
+      "docs",
+      ".claude/skills"
+    ],
+    "pathPrefixes": [
+      "backend/",
+      "frontend/",
+      "docs/",
+      "harness/",
+      ".claude/"
+    ],
+    "exclude": [
+      "docs/devlog/",
+      "docs/design/changelog.md"
+    ]
+  },
+  "boundaries": [
+    {
+      "srcRoot": "backend/src",
+      "aliases": {
+        "src/": "."
+      },
+      "ignoreSuffixes": [
+        ".spec.ts",
+        ".e2e-spec.ts"
+      ],
+      "requireClassified": true,
+      "unrestricted": [
+        {
+          "module": "generated",
+          "reason": "Prisma 생성 코드(prisma generate). 모든 모듈이 타입·enum을 import하고, 자신은 다른 모듈을 import하지 않는다"
+        }
+      ],
+      "forbidden": [
+        {
+          "rule": "R-ARCH-01",
+          "from": [
+            "auth",
+            "users",
+            "organization",
+            "boards",
+            "common",
+            "prisma",
+            "config"
+          ],
+          "to": [
+            "reservations",
+            "approvals",
+            "chats",
+            "projects"
+          ],
+          "message": "핵심 모듈은 애드온을 import하지 않는다. 필요하면 핵심이 등록 지점을 열고 애드온이 등록한다"
+        },
+        {
+          "rule": "R-ARCH-01",
+          "from": [
+            "common"
+          ],
+          "to": [
+            "users",
+            "organization",
+            "boards",
+            "reservations",
+            "approvals",
+            "chats",
+            "projects"
+          ],
+          "message": "common은 업무 모듈을 모른다 (auth의 데코레이터·토큰 타입은 기반 기능이라 허용)"
+        },
+        {
+          "rule": "R-ARCH-01",
+          "from": [
+            "reservations",
+            "approvals",
+            "chats",
+            "projects"
+          ],
+          "to": [
+            "reservations",
+            "approvals",
+            "chats",
+            "projects"
+          ],
+          "allow": [
+            "projects->approvals"
+          ],
+          "$comment": "projects->approvals: 연결 모듈 projects-approval.module.ts만 결재를 import한다(둘 다 켜졌을 때만 등록, 2026-11-16 사용자 결정). 휴가 옵션은 approvals/leaves/ 안에 있어 같은 모듈로 본다",
+          "message": "애드온끼리는 선언한 경우만 의존한다"
+        }
+      ]
+    }
+  ],
+  "$candidateBoundaries": [
+    {
+      "srcRoot": "frontend/src/features",
+      "aliases": {
+        "@/features/": "."
+      },
+      "ignoreSuffixes": [
+        ".test.ts",
+        ".test.tsx"
+      ],
+      "forbidden": [
+        {
+          "rule": "R-ARCH-01",
+          "from": [
+            "*"
+          ],
+          "to": [
+            "*"
+          ],
+          "message": "기능 폴더끼리 서로 import하지 않는다. 같이 쓰는 것은 services/api, types, lib, components로 옮긴다"
+        }
+      ],
+      "$comment": "후보(미적용): 인트라넷 AGENTS.md 12장은 '기능 폴더끼리 서로의 API를 import하지 않는다'까지만 정했다. 이 규칙(모든 cross-feature import 금지)을 2026-11-11 실제 코드에 돌리면 11건(admin → approval·reservation·board 훅 재사용 등)이 걸린다. 규칙을 확정할지는 프로젝트가 정한다."
+    }
+  ],
+  "routeGuards": {
+    "srcRoot": "backend/src",
+    "fileSuffix": ".controller.ts",
+    "authDecorators": [
+      "Roles",
+      "RequireAdmin",
+      "IsPublic"
+    ],
+    "allowlist": [
+      {
+        "route": "UsersController.getMe",
+        "reason": "본인 계정용 — 로그인만 되어 있으면 된다(전역 AccessTokenGuard)"
+      },
+      {
+        "route": "UsersController.patchMe",
+        "reason": "본인 계정용 — 로그인만 되어 있으면 된다(전역 AccessTokenGuard)"
+      },
+      {
+        "route": "UsersController.deleteMe",
+        "reason": "본인 계정용 — 로그인만 되어 있으면 된다(전역 AccessTokenGuard)"
+      },
+      {
+        "route": "AuthController.postLogoutAll",
+        "reason": "본인 계정용 — 로그인만 되어 있으면 된다(전역 AccessTokenGuard)"
+      },
+      {
+        "route": "AuthController.getSessions",
+        "reason": "본인 계정용 — 로그인만 되어 있으면 된다(전역 AccessTokenGuard)"
+      },
+      {
+        "route": "AuthController.deleteSession",
+        "reason": "본인 계정용 — 로그인만 되어 있으면 된다(전역 AccessTokenGuard)"
+      },
+      {
+        "route": "AuthController.patchPassword",
+        "reason": "본인 계정용 — 로그인만 되어 있으면 된다(전역 AccessTokenGuard)"
+      },
+      {
+        "route": "OrganizationController.getMyOrganization",
+        "reason": "본인 계정용 — 로그인만 되어 있으면 된다(전역 AccessTokenGuard)"
+      },
+      {
+        "route": "OrganizationController.patchMyPrimaryDepartment",
+        "reason": "본인 계정용 — 로그인만 되어 있으면 된다(전역 AccessTokenGuard)"
+      }
+    ]
+  },
+  "guards": {
+    "protectedFiles": [
+      {
+        "pattern": "(^|/)\\.env(\\.[^/]*)?$",
+        "except": "\\.example$",
+        "decision": "ask",
+        "$comment": "ask인 이유: ADDONS 같은 설정 값을 바꿀 때마다 사용자가 직접 고치기 번거롭다(2026-11-12 사용자 결정). 확인 창에서 바꿀 내용을 보고 수락한 경우만 수정된다",
+        "reason": "비밀값 파일 수정 — 바꿀 키와 값을 확인하고 수락한다(비밀번호·키 값이 바뀌면 거절). 필요한 키는 .env.example에도 추가한다"
+      },
+      {
+        "pattern": "(^|/)package-lock\\.json$",
+        "reason": "lock 파일은 npm install로만 바뀌어야 한다"
+      }
+    ],
+    "immutableIfExists": [
+      {
+        "pattern": "(^|/)prisma/migrations/[^/]+/migration\\.sql$",
+        "decision": "ask",
+        "$comment": "ask인 이유: migrate dev --create-only로 만든 직후 CHECK·EXCLUDE·collation·데이터 보정 SQL을 직접 쓰는 작업 방식이 있다(2026-11-11 사용자 결정). 아직 적용 전인 새 마이그레이션이면 수락, 적용한 마이그레이션이면 거절한다",
+        "reason": "마이그레이션 SQL 수정 — 아직 적용 전인 새 마이그레이션(--create-only)이면 수락, 이미 적용한 마이그레이션이면 거절하고 새 마이그레이션을 만든다"
+      }
+    ],
+    "bash": [
+      {
+        "pattern": "prisma\\s+migrate\\s+reset",
+        "decision": "deny",
+        "reason": "DB 전체 초기화 — 사용자가 직접 실행한다"
+      },
+      {
+        "pattern": "prisma\\s+db\\s+push",
+        "decision": "deny",
+        "reason": "마이그레이션 기록 없이 스키마를 바꾼다 — prisma migrate dev를 쓴다"
+      },
+      {
+        "pattern": "git\\s+push\\b[^|;&]*(--force\\b|--force-with-lease\\b|\\s-f\\b)",
+        "decision": "deny",
+        "reason": "강제 푸시 금지"
+      },
+      {
+        "pattern": "--no-verify\\b",
+        "decision": "deny",
+        "reason": "검증(pre-commit) 우회 금지 — 실패 원인을 고친다"
+      },
+      {
+        "pattern": "git\\s+reset\\s+--hard",
+        "decision": "ask",
+        "reason": "작업 내용이 사라질 수 있다"
+      },
+      {
+        "pattern": "git\\s+(checkout|restore)\\s+(--\\s+)?\\.(\\s|$)",
+        "decision": "ask",
+        "reason": "변경 사항 전체를 되돌린다"
+      },
+      {
+        "pattern": "\\brm\\s+-[a-zA-Z]*r[a-zA-Z]*\\s+(/|~|\\.|\\*)(\\s|$)",
+        "decision": "deny",
+        "reason": "광범위한 삭제"
+      },
+      {
+        "pattern": "\\b(DROP\\s+(DATABASE|SCHEMA|TABLE)|TRUNCATE)\\b",
+        "decision": "ask",
+        "reason": "데이터 삭제 SQL"
+      }
+    ]
+  }
+}

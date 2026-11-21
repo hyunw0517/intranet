@@ -74,13 +74,16 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 *.tsbuildinfo
 *.pem
 
-# AI Agents
+# AI Agents (설치본·로컬 도구. hook·skill 원본은 harness/claude/)
 .agents/
 .claude/
 .windsurf/
 skills-lock.json
-AGENTS.md
-CLAUDE.md
-Plan.md
-docs/*
-harness/*
+
+# 비공개 문서 (개인 일정·운영 계획·포트폴리오 메모)
+docs/Plan.md
+docs/portfolio.md
+docs/domain_allocation.md
+docs/product_ready.md
+docs/design/need_list.md
+docs/design/demo-seed-plan.md

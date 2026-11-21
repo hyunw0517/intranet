@@ -1,5 +1,5 @@
 import { applyDecorators } from '@nestjs/common';
-import { PartialType } from '@nestjs/swagger';
+import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { IsDateString, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Length, Matches, Max, MaxLength, Min } from 'class-validator';
 import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
 import { StringToNumber } from 'src/common/decorator/string-to-number.decorator';
@@ -31,18 +31,19 @@ export class CreateProjectDto {
     @Length(1, 100)
     name: string;
 
-    // Tiptap HTML - 저장 시 허용 태그만 남긴다(본문 이미지 없음). 한도는 태그 포함 길이 (2026-11-17 사용자 결정: 공용 에디터)
+    /** Tiptap HTML - 저장 시 허용 태그만 남긴다(본문 이미지 없음). 한도는 태그 포함 길이 (2026-11-17 사용자 결정: 공용 에디터) */
     @IsString()
     @MaxLength(EDITOR_HTML_MAX_LENGTH)
     @IsOptional()
     @EmptyToNull()
     description?: string | null;
 
+    @ApiProperty({ enum: ProjectStatus, enumName: 'ProjectStatus', required: false })
     @IsEnum(ProjectStatus)
     @IsOptional()
     status?: ProjectStatus;
 
-    // 시작·종료일 (선택, 둘 다 있으면 시작 <= 종료)
+    /** 시작·종료일 (선택, 둘 다 있으면 시작 <= 종료) */
     @Matches( DATE_ONLY, { message: DATE_ONLY_MESSAGE } )
     @IsDateString()
     @IsOptional()
@@ -55,7 +56,7 @@ export class CreateProjectDto {
     @EmptyToNull()
     endDate?: string | null;
 
-    // 거래처 (선택, 삭제되지 않은 거래처만 새로 연결할 수 있다)
+    /** 거래처 (선택, 삭제되지 않은 거래처만 새로 연결할 수 있다) */
     @StringToNumber()
     @IsInt()
     @IsOptional()
@@ -70,10 +71,13 @@ export class UpdateProjectDto extends PartialType( CreateProjectDto ) {}
 // - scope=mine(기본): 내가 참여한 프로젝트 / scope=all: 전체 (과제 관리 관리자만)
 export class ProjectListQueryDto extends PagePaginationDto {
 
+    /** mine: 내가 참여한 프로젝트 / all: 전체 목록 (USER 이상 누구나, 목록에는 설명·금액 없음) */
+    @ApiProperty({ enum: [ 'mine', 'all' ], required: false, default: 'mine' })
     @IsIn([ 'mine', 'all' ])
     @IsOptional()
     scope: 'mine' | 'all' = 'mine';
 
+    @ApiProperty({ enum: ProjectStatus, enumName: 'ProjectStatus', required: false })
     @IsEnum(ProjectStatus)
     @IsOptional()
     status?: ProjectStatus;
@@ -96,6 +100,7 @@ export class AddProjectMemberDto {
     @IsInt()
     userId: number;
 
+    @ApiProperty({ enum: ProjectMemberRole, enumName: 'ProjectMemberRole', required: false })
     @IsEnum(ProjectMemberRole)
     @IsOptional()
     role?: ProjectMemberRole;
@@ -104,6 +109,7 @@ export class AddProjectMemberDto {
 //* 참여자 역할 수정 (책임자·관리자)
 export class UpdateProjectMemberDto {
 
+    @ApiProperty({ enum: ProjectMemberRole, enumName: 'ProjectMemberRole' })
     @IsEnum(ProjectMemberRole)
     role: ProjectMemberRole;
 }

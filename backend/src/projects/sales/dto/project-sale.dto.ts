@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { ArrayMaxSize, IsArray, IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, Max, MaxLength, Min } from 'class-validator';
 import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
 import { StringToNumber } from 'src/common/decorator/string-to-number.decorator';
@@ -17,22 +18,23 @@ export class CreateProjectSaleDto {
     @Length(1, 100)
     title: string;
 
-    // 확정 견적 버전 (선택) - 연결하면 그 견적의 청구 합계 ≤ 견적 합계
+    /** 확정 견적 버전 (선택) - 연결하면 그 견적의 청구 합계 ≤ 견적 합계 */
     @StringToNumber()
     @IsInt()
     @IsOptional()
     @EmptyToNull()
     quoteVersionId?: number | null;
 
+    @ApiProperty({ enum: ProjectQuoteTaxType, enumName: 'ProjectQuoteTaxType', required: false })
     @IsEnum(ProjectQuoteTaxType)
     @IsOptional()
     taxType?: ProjectQuoteTaxType;
 
-    // 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 (2026-11-17 사용자 결정)
+    /** 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 (2026-11-17 사용자 결정) */
     @VatRateField()
     vatRate?: number;
 
-    // 공급가액 (원 단위 정수) - 부가세·합계는 서버 계산
+    /** 공급가액 (원 단위 정수) - 부가세·합계는 서버 계산 */
     @StringToNumber()
     @IsInt({ message: '공급가액은 원 단위 정수입니다.' })
     @Min(0)
@@ -45,7 +47,7 @@ export class CreateProjectSaleDto {
     @EmptyToNull()
     plannedDate?: string | null;
 
-    // 청구일 (= 매출 기준일 = 세금계산서 발행일). 있으면 "청구" 상태
+    /** 청구일 (= 매출 기준일 = 세금계산서 발행일). 있으면 "청구" 상태 */
     @Matches( DATE_ONLY, { message: DATE_ONLY_MESSAGE } )
     @IsDateString()
     @IsOptional()
@@ -63,7 +65,7 @@ export class CreateProjectSaleDto {
     @EmptyToNull()
     memo?: string | null;
 
-    // 세금계산서 파일 (먼저 POST /common/files/attachments로 올린 id, 순서 = 표시 순서, 보내면 전체 교체)
+    /** 세금계산서 파일 (먼저 POST /common/files/attachments로 올린 id, 순서 = 표시 순서, 보내면 전체 교체) */
     @IsArray()
     @ArrayMaxSize(MAX_ATTACHMENTS_PER_TARGET)
     @IsInt({ each: true })
@@ -86,11 +88,12 @@ export class UpdateProjectSaleDto {
     @EmptyToNull()
     quoteVersionId?: number | null;
 
+    @ApiProperty({ enum: ProjectQuoteTaxType, enumName: 'ProjectQuoteTaxType', required: false })
     @IsEnum(ProjectQuoteTaxType)
     @IsOptional()
     taxType?: ProjectQuoteTaxType;
 
-    // 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 (2026-11-17 사용자 결정)
+    /** 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 (2026-11-17 사용자 결정) */
     @VatRateField()
     vatRate?: number;
 

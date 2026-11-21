@@ -15,7 +15,7 @@ export class CreateProjectClientDto {
     @Length(1, 100)
     name: string;
 
-    // 사업자등록번호 (선택, 숫자 10자리)
+    /** 사업자등록번호 (선택, 숫자 10자리) */
     @Transform( digitsOnly )
     @Matches( /^\d{10}$/, { message: '사업자등록번호는 숫자 10자리입니다.' } )
     @IsOptional()

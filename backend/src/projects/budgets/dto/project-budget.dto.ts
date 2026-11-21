@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
@@ -46,7 +47,7 @@ export class BudgetItemDto {
     @IsInt()
     categoryId: number;
 
-    // 예산 (공급가액 기준, 원 단위 정수)
+    /** 예산 (공급가액 기준, 원 단위 정수) */
     @StringToNumber()
     @IsInt({ message: '예산은 원 단위 정수입니다.' })
     @Min(0)
@@ -71,7 +72,7 @@ export class CreateProjectExpenseDto {
     @IsInt()
     categoryId: number;
 
-    // 지급한 협력사 (선택)
+    /** 지급한 협력사 (선택) */
     @StringToNumber()
     @IsInt()
     @IsOptional()
@@ -87,15 +88,16 @@ export class CreateProjectExpenseDto {
     @IsDateString()
     expenseDate: string;
 
+    @ApiProperty({ enum: ProjectQuoteTaxType, enumName: 'ProjectQuoteTaxType', required: false })
     @IsEnum(ProjectQuoteTaxType)
     @IsOptional()
     taxType?: ProjectQuoteTaxType;
 
-    // 부가세율(%) - 직접 입력, 기본 10, 면세면 무시
+    /** 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 */
     @VatRateField()
     vatRate?: number;
 
-    // 공급가액 (원 단위 정수) - 부가세·합계는 서버 계산, 예산과는 이 금액으로 비교
+    /** 공급가액 (원 단위 정수) - 부가세·합계는 서버 계산, 예산과는 이 금액으로 비교 */
     @StringToNumber()
     @IsInt({ message: '공급가액은 원 단위 정수입니다.' })
     @Min(1)
@@ -108,7 +110,7 @@ export class CreateProjectExpenseDto {
     @EmptyToNull()
     memo?: string | null;
 
-    // 증빙 파일 (먼저 POST /common/files/attachments로 올린 id, 보내면 전체 교체)
+    /** 증빙 파일 (먼저 POST /common/files/attachments로 올린 id, 보내면 전체 교체) */
     @IsArray()
     @ArrayMaxSize(MAX_ATTACHMENTS_PER_TARGET)
     @IsInt({ each: true })
@@ -141,6 +143,7 @@ export class UpdateProjectExpenseDto {
     @IsOptional()
     expenseDate?: string;
 
+    @ApiProperty({ enum: ProjectQuoteTaxType, enumName: 'ProjectQuoteTaxType', required: false })
     @IsEnum(ProjectQuoteTaxType)
     @IsOptional()
     taxType?: ProjectQuoteTaxType;

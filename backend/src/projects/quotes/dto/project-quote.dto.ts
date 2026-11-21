@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
@@ -29,7 +30,7 @@ export class QuoteItemDto {
     @Max(MAX_QUANTITY)
     quantity: number;
 
-    // 단가 (원 단위 정수)
+    /** 단가 (원 단위 정수) */
     @StringToNumber()
     @IsInt({ message: '단가는 원 단위 정수입니다.' })
     @Min(0)
@@ -46,28 +47,29 @@ export class QuoteItemDto {
 //* 견적 내용 (만들기·작성 중 버전 저장 공용) - 품목은 보내면 전체 교체
 export class QuoteContentDto {
 
+    @ApiProperty({ enum: ProjectQuoteTaxType, enumName: 'ProjectQuoteTaxType', required: false })
     @IsEnum(ProjectQuoteTaxType)
     @IsOptional()
     taxType?: ProjectQuoteTaxType;
 
-    // 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 (2026-11-17 사용자 결정)
+    /** 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 (2026-11-17 사용자 결정) */
     @VatRateField()
     vatRate?: number;
 
-    // 견적일 (없으면 오늘)
+    /** 견적일 (없으면 오늘) */
     @Matches( DATE_ONLY, { message: DATE_ONLY_MESSAGE } )
     @IsDateString()
     @IsOptional()
     quoteDate?: string;
 
-    // 유효기간 (견적일 이후)
+    /** 유효기간 (견적일 이후) */
     @Matches( DATE_ONLY, { message: DATE_ONLY_MESSAGE } )
     @IsDateString()
     @IsOptional()
     @EmptyToNull()
     validUntil?: string | null;
 
-    // 수신 담당자 (발주처 거래처의 담당자 중 하나, NULL = 지정 안 함)
+    /** 수신 담당자 (발주처 거래처의 담당자 중 하나, NULL = 지정 안 함) */
     @StringToNumber()
     @IsInt()
     @IsOptional()

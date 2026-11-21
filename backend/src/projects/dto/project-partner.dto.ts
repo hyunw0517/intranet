@@ -1,4 +1,4 @@
-import { OmitType, PartialType } from '@nestjs/swagger';
+import { ApiProperty, OmitType, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsDateString, IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
@@ -52,7 +52,7 @@ export class CreateProjectPartnerDto {
     @EmptyToNull()
     workScope?: string | null;
 
-    // 외주 계약 금액 = 공급가액 (원, 부가세 별도) - 부가세·합계는 서버가 과세 구분·부가세율로 계산
+    /** 외주 계약 금액 = 공급가액 (원, 부가세 별도) - 부가세·합계는 서버가 과세 구분·부가세율로 계산 */
     @StringToNumber()
     @IsInt({ message: '계약 금액은 원 단위 정수입니다.' })
     @Min(0)
@@ -61,12 +61,13 @@ export class CreateProjectPartnerDto {
     @EmptyToNull()
     contractAmount?: number | null;
 
-    // 과세 / 면세 (2026-11-17 사용자 결정: 외주 금액도 부가세 계산)
+    /** 과세 / 면세 (2026-11-17 사용자 결정: 외주 금액도 부가세 계산) */
+    @ApiProperty({ enum: ProjectQuoteTaxType, enumName: 'ProjectQuoteTaxType', required: false })
     @IsEnum(ProjectQuoteTaxType)
     @IsOptional()
     taxType?: ProjectQuoteTaxType;
 
-    // 부가세율(%) - 직접 입력, 기본 10, 면세면 무시
+    /** 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 */
     @VatRateField()
     vatRate?: number;
 
@@ -82,7 +83,7 @@ export class CreateProjectPartnerDto {
     @EmptyToNull()
     endDate?: string | null;
 
-    // 협력사 담당자 (거래처 담당자를 고르지 않고 직접 적는다, 여러 명) - 보내면 목록 전체 교체, 보낸 순서가 표시 순서
+    /** 협력사 담당자 (거래처 담당자를 고르지 않고 직접 적는다, 여러 명) - 보내면 목록 전체 교체, 보낸 순서가 표시 순서 */
     @IsArray()
     @ArrayMaxSize(MAX_PARTNER_CONTACTS)
     @ValidateNested({ each: true })

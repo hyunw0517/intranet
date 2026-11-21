@@ -130,6 +130,8 @@
    - ✅ `approvals` (2026-11-21): 컨트롤러 5개(결재 문서·결재라인 템플릿·결재라인 관리자·휴가·연차 관리) 32개 라우트. 설명은 features.md 7.4·7.5 규칙(상태 전이, 병렬 단계, 결재함, 열람 범위, 휴가 신청 규칙, 연차 조정)과 서비스 검사로 썼다. enum 7종 이름(`ApprovalDocumentType`·`ApprovalStatus`·`ApprovalBox`·`ApprovalLineScope`·`ApprovalLineManagerScope`·`LeaveType`·`LeaveUnit`)
    - ✅ `chats` (2026-11-21): 컨트롤러 3개(채팅방·메시지·파일) 21개 라우트. 설명은 features.md 8.3~8.5(방 규칙·메시지 규칙·파일 메시지·읽음)와 서비스 검사로 썼다. 파일 보내기 2개는 multipart(`files` 필드), 다운로드·썸네일은 binary 응답. 소켓 이벤트는 5장 가이드에 따로 적는다
    - 발견(코드는 그대로 둠): `ChatMessageContentDto` 클래스 주석의 "(파일 메시지는 다음 단계)"는 파일 메시지가 이미 별도 API로 구현돼 있어 지금 코드와 맞지 않는다
+   - ✅ `projects` (2026-11-22): 파일 7개에 컨트롤러 11개(프로젝트·협력사·참여자·과제·거래처·견적서·견적 결재 상신·매출·비용 항목·전사 통계·예산) 61개 라우트. 설명은 docs/design/projects.md(권한 표, 견적 버전·확정, 매출 청구·수금, 예산·지출)와 서비스 검사로 썼다. 목록 `scope`는 기본값 표시. **4단계 완료: 문서의 237개 라우트(숨긴 `GET /` 제외) 모두 summary·태그 있음**
+   - 발견(코드는 그대로 둠): `ProjectListQueryDto` 클래스 주석은 "scope=all: 전체 (과제 관리 관리자만)"이지만, 코드와 projects.md(11/17 결정)는 USER 이상 누구나 전체 목록을 본다. 문서는 실제 동작대로 적었다
 5. 모듈마다 생성된 스키마가 실제 DTO·응답과 맞는지 UI에서 요청을 보내 확인한다 (참고 프로젝트처럼 문서와 코드가 어긋나지 않도록)
 6. 하네스 검사 추가: `@ApiOperation`이 없는 라우트를 찾는다(라우트 권한 데코레이터 검사와 같은 방식). `harness/rules.json`에 새 태그로 등록하고 [harness.md](harness.md)에 반영한다
 7. 공통 규약 가이드를 이 문서 5장에 작성한다

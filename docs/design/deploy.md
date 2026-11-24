@@ -32,11 +32,16 @@ EC2
     └── Backend Container
 ```
 
-> 첫 배포에서 인트라넷 DB는 EC2의 `postgres18` 컨테이너가 아니라 **RDS(PostgreSQL 18, Single-AZ, 비공개)** 를 쓴다(2026-11-22 결정). 크레딧으로 덮이지 않는 청구가 처음 생긴 달에 위 그림처럼 EC2 Docker로 옮긴다. 설정·이전 절차는 `need_list.md`(비공개) 1장.
+> **첫 배포에서는 위 그림의 PostgreSQL 컨테이너 두 개를 두지 않고, RDS 인스턴스 하나(PostgreSQL 18, Single-AZ, 비공개)에 `sns`·`intranet` DB를 함께 둔다**(2026-11-22 인트라넷만 RDS → 2026-11-24 SNS도 함께, 사용자 결정).
+> - SNS는 17 → 18로 올린다(`pg_dump` 후 18에 복원, 화면 동작 확인). SNS는 학습용이라 면접 시연 화면만 동작하면 된다.
+> - RDS는 인스턴스 단위로 과금하므로 DB를 하나 더 넣어도 인스턴스 비용은 그대로다(스토리지만 데이터만큼).
+> - DB·계정 분리는 로컬과 같다: `sns`(owner `sns_user`), `intranet`(owner `intranet_user`), `REVOKE ALL ... FROM PUBLIC`. 한 DB에 계정만 둘로 나누지 않는다(두 앱의 마이그레이션이 같은 `public` 스키마에 섞인다).
+> - RDS 보안 그룹은 EC2 보안 그룹에서 오는 5432만 허용한다.
+> - 크레딧으로 덮이지 않는 청구가 처음 생긴 달에 EC2 Docker(PostgreSQL 18 컨테이너 하나)로 두 DB를 함께 옮긴다. 설정·이전 절차는 `need_list.md`(비공개) 1장.
 
 운영 배포 시에는 하나의 `docker-compose.prod.yaml`에서 전체 서비스를 관리할 수 있다.
 
-예상 서비스: `postgres17`, `postgres18`, `sns-backend`, `sns-frontend`, `intranet-backend`, `intranet-frontend`, `nginx`
+예상 서비스: `sns-backend`, `sns-frontend`, `intranet-backend`, `intranet-frontend`, `nginx` (DB는 RDS)
 
 ## 3. Frontend와 Backend를 다른 컨테이너로
 

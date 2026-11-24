@@ -1,7 +1,7 @@
 # Intranet Portfolio Project Context
 
 > 상위 설계 문서 (Source of Truth) · Claude Code, Codex 등 모든 코딩 에이전트가 공통으로 읽는다.
-> 버전: v1.96 · 최종 갱신: 2026-11-24
+> 버전: v1.97 · 최종 갱신: 2026-11-24
 > 기능·구조가 바뀌면 이 문서(또는 해당 `docs/design/` 문서)를 먼저 갱신하고 [docs/design/changelog.md](docs/design/changelog.md)에 기록한다.
 > **이 파일은 30KB 이하로 유지한다**(Codex 기본 읽기 한도 32KiB). 기능 상세는 [docs/design/features.md](docs/design/features.md)에 쓰고 여기에는 요약만 둔다. [R-DOC-01]
 > 규칙 앞의 `[R-XXX-00]` 태그는 규칙 대장 [harness/rules.json](harness/rules.json)과 짝이다. 무엇이 강제하는지는 [docs/harness.md](docs/harness.md). [R-DOC-03]
@@ -24,7 +24,7 @@
 - Web Server / Reverse Proxy: Nginx
 - Deployment: AWS EC2
 
-별도로 이미 개발한 `NestJS_SNS` 프로젝트가 존재하며, SNS와 Intranet 프로젝트를 동일한 EC2 서버에 배포할 계획이다.
+별도로 이미 개발한 `NestJS_SNS` 프로젝트가 존재하며, 운영(AWS)에는 Intranet만 배포한다. SNS는 로컬 개발·GitHub 저장소로만 남긴다(2026-11-24 결정, [deploy.md](docs/design/deploy.md) 2장).
 
 ---
 
@@ -82,7 +82,7 @@ intranet_user
 컨테이너 내부 포트는 둘 다 5432이며, 호스트 포트만 5432 / 5433으로 구분한다.
 같은 Docker 네트워크(`infra-db-net`) 안의 컨테이너에서는 `infra-postgres17:5432`, `infra-postgres18:5432`로 접근한다.
 
-위 구성은 로컬 기준이다. **운영(AWS)은 RDS 인스턴스 하나(PostgreSQL 18)에 `sns`·`intranet` DB를 함께 두고**, 계정 분리·`REVOKE`는 같게 한다. SNS는 배포 때 18로 올린다(2026-11-24 결정, [deploy.md](docs/design/deploy.md) 2장).
+위 구성은 로컬 기준이다. **운영(AWS)은 RDS 인스턴스 하나(PostgreSQL 18)에 `intranet` DB를 두고**(친구용 인스턴스를 추가하면 같은 RDS에 DB를 하나 더 둔다), 계정 분리·`REVOKE`는 같게 한다. SNS는 배포하지 않는다(2026-11-24 결정, [deploy.md](docs/design/deploy.md) 2장).
 
 애플리케이션별 `.env`도 분리한다. `.env` 예시, **비밀번호 특수문자 주의**(`.env`는 작은따옴표, Prisma `DATABASE_URL`은 퍼센트 인코딩), `infra-db/.env` 구성, DB/계정 생성 스크립트, SNS 데이터 이관 기록은 [docs/design/infra-db.md](docs/design/infra-db.md) 참고.
 
@@ -326,7 +326,7 @@ Route Group: `(auth)` = 로그인·회원가입 별도 레이아웃, `(main)` = 
 ## Database
 
 - SNS와 Intranet DB는 완전히 분리
-- PostgreSQL은 `infra-db`에서 공용 관리하되, 메이저 버전별로 인스턴스 분리 (로컬 SNS: 17, Intranet: 18 / 운영은 RDS 18 하나, 3장)
+- PostgreSQL은 `infra-db`에서 공용 관리하되, 메이저 버전별로 인스턴스 분리 (로컬 SNS: 17, Intranet: 18 / 운영은 RDS 18에 Intranet만, 3장)
 - 프로젝트별 DB User 사용 (`sns_user`, `intranet_user`), 애플리케이션에서 슈퍼유저 사용 금지
 - Prisma Migration으로 Intranet Schema 관리
 - 운영 DB에 직접 수동 변경하는 방식은 지양

@@ -6,6 +6,9 @@ import type { NextConfig } from "next";
 const apiServerUrl = process.env.API_SERVER_URL ?? "http://localhost:3100";
 
 const nextConfig: NextConfig = {
+  // Docker 이미지용: next build가 실행에 필요한 파일만 .next/standalone(server.js + 최소 node_modules)에 모은다.
+  // .next/static은 따로 복사한다(frontend/Dockerfile). 로컬 npm run dev에는 영향 없음. (docs/frontend/fe-21-docker.md)
+  output: "standalone",
   // /api 로 직접 들어오면 API 문서(Swagger, docs/api.md)로 보낸다. redirect는 rewrite보다 먼저 확인된다.
   // 정확히 /api 만 해당하고 /api/* 호출은 아래 rewrite 그대로. (운영은 Nginx에 같은 규칙)
   async redirects() {

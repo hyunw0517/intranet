@@ -7,6 +7,9 @@ generator client {
   provider        = "prisma-client"
   output          = "../src/generated/prisma"
   moduleFormat    = "cjs"
+  // 생성 코드의 import 확장자. 비우면 tsconfig를 보고 추측하는데, Docker 빌드처럼 generate 시점에 tsconfig가 없으면
+  // .ts로 생성되어 컴파일 결과가 ./internal/class.ts를 찾다 실패한다(MODULE_NOT_FOUND). 환경과 상관없이 고정한다. (2026-11-24)
+  importFileExtension = "js"
   previewFeatures = ["partialIndexes"] // 부분 인덱스 허용 (삭제되지 않은 계정끼리만 이메일이 겹치면 안 됨)
 }
 

@@ -1,0 +1,22 @@
+# 빌드 컨텍스트(backend/)에서 뺄 파일. Docker는 git이 아니라 디스크를 보므로 .gitignore와 따로 둔다.
+# 이미지는 GHCR에 공개되므로 비밀값이 들어가면 누구나 꺼내 볼 수 있다 (docs/design/deploy.md 2장).
+
+# 비밀값: 공개 이미지에 절대 들어가면 안 됨
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+# Windows에서 설치한 것: arm64 이미지 안에서 새로 설치해야 함 (bcrypt·sharp 바이너리)
+node_modules
+
+# 이미지 안에서 새로 만드는 것 (prisma generate, nest build)
+dist
+src/generated
+
+# 실행에 필요 없는 것
+test
+coverage
+*.log
+.claude
+README.md

@@ -43,6 +43,17 @@ EC2
 
 예상 서비스: `sns-backend`, `sns-frontend`, `intranet-backend`, `intranet-frontend`, `nginx` (DB는 RDS)
 
+### 이미지 빌드·배포 방식 (2026-11-24 결정)
+
+- 운영 서버에서 `git pull` 후 빌드하지 않는다(서버 메모리를 빌드가 차지하고, 서버에 소스·빌드 도구가 필요함). **로컬에서 `docker buildx`로 `linux/arm64` 이미지를 빌드**해 레지스트리 **GHCR(GitHub Container Registry, 공개 이미지)**에 push하고, EC2는 `docker compose pull && docker compose up -d`만 한다. 서버에는 compose 파일·env 파일·Nginx 설정만 둔다.
+- GHCR을 고른 이유: 공개 이미지는 저장·전송이 무료이고 서버에서 로그인 없이 pull한다(ECR은 GB당 과금, 크레딧 만료 후에도 계속). 저장소가 이미 공개라 새로 드러나는 코드는 없다. 대신 **이미지에 비밀값을 넣지 않는다**(`.dockerignore`에 `.env`·`uploads`, 빌드 인자로 비밀값 금지).
+- 빌드 방법·Dockerfile 구조·막혔을 때 볼 표는 [docs/backend/docker.md](../backend/docker.md).
+- 버전은 `main`의 태그(`v1.0.0` 등)로 표시하고 이미지 태그도 같게 붙인다. 되돌리기는 compose의 이미지 태그를 이전 버전으로 바꿔 다시 `up`. `release/` 브랜치는 두지 않는다(혼자 개발).
+- EC2 서버 OS는 **Ubuntu Server LTS(arm64)**, 이미지 베이스는 공식 `node` 이미지의 Debian slim(배포판 코드명까지 태그 고정). 컨테이너는 서버 커널만 빌려 쓰므로 둘이 달라도 되고, 맞춰야 하는 것은 CPU 아키텍처(arm64)뿐이다. alpine(musl)은 `bcrypt`·`sharp` 네이티브 모듈 때문에 쓰지 않는다. `prisma` CLI는 마이그레이션 컨테이너가 같은 이미지로 `migrate deploy`를 실행하도록 dependencies에 둔다(2026-11-24).
+- 로컬 PC가 x86이라 arm64 빌드는 에뮬레이션(QEMU)으로 느리다. 너무 느리면 GitHub Actions ARM 러너로 옮긴다.
+- 쿠버네티스는 쓰지 않는다(AGENTS.md 17장, 서버 1대에서 Compose와 차이가 없고 EKS는 제어부 비용이 따로 든다).
+- 첫 배포는 **인트라넷 데모 한 벌 + SNS**. 친구용 인스턴스는 데모가 안정된 뒤 추가한다(실제 데이터라 초기화 스크립트·백업을 확인한 뒤에 받는다, `domain_allocation.md`(비공개)).
+
 ## 3. Frontend와 Backend를 다른 컨테이너로
 
 같은 컨테이너로 합치지 않는다. 목적:

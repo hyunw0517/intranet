@@ -1,0 +1,84 @@
+# 운영 서버(EC2)에서 컨테이너를 띄우는 설정. 이미지는 만들지 않고 GHCR에서 받아 실행만 한다.
+# 배포: 태그를 고친 뒤  pull  →  up -d  →  nginx reload (아래 nginx 서비스 설명)
+#   docker compose -f docker-compose.prod.yaml pull
+#   docker compose -f docker-compose.prod.yaml up -d
+#   docker compose -f docker-compose.prod.yaml exec nginx nginx -s reload
+# 로컬 시험: docker-compose.local.yaml을 덧붙인다(그 파일 첫 줄 참고).
+# 비밀값은 이 파일에 쓰지 않는다. env/ 폴더의 env 파일(git 제외)에만 둔다. (docs/design/deploy.md 2장)
+
+name: intranet
+
+services:
+  # ── 마이그레이션: prisma migrate deploy만 실행하고 끝난다 ──
+  # 백엔드와 같은 이미지를 쓴다(prisma CLI가 dependencies에 있는 이유). 적용할 마이그레이션이 없으면 바로 성공으로 끝난다.
+  intranet-migrate:
+    image: ghcr.io/hyunw0517/intranet-backend:v1.0.0
+    init: true
+    env_file: ./env/intranet.backend.env
+    # npx를 거치지 않고 prisma를 직접 실행한다(npx는 npm을 띄워 새 버전 확인 등 불필요한 일을 한다)
+    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    restart: "no" # 한 번 실행하고 끝나는 작업이라 다시 켜지 않는다
+
+  # ── 백엔드 (NestJS) ──
+  intranet-backend:
+    image: ghcr.io/hyunw0517/intranet-backend:v1.0.0
+    init: true # PID 1 문제: 없으면 docker stop 신호를 Node가 받지 못해 10초 뒤 강제 종료된다
+    env_file: ./env/intranet.backend.env
+    environment:
+      # 아래 volumes의 컨테이너 쪽 경로와 짝이라 env 파일이 아니라 여기에 고정한다
+      UPLOAD_ROOT: /app/uploads
+      # 컨테이너 기본 시간대는 UTC. 개발 PC·e2e와 같은 KST로 맞춘다(@Cron은 이미 timeZone을 지정함)
+      TZ: Asia/Seoul
+    volumes:
+      # S3 구현 전까지 업로드 파일을 서버 디스크에 남긴다(컨테이너를 새로 만들어도 유지).
+      # 서버에서는 첫 실행 전에 폴더를 만들고 소유자를 uid 1000(이미지의 node 사용자)으로 맞춘다.
+      - ./uploads:/app/uploads
+    depends_on:
+      intranet-migrate:
+        condition: service_completed_successfully # 마이그레이션이 실패하면 백엔드를 켜지 않는다
+    healthcheck:
+      # 이미지에 curl이 없어 node로 확인한다. GET /은 로그인 없이 응답하는 기동 확인용 라우트(app.controller.ts)
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped # 죽거나 서버가 재부팅되면 다시 켠다. 사람이 docker compose stop 한 것은 그대로 둔다
+    # 포트를 외부에 열지 않는다. 같은 compose 네트워크의 nginx가 intranet-backend:3100으로 접속한다
+
+  # ── 프론트엔드 (Next.js standalone) ──
+  # 인스턴스별 값이 없어 env 파일이 없다(PORT·HOSTNAME은 이미지에 있음, docs/frontend/fe-21-docker.md)
+  intranet-frontend:
+    image: ghcr.io/hyunw0517/intranet-frontend:v1.0.0
+    init: true
+    environment:
+      TZ: Asia/Seoul
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # ── nginx: 외부 요청을 받는 유일한 컨테이너 ──
+  # 경로별 전달 규칙은 nginx/conf.d/intranet.conf. 설정은 파일로 연결해 이미지를 다시 만들지 않고 고친다.
+  # nginx는 시작·reload할 때 서비스 이름을 IP로 바꿔 둔다. 그래서
+  #   - 백엔드·프론트가 healthy가 된 뒤에 켠다(없는 이름이면 nginx가 시작하지 못함)
+  #   - 새 버전 배포로 백엔드·프론트 컨테이너가 다시 만들어지면 IP가 바뀔 수 있으니 up -d 뒤에 reload한다:
+  #       docker compose -f docker-compose.prod.yaml exec nginx nginx -s reload
+  nginx:
+    image: nginx:1.30-alpine # 안정(stable) 버전. 네이티브 모듈이 없어 alpine을 써도 된다
+    ports:
+      - "80:80" # 443(HTTPS)은 도메인·인증서를 붙이는 서버 단계에서 추가
+    volumes:
+      # 이미지의 기본 설정(default.conf)을 우리 설정 폴더로 통째로 바꾼다. 읽기 전용
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    environment:
+      TZ: Asia/Seoul
+    depends_on:
+      intranet-backend:
+        condition: service_healthy
+      intranet-frontend:
+        condition: service_healthy
+    restart: unless-stopped

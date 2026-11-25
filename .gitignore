@@ -63,6 +63,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /backend/public/*
 /uploads/
+# 운영 compose의 env 파일(비밀값). docker-compose.prod.yaml
+/env/
 /uploads-test/
 /backend/src/generated
 

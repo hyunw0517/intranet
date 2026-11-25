@@ -1,0 +1,36 @@
+# 로컬 PC에서 운영 compose를 시험할 때만 덧붙이는 파일. 서버에는 올리지 않는다.
+#   docker compose -f docker-compose.prod.yaml -f docker-compose.local.yaml up -d
+#   브라우저: http://localhost:8080  (화면·로그인·API·채팅을 운영과 같은 경로로 확인)
+# 운영 파일과 다른 점만 적는다(같은 키는 이 파일 값으로 덮어쓴다).
+#   - 이미지: 백엔드는 PC용(x86) :local-amd64. arm64 에뮬레이션에서는 Prisma 쿼리 엔진(WASM)이 깨져 조회가 500이 된다.
+#       docker buildx build --platform linux/amd64 -t ghcr.io/hyunw0517/intranet-backend:local-amd64 --load backend
+#     프론트는 build 스크립트의 arm64 :local을 에뮬레이션으로 쓴다(Prisma가 없어 문제없음, platform 명시로 경고를 끔)
+#   - DB: RDS 대신 infra-db의 postgres18 컨테이너 → infra-db 네트워크에 연결
+#   - 포트: 개발 서버(3000·3100)와 겹치지 않게 nginx는 8080, 백엔드는 3200으로 직접 호출도 해 본다
+
+services:
+  intranet-migrate:
+    image: ghcr.io/hyunw0517/intranet-backend:local-amd64
+    platform: linux/amd64
+    networks: [default, infra-db]
+
+  intranet-backend:
+    image: ghcr.io/hyunw0517/intranet-backend:local-amd64
+    platform: linux/amd64
+    networks: [default, infra-db]
+    ports:
+      - "127.0.0.1:3200:3100"
+
+  intranet-frontend:
+    image: ghcr.io/hyunw0517/intranet-frontend:local
+    platform: linux/arm64
+
+  nginx:
+    # ports는 덮어쓰지 않고 합쳐지므로 !override로 운영의 80:80을 빼고 이것만 쓴다
+    ports: !override
+      - "127.0.0.1:8080:80"
+
+networks:
+  infra-db:
+    name: infra-db-net
+    external: true # infra-db의 compose가 만든 네트워크를 빌려 쓴다(여기서 만들거나 지우지 않음)

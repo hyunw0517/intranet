@@ -41,7 +41,7 @@
 
 - `build`의 결과물(JS, Prisma 생성 코드)은 CPU와 무관해서 PC에서 돌린다. 에뮬레이션이 없어 빠르고, 5장의 Prisma 오류도 피한다.
 - 자주 바뀌는 것을 아래에 둔다: `package*.json` → `prisma/` → `src/` 순서로 복사한다.
-- `prisma` CLI는 dependencies에 있다(마이그레이션 컨테이너가 같은 이미지로 `npx prisma migrate deploy`를 실행).
+- `prisma` CLI는 dependencies에 있다(마이그레이션 컨테이너가 같은 이미지로 `prisma migrate deploy`를 실행, [docker-compose.prod.yaml](../../docker-compose.prod.yaml) `intranet-migrate`).
 - 베이스 `node:26-trixie-slim`에는 `curl`이 없다. healthcheck는 `node`로 쓴다.
 
 ## 5. 막혔을 때 (2026-11-24에 실제로 만난 것)
@@ -55,6 +55,7 @@
 | 컨테이너에서 `localhost:5433` DB에 못 붙음 | 컨테이너 안의 `localhost`는 컨테이너 자신 | `--network infra-db-net` + `infra-postgres18:5432` (운영은 RDS 주소) |
 | `Ctrl+C`·`docker stop`으로 바로 안 멈추고 10초 뒤 강제 종료 | Node가 PID 1로 실행되면 처리기 없는 SIGINT·SIGTERM을 무시. Docker는 10초 뒤 SIGKILL | `docker run --init` / compose `init: true` |
 | 업로드 실패(로컬 저장소) | `UPLOAD_ROOT`가 없으면 `../uploads` = 컨테이너의 `/uploads`인데 `node` 사용자는 `/`에 쓸 수 없음 | env에 `UPLOAD_ROOT`를 주고 볼륨 연결 (S3 전환 전까지) |
+| 로컬 compose 시험에서 로그인은 되는데 조회 API가 500, 로그에 `PrismaClientUnknownRequestError`·`memory access out of bounds` (2026-11-25) | arm64 이미지를 PC(x86)에서 에뮬레이션(QEMU)으로 돌리면 Prisma 7의 쿼리 엔진(WASM)이 깨진다(빌드 단계 `prisma generate` 실패와 같은 계열). 같은 코드의 x86 이미지는 같은 API가 200 | 로컬 시험의 백엔드는 x86 이미지(`:local-amd64`)로. 실제 ARM 서버는 에뮬레이션이 없어 해당 없음(서버에서 확인 예정) |
 
 ## 6. 로컬에서 이미지 확인하기
 
@@ -64,22 +65,34 @@
 docker run --rm ghcr.io/hyunw0517/intranet-backend:local sh -c "whoami; ls -a /app"
 ```
 
-로컬 DB에 붙여 실행 (`backend/.env.docker`: `.env`를 복사해 따옴표를 빼고, DB 호스트를 `infra-postgres18:5432`, `UPLOAD_ROOT=/tmp/uploads`로):
+운영 compose로 로컬 DB에 붙여 실행 (2026-11-25부터, `docker run --env-file`로 하던 방법을 대신함):
+
+- [docker-compose.prod.yaml](../../docker-compose.prod.yaml)(운영)에 [docker-compose.local.yaml](../../docker-compose.local.yaml)(로컬에서만 다른 점: 로컬 이미지, `infra-db-net` 네트워크, nginx `127.0.0.1:8080`·백엔드 `127.0.0.1:3200` 포트)을 덧붙인다.
+- 백엔드는 **x86 이미지**로 시험한다(5장 표 마지막 줄: arm64 에뮬레이션에서는 조회가 500). 스크립트의 arm64 `:local`과 섞이지 않게 태그를 따로 붙인다. 프론트는 스크립트로 만든 arm64 `:local`을 그대로 쓴다.
 
 ```powershell
-cd backend
-docker run --rm --init --name intranet-backend-test --network infra-db-net --env-file .env.docker -p 3200:3100 ghcr.io/hyunw0517/intranet-backend:local
-curl.exe -i -X POST http://localhost:3200/auth/login/emp -u 9999999:wrong   # 401이면 DB 조회까지 성공
-docker stop intranet-backend-test
+docker buildx build --platform linux/amd64 -t ghcr.io/hyunw0517/intranet-backend:local-amd64 --load backend
+```
+- env 파일은 `intranet/env/intranet.backend.env`(git 제외). `.env`를 복사해 DB 호스트를 `infra-postgres18:5432`로 바꾼다. `UPLOAD_ROOT`·`TZ`는 compose가 정한다.
+
+```powershell
+docker compose -f docker-compose.prod.yaml -f docker-compose.local.yaml up -d
+docker compose -f docker-compose.prod.yaml -f docker-compose.local.yaml ps -a              # migrate Exited (0), backend healthy
+docker compose -f docker-compose.prod.yaml -f docker-compose.local.yaml logs intranet-migrate
+curl.exe -s -o NUL -w "%{http_code}" http://localhost:3200/                                  # 200 (백엔드 직접)
+# 브라우저 http://localhost:8080 : nginx를 거쳐 화면·로그인·조회·채팅 확인
+docker compose -f docker-compose.prod.yaml -f docker-compose.local.yaml down
 ```
 
 - 3200으로 연결하는 이유: 개발 서버(3100)와 겹치지 않게.
 - 컨테이너에는 `/api` 접두사가 없다(Nginx·Next.js가 떼고 넘김). Swagger는 `http://localhost:3200/docs`.
-- 컨테이너 로그 시각은 UTC다(`TZ` 미설정). `@Cron`은 `timeZone: 'Asia/Seoul'`을 명시해 영향이 없다.
+- `down`은 이 compose가 만든 컨테이너·네트워크만 지운다. `infra-db-net`은 `external`이라 그대로 둔다.
+- 2026-11-25 확인: migrate `No pending migrations to apply.` 후 backend 시작, 약 20초 뒤 `healthy`, `GET /` 200, 시각 KST, `/app/uploads`에 `node` 사용자로 쓰기 가능.
 
-## 7. 남은 것 (compose 단계에서, 예정)
+## 7. 남은 것
 
-- `docker-compose.prod.yaml`(예정): 마이그레이션 서비스(`depends_on: service_completed_successfully`), `init: true`, healthcheck(`node`), `TZ`, `UPLOAD_ROOT` 볼륨
+- 프론트엔드·nginx 서비스 추가 (compose 다음 단계)
+- 서버 첫 실행 전 `uploads` 폴더 소유자를 uid 1000으로 (로컬 Windows는 권한 제한이 없어 확인되지 않음)
 - `X-Powered-By: Express` 헤더 제거
 - 결정 필요: env 필수 키 시작 검증(`ConfigModule` `validate`), `app.enableShutdownHooks()`
 - 서버에서 확인: arm64에서 `prisma migrate deploy`(generate와 다른 엔진)

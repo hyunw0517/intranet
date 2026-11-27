@@ -2,15 +2,15 @@
 // - 계정(사번) 기준: 5회 연속 실패마다 잠금. 단계별 10분 → 30분 → 1시간(최대). 잠긴 동안은 맞는 비밀번호도 429
 // - 실패 메시지는 원인(없는 사번 / 틀린 비밀번호)과 무관하게 같다. 없는 사번도 같은 방식으로 센다
 // - 로그인 성공·관리자 해제(PATCH /auth/unlock/:userId)는 기록을 지워 단계를 처음부터 다시 센다
-// - IP 요청 수 제한: 로그인 라우트에 1분 10회. 넘으면 비밀번호를 확인하기 전에 429 (감사 로그도 남지 않음)
+// - IP 요청 수 제한: 로그인 라우트에 1분 AUTH_THROTTLE_LIMIT회. 넘으면 비밀번호를 확인하기 전에 429 (감사 로그도 남지 않음)
 //
-// 요청 수 제한 카운터는 앱(서버 메모리)마다 따로 있다. 한 앱에서 로그인 요청이 10회를 넘지 않도록 묶음(describe)마다 앱을 새로 띄운다.
+// 요청 수 제한 카운터는 앱(서버 메모리)마다 따로 있다. 한 앱에서 로그인 요청이 한도를 넘지 않도록 묶음(describe)마다 앱을 새로 띄운다.
 // 잠금 시간(10분·30분)은 기다릴 수 없으므로, 단계·시각은 LoginHistory 행을 직접 고쳐 만든다.
 
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { LOGIN_FAILED_MESSAGE } from 'src/auth/const/login-lock.const';
+import { AUTH_THROTTLE_LIMIT, LOGIN_FAILED_MESSAGE } from 'src/auth/const/login-lock.const';
 import { AuditActionType, UserRole } from 'src/generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { createTestApp } from './utils/app';
@@ -175,18 +175,18 @@ describe('로그인 실패 잠금 · IP 요청 수 제한', () => {
         });
 
         // 사번마다 한 번씩 시도하는 공격은 계정 잠금으로 막을 수 없어 IP 기준으로 함께 막는다.
-        it('같은 IP에서 1분에 10회까지만 받고, 11번째는 비밀번호를 확인하기 전에 429', async () => {
-            for ( let i = 1; i <= 10; i++ ) {
-                await login( `NOBODY${String( i ).padStart( 2, '0' )}`, WRONG_PASSWORD ).expect( 401 );
+        it('같은 IP에서 1분에 한도(AUTH_THROTTLE_LIMIT)까지만 받고, 그다음은 비밀번호를 확인하기 전에 429', async () => {
+            for ( let i = 1; i <= AUTH_THROTTLE_LIMIT; i++ ) {
+                await login( `NOBODY${String( i ).padStart( 3, '0' )}`, WRONG_PASSWORD ).expect( 401 );
             }
 
             // 맞는 비밀번호여도 거부된다
             const res = await login( user.empNo ).expect( 429 );
             expect( messageOf( res ) ).toBe( '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' );
 
-            // 11번째는 로그인 처리까지 가지 않았으므로 실패 기록·감사 로그가 없다
-            expect( await countAudit( AuditActionType.LOGIN_FAILED ) ).toBe( 10 );
+            // 한도를 넘은 요청은 로그인 처리까지 가지 않았으므로 실패 기록·감사 로그가 없다
+            expect( await countAudit( AuditActionType.LOGIN_FAILED ) ).toBe( AUTH_THROTTLE_LIMIT );
             expect( await historyOf( user.empNo ) ).toBeNull();
-        });
+        }, 120000 ); // 한도만큼 로그인 요청을 보내므로 기본 5초로는 부족하다
     });
 });

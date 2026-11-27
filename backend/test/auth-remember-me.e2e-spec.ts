@@ -3,7 +3,7 @@
 // - rememberMe: false → refresh 쿠키에 Max-Age가 없다(세션 쿠키). 브라우저를 닫으면 사라진다.
 // - 쿠키를 다시 발급하는 경로(재발급·비밀번호 변경·모든 기기 로그아웃)도 처음 선택을 유지한다.
 // - 값이 없으면(회원가입, rememberMe 없는 로그인) 기존처럼 Max-Age가 있다.
-// 로그인 API는 IP당 1분 10회 제한이 있어 이 파일의 로그인 횟수를 10회 안으로 유지한다.
+// 로그인 API는 IP당 1분 요청 수 제한(AUTH_THROTTLE_LIMIT)이 있어 이 파일의 로그인 횟수를 그 안으로 유지한다.
 
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';

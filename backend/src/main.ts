@@ -13,6 +13,11 @@ async function bootstrap() {
   // API 문서 (/api/docs) - e2e에는 필요 없으므로 configureApp이 아니라 여기서만 호출
   setupSwagger( app );
 
+  // 바로 앞 프록시 한 단계(운영 nginx)가 넘긴 X-Forwarded-For의 마지막 주소를 req.ip로 쓴다.
+  // 없으면 req.ip가 모두 프록시 주소가 되어 IP 요청 수 제한(ThrottlerGuard)을 전 회원이 함께 쓰고, 감사 로그 IP도 프록시 주소로 남는다.
+  // 1단계만 믿으므로 사용자가 헤더에 넣은 가짜 주소(앞쪽 값)는 쓰이지 않는다. 백엔드 포트를 외부에 열지 않는 것이 전제다(docker-compose.prod.yaml).
+  app.set( 'trust proxy', 1 );
+
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

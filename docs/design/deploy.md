@@ -80,3 +80,27 @@ docker compose up -d --build intranet-backend intranet-frontend
 - SNS의 Vite dev 서버 프록시(`vite.config.ts`의 `/api`, `/public`, `/socket.io`)는 개발 전용이며 백엔드 포트(3101)를 가리킨다.
 - SNS 프론트는 상대 경로(`/api`, `/socket.io`)로 요청하므로 운영 도메인이 생겨도 프론트 코드는 변경하지 않는다.
 - 운영 도메인이 생기면 SNS 백엔드 `.env`의 `PROTOCOL`, `HOST`(응답 URL 생성용)를 운영 값으로 변경한다.
+
+## 5. 예상 비용 (AWS Pricing Calculator, 2026-11-27)
+
+서울 리전(ap-northeast-2), 온디맨드, 24시간 운영 기준. 크레딧·무료 한도를 빼지 않은 금액이다.
+
+| 서비스 | 구성 | 월 |
+|---|---|---|
+| EC2 | t4g.medium(2 vCPU, 4GB, $0.0416/시간) | $30.37 |
+| EBS | gp3 30GB(IOPS 3000·처리량 125MBps 기본 포함) + 일일 스냅샷(변경 1GB/일) | $4.99 |
+| 데이터 전송 | 인터넷 아웃바운드 5GB | $0.63 |
+| RDS | PostgreSQL db.t4g.micro, Single-AZ($0.025/시간) + gp3 20GB, 백업은 무료 한도(할당 스토리지만큼) 안 | $20.87 |
+| S3 | Standard 5GB, PUT 1만·GET 10만 건 | $0.20 |
+| VPC | 퍼블릭 IPv4 1개($0.005/시간) | $3.65 |
+| **합계** | | **$60.71 (연 $728.52)** |
+
+고르지 않은 것과 이유:
+
+- 약정(Savings Plans 1·3년)·스팟: 운영 기간이 몇 달이고, 스팟은 회수될 수 있어 공개 사이트에 맞지 않는다.
+- RDS Multi-AZ(비용 2배), RDS 프록시(연결 수가 적은 상시 서버라 불필요, 월 $26), EC2 세부 모니터링(1분 주기, 월 $2.1), Database Insights 고급 모드.
+- NAT 게이트웨이(외부로 나갈 사설 서브넷이 없음), Route 53(DNS는 Cloudflare), ECR(이미지는 GHCR 공개).
+
+실제 청구가 견적보다 낮아지는 부분: 인터넷 아웃바운드는 계정 전체 월 100GB 무료, 스냅샷은 보관 개수(7개)를 계산기가 반영하지 않아 상한이다. EC2↔RDS는 같은 가용 영역에 두어 전송 요금 0. S3에서 받은 파일은 백엔드를 거쳐 나가므로(S3 → 같은 리전 EC2 무료) 아웃바운드는 EC2 쪽에만 잡았다.
+
+줄일 수 있는 곳: RDS를 EC2 Docker로 옮기면 약 $21(2장), 실제 메모리 사용량이 낮으면 EC2를 t4g.small(2GB)로 낮춰 약 $15. t4g.nano·micro(0.5~1GB)는 OS·Docker·NestJS·Next.js를 함께 올리기에 부족하다.

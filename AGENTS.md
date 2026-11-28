@@ -1,7 +1,7 @@
 # Intranet Portfolio Project Context
 
 > 상위 설계 문서 (Source of Truth) · Claude Code, Codex 등 모든 코딩 에이전트가 공통으로 읽는다.
-> 버전: v1.98 · 최종 갱신: 2026-11-25
+> 버전: v1.99 · 최종 갱신: 2026-11-27
 > 기능·구조가 바뀌면 이 문서(또는 해당 `docs/design/` 문서)를 먼저 갱신하고 [docs/design/changelog.md](docs/design/changelog.md)에 기록한다.
 > **이 파일은 30KB 이하로 유지한다**(Codex 기본 읽기 한도 32KiB). 기능 상세는 [docs/design/features.md](docs/design/features.md)에 쓰고 여기에는 요약만 둔다. [R-DOC-01]
 > 규칙 앞의 `[R-XXX-00]` 태그는 규칙 대장 [harness/rules.json](harness/rules.json)과 짝이다. 무엇이 강제하는지는 [docs/harness.md](docs/harness.md). [R-DOC-03]

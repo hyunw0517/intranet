@@ -58,8 +58,8 @@ const SCROLL_END_TOLERANCE_PX = 2;
 const isScrolledToEnd = (element: HTMLElement) =>
   element.scrollHeight - element.scrollTop - element.clientHeight <= SCROLL_END_TOLERANCE_PX;
 
-// 항목 한 줄(체크박스 + 제목 + 보기 버튼), 본문은 보기 버튼으로 여는 모달에 표시한다.
-// 본문을 맨 아래까지 내려야 체크할 수 있다. (스크롤 없이 전부 보이면 열었을 때 바로 체크 가능)
+// 항목 한 줄(체크박스 + 제목 + 보기 버튼), 본문은 모달에 표시한다.
+// 본문을 맨 아래까지 내려야 체크할 수 있다.
 function ConsentItem({ id, label, checked, onCheckedChange, viewed, onViewed, children }: ConsentItemProps) {
   const markViewedAtEnd = (element: HTMLElement | null) => {
     if (element && !viewed && isScrolledToEnd(element)) onViewed();
@@ -116,8 +116,8 @@ function ConsentItem({ id, label, checked, onCheckedChange, viewed, onViewed, ch
   );
 }
 
-// 회원가입 1단계: 필수 동의 (기본값은 미동의, 본문을 끝까지 확인한 뒤 모두 체크해야 다음 단계로 이동)
-// 개인정보처리자(회사명)를 밝히지 못하면 동의를 받을 수 없으므로 회사명을 불러온 뒤에 본문을 보여 준다.
+// 회원가입 1단계: 필수 동의 (본문을 끝까지 본 뒤 모두 체크해야 다음 단계)
+// 개인정보처리자(회사명)를 밝혀야 해서 회사명을 받은 뒤에 본문을 보여 준다.
 export function RegisterConsentStep({ checks, onChange, viewed, onViewedChange, onNext }: RegisterConsentStepProps) {
   const consentInfo = useConsentInfo();
   const companyName = consentInfo.data?.companyName;

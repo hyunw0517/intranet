@@ -2,8 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { NamedRefResponse } from 'src/users/dto/user-response.dto';
 import { BoardType } from 'src/generated/prisma/client';
 
-//* 게시판·게시판 권한 응답 (문서용 클래스, docs/api.md 3.4)
-// - 서비스는 Prisma 결과를 그대로 반환하고, 컨트롤러 반환 타입을 이 클래스로 적어 필드가 맞는지 typecheck가 검사한다.
+//* 게시판·게시판 권한 응답 (Swagger 문서용 클래스)
 
 /** 게시판 기본 정보 (권한 검사 결과와 함께 내려간다) */
 export class BoardInfoResponse {

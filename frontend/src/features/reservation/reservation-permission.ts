@@ -1,8 +1,7 @@
-// 예약 수정·취소·삭제 버튼을 보일지 (서버 규칙과 같게 맞춘 화면용 판단, 최종 확인은 서버)
+// 예약 수정·취소·삭제 버튼을 보일지 (서버 규칙과 같게, 최종 확인은 서버)
 // - 수정·취소: 본인·관리자, 예약됨, 시작 전
 // - 삭제: 본인은 시작 전, 관리자는 언제나
-// - 관리자 = 예약 관리 기능을 가진 ADMIN 또는 SUPER_ADMIN (서버 ReservationsService.isAdmin)
-// 지난 예약 = 시작 시각이 지난 예약 (2026-11-09 사용자 결정)
+// - 관리자 = 예약 관리 기능을 가진 ADMIN 또는 SUPER_ADMIN
 import { hasAdminPermission } from "@/lib/admin-permission";
 import type { AdminPermission, UserRole } from "@/types/user";
 import type { ReservationStatus } from "@/types/reservation";

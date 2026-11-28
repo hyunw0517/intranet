@@ -37,11 +37,10 @@ interface KanbanBoardProps {
 // 오늘(KST) "YYYY-MM-DD" - 마감 지남 표시용
 const kstToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 
-// 칸반 보드 (할 일 / 진행 / 완료 고정 3컬럼)
-// - 카드를 끌어 다른 컬럼이나 같은 컬럼의 다른 위치에 놓으면 서버에 이동(상태 + 위치)을 요청한다.
-// - 놓는 즉시 화면 캐시를 먼저 바꾸고(낙관적 업데이트), 실패하면 알리고 서버 값으로 다시 조회한다.
-//   순서 번호는 서버가 컬럼을 다시 매긴다(동시에 옮겨도 프로젝트 행 잠금으로 순서가 꼬이지 않음).
-// - 드래그가 어려우면(키보드·터치) 카드를 눌러 과제 창에서 상태를 바꿀 수 있다.
+// 칸반 보드 (할 일 / 진행 / 완료)
+// - 카드를 놓으면 서버에 이동(상태 + 위치)을 요청한다.
+// - 캐시를 먼저 바꾸고(낙관적 업데이트), 실패하면 알리고 서버 값으로 다시 조회한다.
+// - 드래그가 어려우면 과제 창에서 상태를 바꿀 수 있다.
 export function KanbanBoard({ projectId, tasks, onOpenTask, onAddTask }: KanbanBoardProps) {
   const contextId = useId();
   const queryClient = useQueryClient();

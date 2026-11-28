@@ -50,8 +50,7 @@ interface PostFormProps {
   onSubmit: (input: PostInput) => void;
 }
 
-// 게시글 작성·수정 폼
-// 게시판 설정에 따라 입력이 달라진다. (서버도 같은 기준으로 값을 무시·검사한다)
+// 게시글 작성·수정 폼 (게시판 설정에 따라 입력이 달라지고 서버도 같은 기준으로 검사한다)
 // - 비밀글: 비밀글 허용 게시판만 / 일정: 캘린더 게시판만 / 고정: 작성 화면의 게시판 관리자만
 // - 앨범 게시판 작성: 본문 이미지 1개 이상 (첫 번째 이미지가 목록 그리드의 대표 이미지)
 export function PostForm({
@@ -283,7 +282,7 @@ function EventFields({
   );
 }
 
-// 일정 색 고르기 (정해진 색 중 하나, 2026-11-12 사용자 결정) - 달력의 일정 박스 색
+// 일정 색 고르기 (정해진 색 중 하나) - 달력의 일정 박스 색
 function EventColorPicker({ value, onChange }: { value: CalendarEventColor | null; onChange: (color: CalendarEventColor | null) => void }) {
   return (
     <div className="grid gap-1.5">

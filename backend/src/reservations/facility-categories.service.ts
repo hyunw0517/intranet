@@ -9,7 +9,7 @@ import { CreateFacilityCategoryDto } from "./dto/create-facility-category.dto";
 import { UpdateFacilityCategoryDto } from "./dto/update-facility-category.dto";
 import { checkCategorySettings, formatHm, parseHm } from "./util/reservation-rules.util";
 
-//* 응답: 운영 시간을 "HH:mm"으로도 함께 준다. (입력과 같은 형식)
+//* 응답에 운영 시간을 "HH:mm"으로도 준다
 const toResponse = ( category: FacilityCategory ) => ({
     ...category,
     openTime: formatHm( category.openMinute ),
@@ -17,7 +17,7 @@ const toResponse = ( category: FacilityCategory ) => ({
 });
 
 //! 시설 분류 (관리자가 만든다: 회의실, 차량, 장비 …)
-// 분류가 그 시설들의 예약 규칙(단위·운영 시간·요일·예약 가능 기간)을 정한다. (features.md 6장)
+// 분류가 그 시설들의 예약 규칙(단위·운영 시간·요일·예약 가능 기간)을 정한다.
 @Injectable()
 export class FacilityCategoriesService {
 
@@ -30,7 +30,7 @@ export class FacilityCategoriesService {
         this.audit = auditService.target( AuditTargetType.FACILITY_CATEGORY );
     }
 
-    //* 분류 목록 (정렬 순) - 예약 화면의 탭과 입력 제한에 쓰므로 모든 회원이 본다.
+    //* 분류 목록 (예약 화면이 쓰므로 모든 회원)
     async findAll() {
         const categories = await this.prisma.facilityCategory.findMany({
             where: { deleted: false },
@@ -64,7 +64,7 @@ export class FacilityCategoriesService {
         });
     }
 
-    //* 분류 수정 - 규칙을 바꿔도 이미 있는 예약은 그대로 둔다. (새 예약부터 적용)
+    //* 분류 수정 (이미 있는 예약은 그대로, 새 예약부터 적용)
     async update( user: Pick<Users, 'id'>, id: number, body: UpdateFacilityCategoryDto ) {
         const before = await this.findOrThrow( id );
 
@@ -72,7 +72,7 @@ export class FacilityCategoriesService {
             await this.assertNameAvailable( body.name, id );
         }
 
-        // 보낸 값과 기존 값을 합쳐 전체 규칙이 맞는지 확인한다. (운영 시작만 바꿔도 종료·단위와 함께 검사)
+        // 보낸 값과 기존 값을 합쳐 전체 규칙을 검사한다
         const rules = this.toRules({
             slotMinutes: body.slotMinutes ?? before.slotMinutes,
             openTime: body.openTime ?? formatHm( before.openMinute ),
@@ -94,7 +94,7 @@ export class FacilityCategoriesService {
         });
     }
 
-    //* 분류 순서 변경 (드래그 정렬) - 직급·직책과 같은 방식: 현재 분류 전체의 id를 화면 순서대로 받는다.
+    //* 분류 순서 변경 (현재 분류 전체 id를 화면 순서대로 받는다)
     async updateOrder( user: Pick<Users, 'id'>, body: UpdateSortOrderDto ) {
         await this.prisma.$transaction( async ( tx ) => {
             const categories = await tx.facilityCategory.findMany({
@@ -122,7 +122,7 @@ export class FacilityCategoriesService {
         return true;
     }
 
-    //* 분류 삭제 - 시설이 남아 있으면 409 (2026-11-09 사용자 결정. DB FK도 RESTRICT)
+    //* 분류 삭제 - 시설이 남아 있으면 409 (DB FK도 RESTRICT)
     async delete( user: Pick<Users, 'id'>, id: number ) {
         const category = await this.findOrThrow( id );
 

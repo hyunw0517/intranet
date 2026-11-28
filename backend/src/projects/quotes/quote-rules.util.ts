@@ -1,14 +1,14 @@
 import { ApprovalStatus, Prisma, ProjectQuoteStatus, ProjectQuoteTaxType } from "src/generated/prisma/client";
 
-//! 견적서 순수 규칙 (DB 없이 단위 테스트, docs/design/projects.md 5-1장)
+//! 견적서 순수 규칙 (DB 없이 단위 테스트)
 
 // 금액 최대값: Decimal(15,0) (원화 정수, 999조)
 export const MAX_AMOUNT = new Prisma.Decimal( '999999999999999' );
-// 부가세율(%) 기본값 - 견적·매출·협력사 모두 직접 입력하고 기본은 10 (2026-11-17 사용자 결정)
+// 부가세율(%) 기본값 - 견적·매출·협력사 모두 직접 입력하고 기본은 10
 export const DEFAULT_VAT_RATE = 10;
 
 //* 부가세 = floor(공급가액 × 부가세율 ÷ 100) (원 미만 버림), 면세면 0
-// 견적·매출·협력사 공용. 부가세율은 소수 둘째 자리까지(DTO), Decimal로 계산해 정밀도 손실이 없다.
+// 견적·매출·협력사 공용. Decimal로 계산해 정밀도 손실이 없다.
 export function calcVat( supply: Prisma.Decimal, taxType: ProjectQuoteTaxType, vatRate: number | string | Prisma.Decimal = DEFAULT_VAT_RATE ): Prisma.Decimal {
     if ( taxType !== ProjectQuoteTaxType.TAXABLE ) return new Prisma.Decimal( 0 );
     return supply.mul( vatRate ).div( 100 ).floor();
@@ -19,16 +19,14 @@ export function formatVatRate( vatRate: number | string | Prisma.Decimal ): stri
     return new Prisma.Decimal( vatRate ).toString();
 }
 
-//* 화면·API에 보여 주는 견적 상태 - 저장 상태(DRAFT·CONFIRMED·CANCELLED) + 결재 문서 상태로 계산
+//* 화면에 보여 주는 견적 상태 (저장 상태 + 결재 문서 상태)
 export type QuoteDisplayStatus = 'DRAFT' | 'IN_APPROVAL' | 'REJECTED' | 'CONFIRMED' | 'CANCELLED';
 
 // 결재 중으로 보는 결재 문서 상태 (이 동안은 수정·새 버전·다시 상신 불가)
 const IN_APPROVAL: ApprovalStatus[] = [ ApprovalStatus.REQUESTED, ApprovalStatus.IN_PROGRESS ];
 
 //* 표시 상태 계산
-// - 확정·취소는 저장된 값 그대로
-// - 작성 중이면 연결된 결재 문서를 본다: 진행 중 → 결재 중, 반려 → 반려(고쳐서 다시 올릴 수 있음)
-//   회수(CANCELLED)·임시저장·문서 없음 → 작성 중
+// 작성 중이면 결재 문서를 본다: 진행 중이면 결재 중, 반려면 반려, 그 밖에는 작성 중
 export function quoteDisplayStatus( status: ProjectQuoteStatus, approvalStatus: ApprovalStatus | null | undefined ): QuoteDisplayStatus {
     if ( status !== ProjectQuoteStatus.DRAFT ) return status;
     if ( approvalStatus && IN_APPROVAL.includes( approvalStatus ) ) return 'IN_APPROVAL';
@@ -49,9 +47,9 @@ export interface QuoteItemInput {
     note?: string | null;
 }
 
-//* 품목 금액 + 합계 계산 (2026-11-17 사용자 결정)
-// - 금액 = 수량 × 단가 (Decimal로 계산 - 수량 × 단가가 JS number 정밀도(2^53)를 넘을 수 있다)
-// - 과세: 부가세 = floor(공급가액 × 부가세율 ÷ 100) (합계 기준, 원 미만 버림, 부가세율 기본 10), 면세: 0
+//* 품목 금액 + 합계 계산
+// - 금액 = 수량 × 단가 (곱이 2^53을 넘을 수 있어 Decimal로 계산)
+// - 부가세는 합계 기준으로 원 미만 버림, 면세는 0
 // - 어느 금액이든 999조를 넘으면 null (호출한 쪽이 400)
 export function calcQuote( items: QuoteItemInput[], taxType: ProjectQuoteTaxType, vatRate: number | string | Prisma.Decimal = DEFAULT_VAT_RATE ) {
     const rows = items.map( ( item, i ) => ({
@@ -69,7 +67,7 @@ export function calcQuote( items: QuoteItemInput[], taxType: ProjectQuoteTaxType
     return overflow ? null : { rows, supplyAmount, vatAmount, totalAmount };
 }
 
-//* 견적번호 "Q-2026-0001" (네 자리 미만은 0으로 채움, 1만 건을 넘으면 자리수가 늘어난다)
+//* 견적번호 "Q-2026-0001"
 export function formatQuoteNo( year: number, no: number ): string {
     return `Q-${year}-${String( no ).padStart( 4, '0' )}`;
 }
@@ -108,8 +106,8 @@ export interface QuoteHtmlSource {
     note: string | null;
 }
 
-//* 결재 문서 본문 (상신 시 스냅샷) - 결재 화면이 과제 관리를 몰라도 견적 내용을 보여 주도록 서버가 만든다
-// 사용 태그는 공용 정제 허용 목록(p·strong·table…) 안에서만. 사용자 입력은 모두 이스케이프한다.
+//* 결재 문서 본문 (상신 시 스냅샷, 결재 화면이 과제 관리를 몰라도 보여 주도록)
+// 공용 정제 허용 목록 안의 태그만 쓰고, 사용자 입력은 모두 이스케이프한다.
 export function buildQuoteHtml( q: QuoteHtmlSource ): string {
     const bno = q.clientBusinessNo?.length === 10
         ? `${q.clientBusinessNo.slice( 0, 3 )}-${q.clientBusinessNo.slice( 3, 5 )}-${q.clientBusinessNo.slice( 5 )}`

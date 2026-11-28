@@ -1,6 +1,5 @@
 //* 파일 앞부분(시그니처, magic number)으로 실제 이미지 형식 확인
-// 확장자와 Content-Type은 클라이언트가 정하는 값이라 html·스크립트를 .png로 올릴 수 있다.
-// 업로드 버퍼의 첫 12바이트로 형식을 판별하고, 알 수 없으면 null.
+// 확장자와 Content-Type은 클라이언트가 정해서 html을 .png로 올릴 수 있다. 알 수 없으면 null.
 export function detectImageMime( buf: Buffer ): string | null {
     if ( buf.length < 12 ) return null;
 

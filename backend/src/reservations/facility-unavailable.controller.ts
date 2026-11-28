@@ -8,8 +8,8 @@ import { UpdateUnavailableDto } from './dto/update-unavailable.dto';
 import { FacilityUnavailableService } from './facility-unavailable.service';
 import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-//* 시설 사용 불가 기간 (관리자) - 일반 회원은 시간표 API(GET /reservations/schedule)로 본다.
-// 등록·수정 응답: { unavailable, conflicts } - conflicts는 겹치는 기존 예약 (경고용, 예약은 그대로 둔다)
+//* 시설 사용 불가 기간 (관리자, 일반 회원은 시간표 API로 본다)
+// 등록·수정 응답의 conflicts는 겹치는 기존 예약 (경고용)
 @ApiTags('Reservations · Unavailable (시설 사용 불가 기간)')
 @Controller('reservations/facilities/:facilityId/unavailable')
 export class FacilityUnavailableController {

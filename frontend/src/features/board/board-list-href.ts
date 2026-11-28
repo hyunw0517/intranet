@@ -2,11 +2,9 @@
 
 import { useSyncExternalStore } from "react";
 
-// 게시판 목록(달력)으로 돌아가는 주소 기억
-// 상세·글쓰기에서 "← 게시판"을 누르면 보던 조건(달력의 ?month=&view=, 목록의 page·검색·정렬)으로 돌아가게 한다.
-// - BoardView가 주소가 바뀔 때마다 저장하고, 돌아가는 링크가 읽는다.
-// - sessionStorage: 탭마다 따로, 탭을 닫으면 사라진다. (다른 탭에서 보던 조건과 섞이지 않게)
-//   개인 브라우징·저장소 차단 등으로 쓸 수 없으면 조건 없는 게시판 주소로 돌아간다.
+// 게시판 목록으로 돌아가는 주소 기억
+// 상세·글쓰기의 "← 게시판"이 보던 조건(페이지·검색·정렬, 달력의 달·보기)으로 돌아가게 한다.
+// sessionStorage라 탭마다 따로 두고, 쓸 수 없으면 조건 없는 주소로 돌아간다.
 
 const storageKey = (boardId: number) => `board-list-href:${boardId}`;
 const defaultHref = (boardId: number) => `/boards/${boardId}`;

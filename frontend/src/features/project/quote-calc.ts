@@ -1,10 +1,9 @@
 import type { QuoteTaxType } from "@/types/project";
 
-// 견적·매출·협력사 금액 미리보기 - 서버 규칙(quote-rules.util.ts calcVat·calcQuote)과 같은 계산
-// - 금액 = 수량 × 단가, 과세는 합계 × 부가세율(%) 원 미만 버림, 면세 0
-// - 부가세율은 직접 입력(기본 10%), 0~100, 소수 둘째 자리까지 (2026-11-17 사용자 결정)
-// - BigInt로 계산한다 (수량 × 단가가 Number 정밀도를 넘을 수 있다). 저장되는 값은 서버가 다시 계산한 값이다.
-// - tsconfig target이 ES2020 미만이라 BigInt 리터럴(10n) 대신 BigInt()를 쓴다.
+// 견적·매출·협력사 금액 미리보기 (서버 calcVat·calcQuote와 같은 계산)
+// - 금액 = 수량 × 단가, 과세는 합계 × 부가세율 원 미만 버림, 면세 0
+// - 곱이 Number 정밀도를 넘을 수 있어 BigInt로 계산한다.
+// - tsconfig target이 ES2020 미만이라 10n 대신 BigInt()를 쓴다.
 export const MAX_AMOUNT = BigInt("999999999999999");
 export const DEFAULT_VAT_RATE = "10";
 

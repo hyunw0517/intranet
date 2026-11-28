@@ -1,4 +1,4 @@
-//! 사용자용 조직도·사원 검색 e2e (features.md 5.1)
+//! 사용자용 조직도·사원 검색 e2e (features.md)
 // - GET /organization/chart: 부서 트리 + 구성원 수(겸직 포함, 하위 부서 제외, 재직·승인 회원만)
 // - GET /organization/chart/:departmentId/members: 직책 → 직급 → 이름 순, 겸직 포함, 공개 범위(이메일·회사 전화만)
 // - GET /organization/directory: 이름·사번·부서명 검색, 이름순 페이지

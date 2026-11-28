@@ -12,19 +12,17 @@ import { ChatUserSearchQueryDto, CreateGroupChatDto, InviteChatMembersDto, Leave
 type Tx = Prisma.TransactionClient;
 type Db = PrismaService | Tx;
 
-//* 채팅 대상 (features.md 8.3): USER 이상, ACTIVE, 삭제되지 않은 회원 - 상대 검색과 생성·초대 검사가 같은 조건을 쓴다
+//* 채팅 대상: USER 이상, ACTIVE, 삭제 안 됨 (검색과 생성·초대 검사가 같은 조건)
 const chatableUserWhere = {
     deleted: false,
     status: UserStatus.ACTIVE,
     role: { in: [ UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN ] },
 } satisfies Prisma.UsersWhereInput;
 
-//! 채팅방 (features.md 8.3, 8.5, 8.6)
-// - 시각은 서버에서 만든 같은 Date(now)를 joinedAt·메시지 createdAt에 함께 넣는다.
-//   "참여 시점 이후 메시지만" 규칙이 두 컬럼을 비교하므로 같은 시계여야 한다. (초대 시스템 메시지가 초대된 사람에게 보이도록 같은 값)
-// - 참여자를 바꾸는 작업(초대·내보내기·나가기)은 방 행을 먼저 잠근다(FOR NO KEY UPDATE).
-//   같은 방에서 동시에 일어나면 차례로 처리된다. 예) OWNER가 나가는 중에 다른 사람이 OWNER를 넘겨받은 사람을 내보내는 경우
-// - 푸시는 트랜잭션 커밋 후 ChatEvents로 보낸다. 받는 사람은 커밋 직전에 조회한 활성 참여자.
+//! 채팅방
+// - joinedAt과 메시지 createdAt에 같은 now를 넣는다. "참여 이후 메시지만" 규칙이 둘을 비교해서다.
+// - 초대·내보내기·나가기는 방 행을 먼저 잠가(FOR NO KEY UPDATE) 같은 방의 변경을 차례로 처리한다.
+// - 푸시는 커밋 후 보내고, 받는 사람은 커밋 직전에 읽은 활성 참여자다.
 @Injectable()
 export class ChatRoomsService {
 
@@ -41,7 +39,7 @@ export class ChatRoomsService {
 
     //! 공용 (메시지 서비스도 사용)
 
-    //* 내가 활성 참여자인 방 (아니면 404 - 남의 방이 있는지도 알려주지 않는다)
+    //* 내가 활성 참여자인 방 (아니면 404, 남의 방이 있는지도 알리지 않는다)
     async getActiveMember( db: Db, roomId: number, userId: number ) {
         const member = await db.chatRoomMember.findFirst({
             where: { chatRoomId: roomId, userId, leftAt: null, chatRoom: { deleted: false } },
@@ -72,7 +70,7 @@ export class ChatRoomsService {
     }
 
     //* 방 행 잠금 - 참여자 변경을 방 단위로 차례대로 처리
-    // FOR NO KEY UPDATE: 서로는 막지만, 메시지·참여자 INSERT가 방을 FK로 참조할 때 거는 KEY SHARE와는 충돌하지 않는다. (휴가 신청의 회원 행 잠금과 같은 방식)
+    // FOR NO KEY UPDATE라 메시지·참여자 INSERT의 FK 참조(KEY SHARE)와는 충돌하지 않는다.
     async lockRoom( tx: Tx, roomId: number ) {
         await tx.$queryRaw`SELECT id FROM chat_room_model WHERE id = ${roomId} FOR NO KEY UPDATE`;
     }
@@ -107,7 +105,7 @@ export class ChatRoomsService {
                             type: true,
                             name: true,
                             lastMessageAt: true,
-                            // 1:1은 상대가 나갔어도 이름을 보여줘야 하므로 나간 사람도 가져와서 아래에서 거른다
+                            // 1:1은 상대가 나갔어도 이름을 보여줘야 해서 나간 사람도 가져와 아래에서 거른다
                             members: { select: { userId: true, leftAt: true, user: { select: chatUserSelect } } },
                             messages: { orderBy: { id: 'desc' }, take: 1, select: chatMessageSelect },
                         },
@@ -117,14 +115,14 @@ export class ChatRoomsService {
             this.unreadCounts( userId ),
         ]);
 
-        // 마지막 메시지가 파일 메시지면 미리보기 문구("이미지" / "동영상" / 파일명)에 파일 종류가 필요하다 → 쿼리 1번으로 붙인다
+        // 마지막 메시지가 파일이면 미리보기 문구에 파일 종류가 필요해서 붙인다
         const fileMessageIds = memberships.flatMap( ( m ) => m.chatRoom.messages ).filter( ( msg ) => msg.type === ChatMessageType.FILE ).map( ( msg ) => msg.id );
         const filesByMessage = await this.filesService.listByTargets( FileTargetType.CHAT_MESSAGE, fileMessageIds );
 
         const directOthers = memberships.map( ( { chatRoom: room } ) =>
             room.type === ChatRoomType.DIRECT ? room.members.find( ( m ) => m.userId !== userId ) : undefined,
         );
-        // 1:1 상대의 프로필 사진 (목록의 Avatar) - 쿼리 1번
+        // 1:1 상대의 프로필 사진
         const profileImageUrls = await this.filesService.findProfileImageUrls( directOthers.flatMap( ( m ) => m ? [ m.userId ] : [] ) );
 
         return memberships.map( ( { role, joinedAt, customName, chatRoom: room }, i ) => {
@@ -136,11 +134,11 @@ export class ChatRoomsService {
                 id: room.id,
                 type: room.type,
                 name: room.name,                                        // 방 기본 이름 (그룹, OWNER가 정함)
-                myName: customName,                                     // 나만 보는 이름 (화면 표시: myName ?? name ?? 1:1 상대 이름)
+                myName: customName,                                     // 나만 보는 이름 (myName ?? name ?? 1:1 상대 이름)
                 otherUser: other ? toChatUser( other.user, profileImageUrls ) : null, // 1:1 상대 (그룹은 null)
                 memberCount: activeMembers.length,
                 myRole: role,
-                lastMessage: last && last.createdAt >= joinedAt ? toChatMessage( last, filesByMessage.get( last.id ) ) : null, // 참여 전 메시지는 미리보기에도 보이지 않게
+                lastMessage: last && last.createdAt >= joinedAt ? toChatMessage( last, filesByMessage.get( last.id ) ) : null, // 참여 전 메시지는 미리보기에도 안 보이게
                 lastMessageAt: room.lastMessageAt,
                 unreadCount: unread.get( room.id ) ?? 0,
             };
@@ -156,9 +154,9 @@ export class ChatRoomsService {
         return { total };
     }
 
-    //* 방별 안 읽은 수 (features.md 8.5)
-    // 참여 시점 이후, 내 lastReadMessageId보다 큰 메시지 중 내가 보낸 것·시스템 메시지·삭제된 메시지를 뺀 개수.
-    // 방마다 count를 따로 부르지 않고 한 쿼리로 묶는다. (인덱스: chat_message_model(chat_room_id, deleted, id DESC))
+    //* 방별 안 읽은 수
+    // 참여 이후, lastReadMessageId보다 큰 메시지 중 내 것·시스템·삭제된 메시지를 뺀 개수
+    // 방마다 count를 부르지 않고 한 쿼리로 묶는다 (인덱스: chat_room_id, deleted, id DESC)
     private async unreadCounts( userId: number ): Promise<Map<number, number>> {
         const rows = await this.prisma.$queryRaw<{ roomId: number; count: number }[]>`
             SELECT m.chat_room_id AS "roomId", COUNT(*)::int AS "count"
@@ -177,8 +175,8 @@ export class ChatRoomsService {
         return new Map( rows.map( ( r ) => [ r.roomId, r.count ] ) );
     }
 
-    //* 채팅 상대 검색 (새 1:1·그룹 만들기, 초대) - 채팅할 수 있는 회원만, 본인 제외, 최대 20명
-    // 이름·사번·소속 부서명(겸직 포함)으로 찾는다. 결재 애드온의 결재자 검색을 쓰지 않는다(애드온끼리 의존하지 않음, R-ARCH-01).
+    //* 채팅 상대 검색 (채팅할 수 있는 회원만, 본인 제외, 최대 20명)
+    // 결재 애드온의 결재자 검색은 쓰지 않는다 (애드온끼리 의존하지 않게).
     async searchUsers( userId: number, dto: ChatUserSearchQueryDto ): Promise<ChatUserView[]> {
         const keyword = dto.search?.trim();
 
@@ -204,7 +202,7 @@ export class ChatRoomsService {
         return users.map( ( u ) => toChatUser( u, profileImageUrls ) );
     }
 
-    //* 방 상세 - 메시지별 안 읽은 사람 수는 화면이 members의 lastReadMessageId·joinedAt으로 계산한다 (features.md 8.5)
+    //* 방 상세 (메시지별 안 읽은 사람 수는 화면이 members로 계산한다)
     async findOne( userId: number, roomId: number ) {
         const me = await this.getActiveMember( this.prisma, roomId, userId );
         const room = me.chatRoom;
@@ -217,7 +215,7 @@ export class ChatRoomsService {
 
         const activeMembers = members.filter( ( m ) => m.leftAt === null );
         const other = room.type === ChatRoomType.DIRECT ? members.find( ( m ) => m.user.id !== userId ) : undefined;
-        // 참여자(나간 1:1 상대 포함)의 프로필 사진 - 메시지 목록의 보낸 사람 Avatar도 이 값을 쓴다
+        // 참여자(나간 1:1 상대 포함)의 프로필 사진 (메시지 보낸 사람 Avatar도 쓴다)
         const profileImageUrls = await this.filesService.findProfileImageUrls( members.map( ( m ) => m.user.id ) );
         const otherUser = other ? toChatUser( other.user, profileImageUrls ) : null;
 
@@ -242,7 +240,7 @@ export class ChatRoomsService {
     //! 1:1
 
     //* 1:1 채팅 열기 - 두 사람당 방 하나. 있으면 그 방, 없으면 만든다.
-    // 내가 나갔던 방이면 다시 참여한다(이전 기록은 보이지 않음). 상대가 나간 상태는 그대로 두고, 내가 메시지를 보낼 때 다시 참여시킨다.
+    // 내가 나갔던 방이면 다시 참여한다. 상대가 나간 상태는 내가 보낼 때 다시 참여시킨다.
     async openDirect( userId: number, dto: OpenDirectChatDto ) {
         if ( dto.userId === userId ) {
             throw new BadRequestException( '자기 자신과는 채팅할 수 없습니다.' );
@@ -273,7 +271,7 @@ export class ChatRoomsService {
                     return created;
                 });
             } catch ( e ) {
-                // 두 사람이 동시에 열면 한쪽은 directKey 부분 unique에 걸린다 → 먼저 만들어진 방을 쓴다
+                // 두 사람이 동시에 열면 한쪽은 directKey unique에 걸려서 먼저 만들어진 방을 쓴다
                 if ( !( e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002' ) ) throw e;
 
                 room = await this.prisma.chatRoom.findFirstOrThrow( { where: { directKey, deleted: false }, select: { id: true } } );
@@ -293,7 +291,7 @@ export class ChatRoomsService {
     //! 그룹
 
     //* 그룹 생성 - 본인 포함 3명 이상, 만든 사람이 OWNER
-    // 이름을 비우면 참여자(본인 포함) 이름으로 만든다. 만들 때 한 번만 정하고 이후 참여자가 바뀌어도 그대로 둔다(2026-11-13 사용자 결정).
+    // 이름을 비우면 참여자 이름으로 한 번만 정한다 (이후 참여자가 바뀌어도 그대로).
     async createGroup( userId: number, dto: CreateGroupChatDto ) {
         const invitedIds = dto.userIds.filter( ( id ) => id !== userId );
 
@@ -337,7 +335,7 @@ export class ChatRoomsService {
         return this.findOne( userId, roomId );
     }
 
-    //* 초대 - 참여자 누구나. 예전에 나갔던 사람은 기존 행을 다시 쓴다(참여 시점 갱신 → 이전 기록은 보이지 않음).
+    //* 초대 - 참여자 누구나. 예전에 나간 사람은 기존 행을 다시 쓴다 (이전 기록은 안 보임).
     async invite( userId: number, roomId: number, dto: InviteChatMembersDto ) {
         const invitedIds = dto.userIds.filter( ( id ) => id !== userId );
 
@@ -445,9 +443,9 @@ export class ChatRoomsService {
     }
 
     //* 나가기
-    // - 1:1: 내 목록에서 숨기기만 한다(시스템 메시지 없음). 상대가 보내거나 내가 다시 열면 같은 방에 다시 참여한다.
-    // - 그룹: OWNER가 나가면 지정한 사람(nextOwnerId), 없으면 가장 오래 참여한 사람(joinedAt, 같으면 회원 id 순)이 OWNER가 된다.
-    //   마지막 사람이 나가도 방과 메시지는 남긴다(누구의 목록에도 나오지 않음).
+    // - 1:1은 내 목록에서 숨기기만 한다. 상대가 보내거나 내가 다시 열면 다시 참여한다.
+    // - 그룹 OWNER가 나가면 지정한 사람, 없으면 가장 오래 참여한 사람이 OWNER가 된다.
+    // - 마지막 사람이 나가도 방과 메시지는 남긴다.
     async leave( userId: number, roomId: number, dto: LeaveChatDto ) {
         const now = new Date();
 
@@ -535,8 +533,8 @@ export class ChatRoomsService {
 
     //! 방 이름
 
-    //* 방 기본 이름 변경 (그룹, OWNER만) - 모든 참여자에게 보이는 이름, 시스템 메시지로 알린다
-    // 방 행을 잠그는 이유: "OWNER인지 확인 → 변경" 사이에 OWNER가 나가며 방장이 바뀌면 방장이 아닌 사람의 변경이 통과할 수 있다
+    //* 방 기본 이름 변경 (그룹, OWNER만, 시스템 메시지로 알린다)
+    // 방 행을 잠그는 이유: OWNER 확인과 변경 사이에 방장이 바뀌면 방장이 아닌 사람의 변경이 통과할 수 있다
     async rename( userId: number, roomId: number, dto: RenameChatRoomDto ) {
         const now = new Date();
 
@@ -567,8 +565,8 @@ export class ChatRoomsService {
         return this.findOne( userId, roomId );
     }
 
-    //* 나만 보는 방 이름 (참여자 누구나, 1:1·그룹 모두) - null이면 기본 이름으로 되돌린다
-    // 다른 참여자에게는 보이지 않으므로 시스템 메시지·감사 로그를 남기지 않고, 내 다른 탭에만 푸시한다
+    //* 나만 보는 방 이름 (null이면 기본 이름으로)
+    // 나만 보는 값이라 시스템 메시지·감사 로그 없이 내 다른 탭에만 푸시한다
     async setMyName( userId: number, roomId: number, dto: SetMyChatRoomNameDto ) {
         await this.getActiveMember( this.prisma, roomId, userId );
 
@@ -594,7 +592,7 @@ export class ChatRoomsService {
             throw new NotFoundException( '이 채팅방의 메시지가 아닙니다.' );
         }
 
-        // 조건부 UPDATE 한 번으로 "더 큰 값일 때만" 바꾼다 (탭 여러 개가 동시에 보내도 값이 뒤로 가지 않음)
+        // "더 큰 값일 때만" 조건부 UPDATE라 탭 여러 개가 동시에 보내도 뒤로 가지 않는다
         const { count } = await this.prisma.chatRoomMember.updateMany({
             where: {
                 chatRoomId: roomId,

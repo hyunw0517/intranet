@@ -10,9 +10,8 @@ export const holidayKeys = {
 const toHolidayMap = (results: UseQueryResult<Holiday[]>[]) =>
   new Map(results.flatMap((result) => result.data ?? []).map((holiday) => [holiday.date, holiday.name]));
 
-// 달력에 보이는 날짜의 공휴일 (날짜 → 이름). 대시보드 달력과 게시판 캘린더가 함께 쓴다.
-// 12월·1월 달력은 앞뒤 해의 날짜도 보이므로 첫 칸과 마지막 칸의 연도를 모두 조회한다.
-// 조회에 실패하면 빈 Map이라 공휴일 색만 빠지고 달력은 그대로 동작한다.
+// 달력에 보이는 날짜의 공휴일 (대시보드·게시판 캘린더 공용)
+// 12월·1월 달력은 앞뒤 해의 날짜도 보여서 두 해를 조회하고, 실패하면 공휴일 색만 빠진다.
 export function useHolidayMap(weeks: { date: string }[][]) {
   const firstYear = Number(weeks[0][0].date.slice(0, 4));
   const lastYear = Number(weeks[weeks.length - 1][6].date.slice(0, 4));

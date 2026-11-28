@@ -12,8 +12,8 @@ import {
 
 type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 
-//* 전자결재 문서 - 열람·처리 권한(기안자·결재자·관리자, 상태)은 서비스에서 문서마다 확인한다.
-// 상태 변경은 PATCH :id/<동작> (시설 예약과 같은 형식)
+//* 전자결재 문서 - 열람·처리 권한은 서비스가 문서마다 확인한다
+// 상태 변경은 PATCH :id/<동작>
 @ApiTags('Approvals (전자결재)')
 @Controller('approvals')
 export class ApprovalDocumentsController {
@@ -43,7 +43,7 @@ export class ApprovalDocumentsController {
         return this.documentsService.findList( user, query );
     }
 
-    //* 결재함 탭 건수 { pending, upcoming, mine(진행 중만), drafts } - 'documents/:id'보다 먼저 선언
+    //* 결재함 탭 건수 ('documents/:id'보다 먼저 선언)
     @Get('documents/counts')
     @Roles(UserRole.USER)
     @ApiOperation({ summary: '결재함 탭 건수', description: '`{ pending, upcoming, mine, drafts }`. 기안함(mine)은 결재 요청·결재 중인 내 문서만 센다.' })
@@ -146,7 +146,7 @@ export class ApprovalDocumentsController {
         return this.documentsService.reject( user, id, body );
     }
 
-    //* 관리자 결재자 교체 (진행 중 문서의 남은 결재자 한 명) - 병렬 단계는 단계 번호로 한 사람을 정할 수 없어 단계 행 id를 쓴다
+    //* 관리자 결재자 교체 (병렬 단계는 단계 번호로 한 사람을 못 정해서 단계 행 id를 쓴다)
     @Patch('documents/:id/steps/:stepId')
     @RequireAdmin(AdminPermission.APPROVAL_LINES)
     @ApiOperation({ summary: '(관리자) 결재자 교체', description: '결재자 부재 시 진행 중 문서의 남은(대기·예정) 결재자 한 명을 바꾼다. 병렬 단계는 단계 번호로 한 사람을 정할 수 없어 단계 행 id(stepId)를 쓴다. 새 스냅샷·이력·감사 로그를 남기고, 새 결재자가 지금 차례면 알린다.' })
@@ -192,7 +192,7 @@ export class ApprovalDocumentsController {
         return this.documentsService.delete( user, id );
     }
 
-    //* 첨부 다운로드 (열람 권한) - 게시글 첨부와 같은 응답 형식
+    //* 첨부 다운로드 (열람 권한)
     @Get('documents/:id/files/:fileId')
     @Roles(UserRole.USER)
     @ApiOperation({ summary: '첨부 다운로드', description: '문서 열람 권한으로 확인한 뒤 내려준다. 게시글 첨부와 같은 응답 형식(application/octet-stream + attachment, 한글 파일명 filename*). Bearer 헤더를 붙인 fetch로 받는다.' })

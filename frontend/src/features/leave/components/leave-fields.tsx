@@ -14,10 +14,10 @@ import { formatDays, partialEndTime, previewDays, REASON_MAX, startTimeOptions, 
 const TYPES: LeaveType[] = ["ANNUAL", "SICK", "OFFICIAL"];
 const UNITS: LeaveUnit[] = ["FULL", "HALF", "QUARTER"];
 
-// 전자결재 작성 화면의 휴가 입력 칸 (문서 유형이 "휴가 신청"일 때)
-// - 종일은 달력 일수로 센다. 주말·공휴일 등 쉬는 날은 기간에서 빼고 나눠 신청한다(서버도 쉬는 날을 가정하지 않음).
+// 전자결재 작성 화면의 휴가 입력 칸
+// - 종일은 달력 일수로 센다 (쉬는 날은 빼고 나눠 신청한다).
 // - 반차·반반차는 시작 시각만 고르고 종료는 4시간·2시간 뒤로 정해진다.
-// - 연차면 그 연도의 남은 연차(결재 중 포함)를 함께 보여 준다. 최종 확인은 상신할 때 서버가 한다.
+// - 연차면 남은 연차(결재 중 포함)를 함께 보여 준다. 최종 확인은 상신할 때 서버가 한다.
 export function LeaveFields({
   value,
   onChange,

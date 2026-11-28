@@ -9,6 +9,7 @@ const EXAMPLE = JSON.parse(fs.readFileSync(path.join(DEFAULT_ROOT, 'harness/exam
 import importBoundaries, { extractImports } from '../checks/import-boundaries.mjs';
 import routeGuards, { maskStrings, parseController } from '../checks/route-guards.mjs';
 import apiDocs from '../checks/api-docs.mjs';
+import commentStyle, { extractComments } from '../checks/comment-style.mjs';
 import rulesRegistry from '../checks/rules-registry.mjs';
 import docLinks from '../checks/doc-links.mjs';
 import docPaths from '../checks/doc-paths.mjs';
@@ -361,4 +362,58 @@ test('docs.exclude: "/"로 끝나면 폴더 전체를 뺀다', () => {
   const errors = docPaths.run(c).errors;
   assert.equal(errors.length, 1);
   assert.match(errors[0], /old2\.ts/);
+});
+
+// ── comment-style ─────────────────────────────────────────────
+
+test('comment-style: 주석의 결정 기록·결정 날짜·문서 장 번호·⭐는 오류', () => {
+  const root = makeRepo({
+    'backend/src/a.service.ts': [
+      '//* 결재함 탭 건수 (2026-11-10 사용자 결정)',
+      'const a = 1; // 기본 10 (2026-11-17 결정)',
+      '/**',
+      ' * 규칙은 features.md 7.4 참고',
+      ' * 예산은 docs/design/projects.md 5-3장',
+      ' */',
+      '// ⭐ 동시 처리',
+    ].join('\n'),
+  });
+  const errors = commentStyle.run(ctx(root)).errors;
+  assert.equal(errors.length, 6);
+  assert.match(errors[0], /a\.service\.ts:1 \[R-DOC-05\].*결정·요청 기록/);
+  assert.match(errors[1], /a\.service\.ts:1 .*결정 날짜/);
+  assert.match(errors[2], /a\.service\.ts:2 .*결정 날짜/);
+  assert.match(errors[3], /a\.service\.ts:4 .*장 번호/);
+  assert.match(errors[4], /a\.service\.ts:5 .*장 번호/);
+  assert.match(errors[5], /a\.service\.ts:7 .*⭐/);
+});
+
+test('comment-style: 예시 날짜, 문자열 속 값, 파일 이름만 적은 문서 참조, 제외 폴더는 통과', () => {
+  const root = makeRepo({
+    'backend/src/b.util.ts': [
+      '//* 휴가 기간 표시 ("2026-12-01 ~ 2026-12-03")',
+      '// 날짜 + n일 ("2026-12-31" + 1 → "2027-01-01")',
+      '// 규칙 원본: docs/design/leave_calculate_manual.md',
+      "const msg = '사용자 결정 2026-11-10 결정 features.md 7.4 ⭐';",
+      "const url = 'http://x/a.md 1'; // 주소 문자열",
+      '// 이미지 1~10장 = 묶음 메시지 1개',
+    ].join('\n'),
+    'backend/src/generated/prisma/x.ts': '// 사용자 결정',
+  });
+  const r = commentStyle.run(ctx(root));
+  assert.deepEqual(r.errors, []);
+});
+
+test('comment-style: 한 줄에 코드와 블록 주석이 섞여도 주석 부분만 본다', () => {
+  assert.deepEqual(
+    extractComments("const a = '//사용자 결정'; /* 주석 */ const b = 1; // 끝").map((c) => c.text.trim()),
+    [ '주석', '끝' ],
+  );
+});
+
+test('comment-style: 설정이 없으면 건너뛴다', () => {
+  const root = makeRepo({});
+  const c = ctx(root);
+  delete c.config.commentStyle;
+  assert.match(commentStyle.run(c).notes[0], /commentStyle 설정 없음/);
 });

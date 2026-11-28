@@ -99,8 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [loadUser],
   );
 
-  // 비밀번호 변경 → 서버가 tokenVersion을 올려 기존 토큰이 모두 무효가 되므로 응답의 새 access token으로 교체한다.
-  // (새 refresh 쿠키는 서버가 저장) 토큰을 새로 받는 동작은 login·register와 같이 이곳에서만 처리한다.
+  // 비밀번호를 바꾸면 기존 토큰이 모두 무효가 되어 응답의 새 access token으로 교체한다.
+  // 토큰을 새로 받는 동작은 login·register와 같이 이곳에서만 처리한다.
   const changePassword = useCallback(async (input: ChangePasswordInput) => {
     const { accessToken } = await authApi.changePassword(input);
     setAccessToken(accessToken);

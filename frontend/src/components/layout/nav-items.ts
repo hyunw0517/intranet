@@ -50,7 +50,7 @@ export const mainNav: NavGroup[] = [
     label: "개인",
     items: [
       { title: "마이페이지", href: "/mypage", icon: UserRound },
-      { title: "휴가내역", href: "/leaves", icon: Plane, addon: "leaves" }, // 마이페이지 아래 (2026-11-12 사용자 결정)
+      { title: "휴가내역", href: "/leaves", icon: Plane, addon: "leaves" }, // 마이페이지 아래
     ],
   },
 ];
@@ -75,14 +75,13 @@ export const adminNav: NavGroup[] = [
 
 export type ShellVariant = "main" | "admin";
 
-// 아이콘(컴포넌트)은 서버 → 클라이언트로 props 전달이 불가능하므로
-// 서버 레이아웃은 variant만 넘기고 클라이언트 컴포넌트에서 메뉴를 고른다.
+// 아이콘 컴포넌트는 서버에서 props로 넘길 수 없어서, 서버 레이아웃은 variant만 넘긴다.
 export const navByVariant: Record<ShellVariant, NavGroup[]> = {
   main: mainNav,
   admin: adminNav,
 };
 
-// 켜지지 않은 애드온의 메뉴를 뺀다. (목록을 아직 못 받았으면 애드온 메뉴는 모두 숨김, 비어 버린 그룹은 제외)
+// 꺼진 애드온 메뉴를 뺀다 (목록을 아직 못 받았으면 모두 숨기고, 빈 그룹은 뺀다)
 export function filterNavForAddons(nav: NavGroup[], enabled: AddonName[] | undefined): NavGroup[] {
   return nav
     .map((group) => ({ ...group, items: group.items.filter((item) => !item.addon || (enabled ?? []).includes(item.addon)) }))

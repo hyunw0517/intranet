@@ -78,9 +78,8 @@ export class OrganizationService {
         return user;
     }
 
-    //* 대표 소속 이름 (게시글·댓글 작성 당시, 결재 당시 등 스냅샷 저장용) → 대표 소속의 부서·직책 + 직급
-    // 대표 소속은 getUserOrganization의 정렬 규칙(isPrimary 우선)을 따르므로 첫 번째 소속이다.
-    // 컬럼 이름은 쓰는 쪽마다 다르므로(authorXxx, approverXxx 등) 일반적인 이름으로 반환한다.
+    //* 대표 소속 이름 (작성·결재 당시 스냅샷 저장용)
+    // 쓰는 쪽마다 컬럼 이름이 달라서(authorXxx, approverXxx) 일반적인 이름으로 돌려준다.
     async getPrimaryOrganizationNames(
         userId: number,
     ){

@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { PROJECT_STATUS_LABEL, type ProjectProgress, type ProjectStatus } from "@/types/project";
 
-// 상태 배지 - 강조색은 진행 중일 때만 쓰고, 나머지는 차분하게 (요구사항 2.1: 강조 배지 남발 금지)
+// 상태 배지 - 강조색은 진행 중일 때만 쓴다
 export function ProjectStatusBadge({ status }: { status: ProjectStatus }) {
   const variant = status === "IN_PROGRESS" ? "default" : status === "CANCELLED" ? "destructive" : status === "PLANNED" ? "outline" : "secondary";
   return <Badge variant={variant}>{PROJECT_STATUS_LABEL[status]}</Badge>;

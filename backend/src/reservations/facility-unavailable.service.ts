@@ -10,10 +10,9 @@ import { UnavailableListQueryDto } from "./dto/unavailable-list-query.dto";
 import { formatReservationTime } from "./util/reservation-rules.util";
 
 //! 시설 사용 불가 기간 (점검 등, 관리자)
-// - 등록·수정할 때 겹치는 기존 예약이 있어도 저장하고, 응답의 conflicts로 관리자 화면에 경고만 보여 준다.
-//   기존 예약은 그대로 두고 예약자에게 알림도 보내지 않는다. (2026-11-09 사용자 결정)
+// - 겹치는 기존 예약이 있어도 저장하고 conflicts로 경고만 준다. 예약자 알림도 없다.
 // - 그 기간의 새 예약은 예약 서비스가 막는다.
-// - 감사 로그 대상은 시설(FACILITY) - 사용 불가 기간 전용 enum 값을 따로 두지 않는다.
+// - 감사 로그 대상은 시설(FACILITY)로 남긴다.
 @Injectable()
 export class FacilityUnavailableService {
 
@@ -125,7 +124,7 @@ export class FacilityUnavailableService {
         return true;
     }
 
-    //* 기간과 겹치는 유효한 예약 (경고용) - [시작, 종료) 겹침: 예약 시작 < 기간 종료 AND 예약 종료 > 기간 시작
+    //* 기간과 겹치는 유효한 예약 (경고용)
     private findConflicts( facilityId: number, startAt: Date, endAt: Date ) {
         return this.prisma.facilityReservation.findMany({
             where: {

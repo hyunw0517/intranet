@@ -1,5 +1,4 @@
 //! sale-rules.util.ts 단위 테스트 (청구 금액·부가세, 수금 상태, 분할 청구 한도)
-// DB를 쓰지 않는다. 규칙은 docs/design/projects.md 5-2장.
 
 import { Prisma, ProjectQuoteTaxType } from 'src/generated/prisma/client';
 import { calcSaleAmounts, exceedsQuote, paymentStatus } from './sale-rules.util';

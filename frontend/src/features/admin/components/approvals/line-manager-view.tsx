@@ -25,8 +25,8 @@ import { LINE_MANAGER_SCOPE_LABEL, type Approver, type LineManagerRule, type Lin
 import { useLineManagerMutation, useLineManagers } from "../../hooks/use-admin-approvals";
 import { useDepartments, useJobTitles } from "../../hooks/use-organization";
 
-// 결재라인 관리자 (공용·부서 결재라인을 관리할 수 있는 사람을 지정, features.md 7.5)
-// 한 규칙 = 대상(회원 또는 직책) + 범위(전체 / 특정 부서 / 본인 부서). 관리자(ADMIN)는 규칙 없이도 항상 관리한다.
+// 결재라인 관리자 (공용·부서 결재라인을 관리할 사람을 지정)
+// 한 규칙 = 대상(회원 또는 직책) + 범위. ADMIN은 규칙 없이도 항상 관리한다.
 export function LineManagerView() {
   const { data, isPending, isError, error, refetch } = useLineManagers();
   const [adding, setAdding] = useState(false);

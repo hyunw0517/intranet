@@ -1,5 +1,4 @@
-//* 페이지 목록 응답의 meta (문서용 클래스, PaginatePage의 PagePaginationResult.meta와 같은 형태)
-// - 목록 응답 클래스는 모듈별로 두고(예: UserListResponse), meta만 이 클래스를 같이 쓴다. (docs/api.md 3.4)
+//* 페이지 목록 응답의 meta (Swagger 문서용, PaginatePage 결과와 같은 형태)
 export class PageMetaResponse {
     /** 현재 페이지 (1부터) */
     page: number;

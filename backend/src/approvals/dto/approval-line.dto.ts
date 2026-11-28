@@ -7,7 +7,7 @@ import { ApprovalLineScope } from "src/generated/prisma/client";
 import { MAX_APPROVAL_STEPS } from "../const/approval.const";
 
 //* 결재 한 단계 (템플릿·문서 공통) - steps 배열 순서 = 결재 순서
-// 한 단계에 여러 명이면 병렬: 모두 승인해야 다음 단계, 한 명이라도 반려하면 문서 반려 (2026-11-10 사용자 결정)
+// 한 단계에 여러 명이면 병렬: 모두 승인해야 다음 단계, 한 명이라도 반려하면 문서 반려
 export class ApprovalStepInputDto {
 
     /** 이 단계의 결재자 회원 id (1명 이상, 문서 전체 결재자는 1~10명) */

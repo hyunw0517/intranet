@@ -10,10 +10,9 @@ const SUCCESS_CACHE_MS = 24 * 60 * 60 * 1000;           // 성공 결과 보관 
 const FAILURE_CACHE_MS = 10 * 60 * 1000;                // 실패 후 다시 호출하기까지의 대기
 const REQUEST_TIMEOUT_MS = 5000;
 
-//! 공휴일 (핵심 - common): 한국천문연구원 특일 정보 API를 서버에서 호출해 연도별로 캐시한다.
-// - API 키를 브라우저에 노출하지 않고, 접속자 수와 관계없이 외부 호출 수를 일정하게 유지한다. (일일 한도 10,000건)
-// - 외부 API가 실패해도 달력은 동작해야 하므로 예외를 던지지 않는다. 이전 결과가 있으면 그 값을, 없으면 빈 목록을 준다.
-// - 캐시는 서버 메모리에 둔다. 재시작하면 다시 조회하고, 서버가 여러 대여도 호출 수만 그만큼 늘어난다.
+//! 공휴일: 한국천문연구원 특일 정보 API를 서버에서 호출해 연도별로 메모리에 캐시한다.
+// API 키를 브라우저에 노출하지 않고, 접속자 수와 상관없이 외부 호출 수를 일정하게 둔다 (일일 한도 10,000건).
+// 외부 API가 실패해도 달력은 동작해야 해서 예외 대신 이전 결과나 빈 목록을 준다.
 @Injectable()
 export class HolidaysService {
 
@@ -25,7 +24,7 @@ export class HolidaysService {
         private readonly configService: ConfigService,
     ){}
 
-    //* 그해 공휴일 (조회 범위 밖의 연도는 외부 호출 없이 빈 목록 - 임의의 연도로 호출 한도를 소모하지 못하게 한다)
+    //* 그해 공휴일 (범위 밖 연도는 빈 목록 - 임의의 연도로 호출 한도를 쓰지 못하게)
     async findByYear( year: number ): Promise<Holiday[]> {
         const thisYear = Number( kstDateString( new Date() ).slice( 0, 4 ) );
         if ( Math.abs( year - thisYear ) > QUERYABLE_YEARS_AROUND ) return [];
@@ -58,7 +57,7 @@ export class HolidaysService {
         const key = this.configService.get<string>( 'HOLIDAY_API_KEY' );
         if ( !key ) throw new Error( 'HOLIDAY_API_KEY가 설정되지 않았습니다.' );
 
-        // 공공데이터포털은 인코딩된 키와 디코딩된 키를 함께 발급한다. 인코딩된 키를 다시 인코딩하면 인증에 실패한다.
+        // 공공데이터포털 키는 인코딩·디코딩 두 가지가 있고, 인코딩된 키를 다시 인코딩하면 인증에 실패한다
         const serviceKey = /%[0-9A-Fa-f]{2}/.test( key ) ? key : encodeURIComponent( key );
         const response = await fetch( `${HOLIDAY_API_URL}?serviceKey=${serviceKey}&solYear=${year}&numOfRows=100`, {
             signal: AbortSignal.timeout( REQUEST_TIMEOUT_MS ),

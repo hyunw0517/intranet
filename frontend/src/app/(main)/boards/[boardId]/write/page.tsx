@@ -4,7 +4,7 @@ import { PostCreateView } from "@/features/board/components/post-write-view";
 
 export const metadata: Metadata = { title: "글쓰기" };
 
-// URL 형식만 확인하고, 게시판 권한(쓰기)은 클라이언트가 목록 응답의 perm으로 확인한다. (서버도 작성 시 403)
+// URL 형식만 확인하고, 쓰기 권한은 클라이언트가 perm으로 확인한다 (서버도 403)
 export default async function PostWritePage({ params }: PageProps<"/boards/[boardId]/write">) {
   const { boardId: raw } = await params;
   const boardId = Number(raw);

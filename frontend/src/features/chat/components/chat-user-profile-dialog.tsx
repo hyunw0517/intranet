@@ -6,8 +6,8 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useChatUserProfile } from "../hooks/use-chats";
 import { StartChatButton } from "./start-chat-button";
 
-// 메시지 위 사진·이름을 누르면 보낸 사람의 기본 정보 (조직도 사원 상세와 같은 본문)
-// 채팅 응답에는 이름·사진만 있으므로 열 때 GET /organization/directory/:userId로 받는다. 재직 중이 아니면 404 → 안내
+// 메시지 위 사진·이름을 누르면 보낸 사람의 기본 정보
+// 채팅 응답에는 이름·사진만 있어서 열 때 조직도 API로 받는다 (재직 중이 아니면 404 안내).
 export function ChatUserProfileDialog({ userId, onClose }: { userId: number | null; onClose: () => void }) {
   const profile = useChatUserProfile(userId);
 

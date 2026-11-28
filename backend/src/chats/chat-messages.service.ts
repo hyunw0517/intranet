@@ -14,11 +14,10 @@ import { ChatMessageContentDto } from './dto/chat-message.dto';
 type Tx = Prisma.TransactionClient;
 type MessageRow = Prisma.ChatMessageGetPayload<{ select: typeof chatMessageSelect }>;
 
-//! 채팅 메시지 (features.md 8.4)
-// - 보내기·수정·삭제는 REST로만 한다. 소켓은 커밋 후 푸시만 한다(ChatEvents).
-// - 메시지는 감사 로그에 남기지 않는다. ChatMessage(삭제는 soft delete) + ChatMessageEdit(수정 전 내용)가 이력이다.
-// - 파일 메시지(FILE): 요청 1개 = 메시지 1개. 이미지만 여러 장을 묶고, 동영상·그 밖의 파일은 하나씩. (2026-11-13 사용자 결정)
-//   파일 저장·검사·썸네일은 핵심 FilesService가 하고, 여기서는 채팅 권한(활성 참여자 + 참여 이후 + 삭제 안 됨)만 확인한다.
+//! 채팅 메시지
+// - 보내기·수정·삭제는 REST로만 하고, 소켓은 커밋 후 푸시만 한다.
+// - 감사 로그는 남기지 않는다. ChatMessage(soft delete)와 ChatMessageEdit(수정 전 내용)가 이력이다.
+// - 파일 메시지는 요청 1개 = 메시지 1개. 이미지만 여러 장을 묶는다.
 @Injectable()
 export class ChatMessagesService {
 
@@ -48,11 +47,10 @@ export class ChatMessagesService {
         return this.insertMessage( userId, roomId, { type: ChatMessageType.TEXT, content: dto.content } );
     }
 
-    //* 파일 보내기 - 요청 1개 = 메시지 1개 (업로드와 메시지 생성을 한 번에)
-    // - 여러 개는 이미지만(묶음 메시지). 동영상·그 밖의 파일은 화면이 하나씩 보낸다.
-    //   종류·용량은 경로별 multer 옵션이 먼저 거른다(이미지 POST images 장당 20MB / 파일 POST files 200MB). 아래 검사는 한 번 더 막는 용도.
-    // - 권한을 먼저 확인한 뒤 저장한다. 저장은 트랜잭션 밖(저장소 → Files 행), 연결은 메시지와 같은 트랜잭션.
-    //   메시지 저장이 실패하면 올린 파일은 미연결로 남는다(게시판 첨부와 같은 정책, 정리 배치는 남은 일).
+    //* 파일 보내기 (업로드와 메시지 생성을 한 번에)
+    // 종류·용량은 경로별 multer 옵션이 먼저 거르고, 아래 검사는 한 번 더 막는 용도다.
+    // 권한을 먼저 확인하고 저장한다. 저장은 트랜잭션 밖, 연결은 메시지와 같은 트랜잭션.
+    // 메시지 저장이 실패하면 올린 파일은 미연결로 남는다.
     async sendFiles( userId: number, roomId: number, files: Express.Multer.File[] | undefined ) {
         if ( !files || files.length === 0 ) {
             throw new BadRequestException( '보낼 파일이 없습니다. (form-data 필드명: files)' );
@@ -73,8 +71,8 @@ export class ChatMessagesService {
     }
 
     //* 메시지 저장 공통 (텍스트·파일)
-    // - 1:1에서 상대가 퇴사·비활성·삭제면 읽기 전용(403). 상대가 나간 상태면 다시 참여시킨다(이전 기록은 보이지 않음).
-    // - 방의 lastMessageAt(목록 정렬)과 내 lastReadMessageId(내 메시지는 읽은 것)를 같은 트랜잭션에서 갱신한다.
+    // - 1:1 상대가 퇴사·비활성이면 읽기 전용(403), 나간 상태면 다시 참여시킨다.
+    // - 방의 lastMessageAt과 내 lastReadMessageId를 같은 트랜잭션에서 갱신한다.
     private async insertMessage(
         userId: number,
         roomId: number,
@@ -95,7 +93,7 @@ export class ChatMessagesService {
                 select: chatMessageSelect,
             });
 
-            // 파일 연결: 내가 올린 미연결 첨부만 (조건을 WHERE에 걸고 개수가 다르면 롤백 - FilesService.syncTargetFiles)
+            // 파일 연결: 내가 올린 미연결 첨부만 (개수가 다르면 롤백)
             if ( files.length > 0 ) {
                 await this.filesService.syncTargetFiles( tx, {
                     kind: FileKind.ATTACHMENT,
@@ -122,7 +120,7 @@ export class ChatMessagesService {
         return message;
     }
 
-    //* 수정 - 본인 TEXT 메시지, 보낸 뒤 5분 이내. 수정 전 내용을 ChatMessageEdit에 쌓는다. (파일 메시지는 수정 불가)
+    //* 수정 - 본인 TEXT 메시지, 5분 이내. 수정 전 내용을 ChatMessageEdit에 쌓는다.
     async update( userId: number, roomId: number, messageId: number, dto: ChatMessageContentDto ) {
         const now = new Date();
 
@@ -152,8 +150,8 @@ export class ChatMessagesService {
         return result.message;
     }
 
-    //* 삭제 - 본인 TEXT·FILE 메시지, 보낸 뒤 5분 이내. soft delete (원문은 DB에 남는다)
-    // 파일 메시지는 연결된 파일도 soft delete → 다운로드·썸네일 404. 이미지 묶음은 통째로만 지운다.
+    //* 삭제 - 본인 TEXT·FILE 메시지, 5분 이내 (soft delete)
+    // 파일 메시지는 연결된 파일도 지운다. 이미지 묶음은 통째로만 지운다.
     async remove( userId: number, roomId: number, messageId: number ) {
         const now = new Date();
 
@@ -178,9 +176,8 @@ export class ChatMessagesService {
         return true;
     }
 
-    //* 파일 보관함 - 이 방에서 주고받은 파일 (최신순 커서, 파일 id 기준)
-    // 보이는 범위는 메시지와 같다: 참여 시점 이후 + 메시지·파일 삭제 안 됨. 이미지 묶음은 파일마다 한 칸.
-    // Files는 다형 참조(targetType + targetId)라 메시지와 relation이 없어서, 조인 한 번으로 묶는다.
+    //* 파일 보관함 (최신순 커서, 메시지와 같은 범위, 이미지 묶음은 파일마다 한 칸)
+    // Files는 다형 참조라 메시지와 relation이 없어서 조인 한 번으로 묶는다.
     async listFiles( userId: number, roomId: number, dto: CursorPaginationDto ) {
         const me = await this.chatRooms.getActiveMember( this.prisma, roomId, userId );
 
@@ -209,7 +206,7 @@ export class ChatMessagesService {
     }
 
     //* 파일 열기 (다운로드 / 썸네일)
-    // 권한 = 활성 참여자 + 이 방의 메시지 + 참여 시점 이후 + 메시지·파일 삭제 안 됨. 아니면 404 (나간 사람, 재참여 전 파일 포함)
+    // 활성 참여자 + 이 방 메시지 + 참여 이후 + 삭제 안 됨, 아니면 404
     async openFile( userId: number, roomId: number, fileId: number ) {
         const messageId = await this.findReadableFileMessage( userId, roomId, fileId );
         return this.filesService.openTargetFile( fileId, FileTargetType.CHAT_MESSAGE, messageId );
@@ -242,7 +239,7 @@ export class ChatMessagesService {
         return message.id;
     }
 
-    //* 메시지 행 → 응답 (파일 메시지는 파일 목록을 붙인다, 쿼리 1번)
+    //* 메시지 행을 응답 형태로 (파일 메시지는 파일 목록을 붙인다)
     private async withFiles( rows: MessageRow[] ): Promise<ChatMessageView[]> {
         const fileMessageIds = rows.filter( ( r ) => r.type === ChatMessageType.FILE ).map( ( r ) => r.id );
         const filesByMessage = await this.filesService.listByTargets( FileTargetType.CHAT_MESSAGE, fileMessageIds );
@@ -250,8 +247,8 @@ export class ChatMessagesService {
         return rows.map( ( row ) => toChatMessage( row, filesByMessage.get( row.id ) ) );
     }
 
-    //* 파일 저장 전 확인 - 활성 참여자이고, 1:1이면 상대가 채팅할 수 있어야 한다 (읽기 전용 방은 업로드도 막음)
-    // 트랜잭션 안(insertMessage)에서 다시 확인한다. 여기서는 거절될 파일을 저장소에 쓰지 않으려는 용도.
+    //* 파일 저장 전 확인 (활성 참여자, 1:1이면 상대가 채팅할 수 있어야)
+    // 트랜잭션 안에서 다시 확인한다. 여기서는 거절될 파일을 저장소에 쓰지 않으려는 용도.
     private async assertCanSend( roomId: number, userId: number ) {
         const me = await this.chatRooms.getActiveMember( this.prisma, roomId, userId );
         if ( me.chatRoom.type !== ChatRoomType.DIRECT ) return;
@@ -266,7 +263,7 @@ export class ChatMessagesService {
         }
     }
 
-    //* 1:1 보내기 전 확인 - 상대가 채팅할 수 없으면 403, 나간 상태면 다시 참여시키고 그 id를 돌려준다
+    //* 1:1 보내기 전 확인 (상대가 못 받으면 403, 나갔으면 다시 참여시키고 id를 돌려준다)
     private async prepareDirect( tx: Tx, roomId: number, userId: number, now: Date ): Promise<number | null> {
         const other = await tx.chatRoomMember.findFirst({
             where: { chatRoomId: roomId, userId: { not: userId } },
@@ -279,7 +276,7 @@ export class ChatMessagesService {
 
         if ( other.leftAt === null ) return null;
 
-        // 같은 now를 joinedAt과 메시지 createdAt에 넣어, 다시 참여한 상대에게 이 메시지부터 보이게 한다
+        // 같은 now를 joinedAt과 메시지 createdAt에 넣어 이 메시지부터 보이게 한다
         await tx.chatRoomMember.update({
             where: { chatRoomId_userId: { chatRoomId: roomId, userId: other.userId } },
             data: { leftAt: null, joinedAt: now, lastReadMessageId: null, customName: null },
@@ -288,7 +285,7 @@ export class ChatMessagesService {
         return other.userId;
     }
 
-    //* 수정·삭제할 수 있는 메시지인지 확인 + 행 잠금 (동시에 수정하면 차례로 처리 → 수정 이력이 빠지지 않는다)
+    //* 수정·삭제할 수 있는 메시지인지 확인 + 행 잠금 (동시 수정에도 수정 이력이 빠지지 않게)
     // 수정은 TEXT만, 삭제는 TEXT·FILE (시스템 메시지는 둘 다 불가)
     private async lockEditable( tx: Tx, roomId: number, messageId: number, userId: number, now: Date, action: 'update' | 'delete' ) {
         await tx.$queryRaw`SELECT id FROM chat_message_model WHERE id = ${messageId} AND chat_room_id = ${roomId} FOR NO KEY UPDATE`;

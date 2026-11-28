@@ -232,8 +232,7 @@ export class DepartmentsService {
     }
 
     //* 부서 순서 변경 (드래그 정렬)
-    // - 같은 상위 부서 아래의 형제 부서끼리만 순서를 바꾼다. (상위 부서 이동은 부서 수정에서)
-    // - 받은 id 배열이 그 상위 부서의 하위 부서 전체와 정확히 일치해야 한다.
+    // 같은 상위 아래 형제끼리만 바꾸고, 받은 id 배열이 형제 전체와 정확히 같아야 한다.
     async updateDepartmentOrder(
         user: Pick<Users, 'id'>,
         body: UpdateDepartmentOrderDto,
@@ -264,7 +263,7 @@ export class DepartmentsService {
                 });
             }
 
-            // 순서 변경은 대상 전체의 순서가 바뀌는 일괄 처리 (변경 전·후 순서를 id 배열로 남김)
+            // 변경 전·후 순서를 id 배열로 남긴다
             await this.audit.logBatch({
                 targetIds: body.ids,
                 actionType: AuditActionType.UPDATE,

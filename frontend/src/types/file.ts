@@ -1,4 +1,4 @@
-// 업로드 파일 정보 (백엔드 FilesService FileInfo) - 게시글 첨부, 이후 결재 문서 첨부에서도 사용
+// 업로드 파일 정보 (백엔드 FilesService FileInfo, 게시글·결재 문서 첨부 공용)
 export interface FileInfo {
   id: number;
   originalName: string;

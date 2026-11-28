@@ -57,7 +57,7 @@ function validate(v: Values): Errors {
 }
 
 // 필수 동의 → 가입 정보 입력 → 즉시 GUEST로 로그인 → 관리자가 승인하면 USER
-// 가입 성공 후 이동은 GuestOnlyGate가 처리한다. (/ 로 이동 → PendingApprovalGate가 승인 대기 화면 표시)
+// 가입 후 이동은 GuestOnlyGate가 하고, 승인 대기 화면은 PendingApprovalGate가 보여 준다.
 export function RegisterForm() {
   const { register } = useAuth();
   const [step, setStep] = useState<"consent" | "form">("consent");

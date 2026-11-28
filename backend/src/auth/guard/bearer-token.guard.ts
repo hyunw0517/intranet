@@ -6,15 +6,13 @@ import { IS_PUBLIC_KEY } from "src/common/decorator/is-public.decorator";
 import { TokenUserPayload } from "../types/jwt-payload.type";
 
 /**
- * *[토큰 검증 두 갈래]
+ * *[토큰 검증]
  *
- * 1) access token (일반 API, 전역 AccessTokenGuard) → authenticateAccess()
- *    서명·만료·type만 확인하고 req.user를 payload(id·empNo·role·perms·ver)로 채운다. DB 조회 없음.
- *    → 권한 변경·퇴사·비밀번호 변경·모든 기기 로그아웃은 access 만료(최대 10분)까지 반영되지 않는다. (2026-11-07 결정)
+ * 1) access token (전역 AccessTokenGuard): 서명·만료·type만 보고 payload로 req.user를 채운다. DB 조회 없음.
+ *    그래서 권한 변경·퇴사·비밀번호 변경은 access 만료(최대 10분)까지 반영되지 않는다.
  *
- * 2) refresh token (재발급 라우트, RefreshTokenGuard) → authenticate()
- *    서명·만료에 더해 회원 조회 → tokenVersion 일치 → 상태(ACTIVE) 확인.
- *    → 위 변경 사항은 늦어도 다음 재발급에서 막힌다. 새 access에는 DB의 최신 role·adminPermissions가 들어간다.
+ * 2) refresh token (RefreshTokenGuard): 회원을 조회해 tokenVersion과 상태까지 본다.
+ *    위 변경은 늦어도 다음 재발급에서 막히고, 새 access에는 최신 권한이 들어간다.
  */
 @Injectable()
 export class BearerTokenGuard implements CanActivate {
@@ -40,11 +38,8 @@ export class BearerTokenGuard implements CanActivate {
         if( isPublic ){
             req.isRoutePublic = true;
 
-            // 공개 라우트라도 유효한 accessToken이 함께 왔으면 req.user를 채워둔다.
-            // "로그인 없이도 볼 수 있지만, 로그인했으면 개인화된 정보(예: 내가 좋아요했는지)도
-            // 함께 보여준다" 같은 케이스를 위한 것. 토큰이 없거나 유효하지 않아도 공개
-            // 라우트이므로 에러를 던지지 않고 그냥 비로그인으로 취급한다.
-            // 공개 라우트에서도 access token만 로그인으로 인정한다. (authenticateAccess가 type 확인)
+            // 공개 라우트라도 유효한 access token이 오면 req.user를 채운다.
+            // 토큰이 잘못돼도 에러 없이 비로그인으로 취급한다.
             const rawToken = req.headers['authorization'];
 
             if( rawToken ){
@@ -63,7 +58,6 @@ export class BearerTokenGuard implements CanActivate {
             return true;
         }
 
-        // access token은 Authorization 헤더에서 꺼낸다.
         const rawToken = req.headers['authorization'];
 
         if(!rawToken){
@@ -77,7 +71,7 @@ export class BearerTokenGuard implements CanActivate {
         return true;
     }
 
-    //* access token 검증 -> payload로 req.user 채우기 (DB 조회 없음, stateless)
+    //* access token 검증 -> payload로 req.user 채우기 (DB 조회 없음)
     protected authenticateAccess(req: any, token: string): void {
         const result = this.authService.verifyToken(token);
 
@@ -85,7 +79,7 @@ export class BearerTokenGuard implements CanActivate {
             throw new UnauthorizedException('Access Token이 아닙니다.');
         }
 
-        // role이 없는 토큰 = 이 방식 이전에 발급된 토큰 → 401로 재발급을 유도한다.
+        // role이 없으면 이전 방식 토큰이라 401로 재발급시킨다
         if( !result.empNo || !result.role ){
             throw new UnauthorizedException('잘못된 토큰입니다.');
         }
@@ -105,8 +99,7 @@ export class BearerTokenGuard implements CanActivate {
     }
 
     //* refresh token 검증 -> 사용자 조회 -> tokenVersion·상태 체크 -> req에 저장
-    //      - 토큰을 어디서 꺼낼지(헤더/쿠키)는 호출하는 쪽이 정하고, 여기서는 검증만 한다.
-    //      - public 여부와 상관없이 무조건 검증한다. (RefreshTokenGuard에서 사용)
+    // 토큰을 어디서 꺼낼지는 호출하는 쪽이 정한다.
     protected async authenticate(req: any, token: string): Promise<void> {
         const result = this.authService.verifyToken(token);
 
@@ -142,15 +135,14 @@ export class BearerTokenGuard implements CanActivate {
     }
 }
 
-//* 전역 가드 - 공개 라우트가 아니면 access token 필수 (검증은 BearerTokenGuard.authenticateAccess)
+//* 전역 가드 - 공개 라우트가 아니면 access token 필수
 @Injectable()
 export class AccessTokenGuard extends BearerTokenGuard {}
 
 @Injectable()
 export class RefreshTokenGuard extends BearerTokenGuard {
-    // 토큰 재발급 라우트는 전역 AccessTokenGuard를 건너뛰기 위해 @IsPublic()을 붙이므로,
-    // public 여부와 상관없이 항상 검증한다.
-    // 여기서는 JWT·회원 단위 검사까지만 하고, 세션(sid·jti) 확인과 교체는 AuthSessionsService.rotateSession이 한다.
+    // 재발급 라우트는 전역 가드를 건너뛰려고 @IsPublic()을 붙여서, 여기서는 항상 검증한다.
+    // 세션(sid·jti) 확인은 AuthSessionsService.rotateSession이 한다.
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const req = context.switchToHttp().getRequest();
 

@@ -23,7 +23,7 @@ import { OrgChartService } from './org-chart.service';
     DepartmentsController,
     PositionsController,
     JobTitlesController,
-    OrgChartController, // 사용자용 조직도·사원 검색
+    OrgChartController,
   ],
   providers: [
     OrganizationService,

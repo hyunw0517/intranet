@@ -28,9 +28,8 @@ const toMinute = (hm: string) => {
   return h * 60 + m;
 };
 
-// 시설 분류 추가·수정 (예약 규칙: 단위·운영 시간·운영 요일·예약 가능 기간)
-// - 규칙을 바꿔도 이미 있는 예약은 그대로이고 새 예약부터 적용된다. (서버 규칙)
-// - <input type="time">은 24:00을 고를 수 없어 "자정까지" 체크로 받는다.
+// 시설 분류 추가·수정 (바뀐 규칙은 새 예약부터 적용된다)
+// <input type="time">은 24:00을 고를 수 없어서 "자정까지" 체크로 받는다.
 export function CategoryFormDialog({ state, onClose, ...props }: CategoryFormDialogProps) {
   return (
     <Dialog open={state !== null} onOpenChange={(next) => !next && !props.pending && onClose()}>

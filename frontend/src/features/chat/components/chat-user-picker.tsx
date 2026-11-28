@@ -9,8 +9,8 @@ import type { ChatUser } from "@/services/api/chats";
 import { userMeta } from "../chat-display";
 import { useChatUserSearch } from "../hooks/use-chats";
 
-// 채팅 상대 고르기 (새 채팅·초대 공용) - GET /chats/users (본인 제외, 최대 20명)
-// 입력이 멈추고 0.3초 뒤에 검색한다. 고른 사람은 위에 이름표로 남아 검색어를 바꿔도 유지된다.
+// 채팅 상대 고르기 (새 채팅·초대 공용, 본인 제외, 최대 20명)
+// 입력이 멈추고 0.3초 뒤에 검색하고, 고른 사람은 위에 이름표로 남긴다.
 export function ChatUserPicker({
   selected,
   onChange,

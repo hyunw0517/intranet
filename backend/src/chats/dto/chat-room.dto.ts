@@ -23,7 +23,7 @@ export class OpenDirectChatDto {
 }
 
 //* 그룹 채팅 생성 - userIds에 본인은 넣지 않아도 된다(넣어도 무시). 본인 포함 3명 이상.
-// name은 선택: 생략·빈 문자열이면 서버가 참여자 이름으로 만든다(util/chat-room-name.util.ts, 2026-11-13 사용자 결정)
+// name을 비우면 서버가 참여자 이름으로 만든다
 export class CreateGroupChatDto {
 
     /** 방 이름 (1~50자) */

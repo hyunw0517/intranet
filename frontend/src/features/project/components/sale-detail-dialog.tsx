@@ -19,7 +19,7 @@ import { useProjectMutation } from "../hooks/use-projects";
 const kstToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 const digits = (value: string) => value.replace(/[^0-9]/g, "").replace(/^0+(?=\d)/, "").slice(0, 15);
 
-// 매출 상세 - 금액·세금계산서(파일 다운로드), 청구 처리, 수금 기록(부분 수금) (docs/design/projects.md 5-2장)
+// 매출 상세 - 금액·세금계산서, 청구 처리, 수금 기록
 export function SaleDetailDialog({ projectId, sale, onClose }: { projectId: number; sale: ProjectSale | null; onClose: () => void }) {
   return (
     <Dialog open={sale !== null} onOpenChange={(next) => !next && onClose()}>
@@ -64,7 +64,7 @@ function SaleDetail({ projectId, sale }: { projectId: number; sale: ProjectSale 
   );
 }
 
-// 세금계산서 파일 - Bearer 헤더가 필요해 fetch로 받아 저장, 받기 전 보안 확인 창(게시글·결재 첨부와 같은 방식)
+// 세금계산서 파일 (Bearer 헤더가 필요해 fetch로 받고, 받기 전 보안 확인 창을 띄운다)
 function InvoiceFiles({ projectId, saleId, files }: { projectId: number; saleId: number; files: FileInfo[] }) {
   const [target, setTarget] = useState<FileInfo | null>(null);
   const [downloading, setDownloading] = useState(false);

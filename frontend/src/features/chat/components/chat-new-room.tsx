@@ -19,10 +19,9 @@ import { ChatPanelHeader } from "./chat-window";
 import { ChatUserPicker } from "./chat-user-picker";
 import { useChat } from "./chat-provider";
 
-// 새 채팅 (features.md 8.3)
-// - 1명 고르면 1:1: 두 사람의 방이 이미 있으면 그 방이 열린다(나갔던 방이면 다시 참여, 이전 기록은 보이지 않음).
-// - 2명 이상 고르면 그룹: 본인 포함 3명 이상, 이름은 선택(1~50자). 만든 사람이 방장.
-//   이름을 비우면 서버가 참여자(본인 포함) 이름으로 만든다. 예) "Michael Johnson, 관리자, 신민아 외 2명"
+// 새 채팅
+// - 1명이면 1:1 (방이 이미 있으면 그 방이 열린다)
+// - 2명 이상이면 그룹 (본인 포함 3명 이상, 이름을 비우면 서버가 참여자 이름으로 만든다)
 export function ChatNewRoom() {
   const { showList, openRoom } = useChat();
   const queryClient = useQueryClient();

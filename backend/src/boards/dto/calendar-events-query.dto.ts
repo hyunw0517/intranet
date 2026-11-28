@@ -3,8 +3,7 @@ import { ArrayMaxSize, IsArray, IsDate, IsInt, IsOptional } from "class-validato
 import { StringToDate } from "src/common/decorator/string-to-date.decorator";
 
 //* 캘린더 일정 조회 기간 (start 이상 ~ end 미만, 시간대가 있는 ISO 문자열)
-// 화면은 달력에 보이는 칸 범위(첫 주 일요일 00:00 ~ 마지막 주 토요일 다음 날 00:00, KST)를 보낸다.
-// 쿼리 문자열의 "+09:00"은 URL 인코딩(%2B)해서 보내야 한다. (+가 공백으로 바뀜)
+// 쿼리 문자열의 "+09:00"은 %2B로 인코딩해서 보내야 한다 (+가 공백으로 바뀜)
 export class CalendarEventsQueryDto {
 
     /**

@@ -1,5 +1,5 @@
 // 회원 관련 공통 타입 (여러 기능·화면에서 사용)
-// 백엔드 Users 모델의 "JSON 응답" 기준이다. (날짜는 문자열, 비밀번호 해시는 Prisma 전역 omit으로 제외)
+// 백엔드 Users의 JSON 응답 기준 (날짜는 문자열, 비밀번호는 응답에 없다)
 export type UserRole = "GUEST" | "USER" | "ADMIN" | "SUPER_ADMIN";
 
 // 관리자 기능 (백엔드 enum AdminPermission) - ADMIN은 지정된 기능만, SUPER_ADMIN은 전부

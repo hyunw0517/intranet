@@ -79,7 +79,7 @@ export class PostsController {
     }
 
     //* 게시글 고정·해제 (게시판 관리 권한)
-    // ':postId' 뒤에 붙는 고정 경로라 수정 라우트(:boardId/posts/:postId)와 충돌하지 않는다.
+    // ':postId' 뒤에 붙는 고정 경로라 수정 라우트와 충돌하지 않는다.
     @Patch(':postId/pin')
     @Roles(UserRole.USER)
     @ApiOperation({ summary: '게시글 고정·해제', description: '게시판 관리 권한만. 고정 글은 게시판당 최대 10개. 응답 본문은 true.' })
@@ -142,7 +142,7 @@ export class PostsController {
     ): Promise<StreamableFile> {
         const { stream, originalName, size } = await this.postsService.openAttachment( user, boardId, postId, fileId );
 
-        // 어떤 형식이든 브라우저가 열지(실행하지) 않고 내려받게 한다. (업로드한 html 등이 우리 출처에서 실행되는 것 방지)
+        // 어떤 형식이든 브라우저가 열지 않고 내려받게 한다 (업로드한 html이 우리 출처에서 실행되지 않게)
         res.setHeader( 'X-Content-Type-Options', 'nosniff' );
 
         return new StreamableFile( stream, {

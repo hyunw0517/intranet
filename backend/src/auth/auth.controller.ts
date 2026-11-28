@@ -22,7 +22,6 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   //* (개인) 쿠키의 Refresh 토큰 -> Access 토큰 재발급 + Refresh 토큰 교체(rotation)
-  //      - 프론트가 401을 받으면 호출하는 재발급 API. refresh token도 매번 새 것으로 바뀐다.
   @Post('token/access')
   @IsPublic()
   @UseGuards(RefreshTokenGuard)
@@ -41,7 +40,7 @@ export class AuthController {
   }
 
   //* (개인) 쿠키의 Refresh 토큰 -> Refresh 토큰 재발급 (쿠키로 다시 저장)
-  //      - token/access와 같은 교체 로직을 쓴다. (refresh만 필요할 때를 위해 남겨 둔 API)
+  // refresh만 필요할 때를 위해 남겨 둔 API
   @Post('token/refresh')
   @IsPublic()
   @UseGuards(RefreshTokenGuard)
@@ -59,8 +58,7 @@ export class AuthController {
   }
 
   //* (개인) 회원 로그인 요청 - 세션(기기) 1개 생성
-  //      - ThrottlerGuard(IP당 요청 수 제한)를 BasicTokenGuard(비밀번호 확인)보다 먼저 실행한다. (넘친 요청은 확인·기록 없이 429)
-  //      - 본문의 rememberMe가 false면 refresh 쿠키를 세션 쿠키로 발급한다. (브라우저를 닫으면 로그아웃)
+  // ThrottlerGuard를 BasicTokenGuard보다 먼저 둬서 넘친 요청은 비밀번호 확인 없이 429
   @Post('login/emp')
   @IsPublic()
   @ApiBasicAuth('basic') // 문서: Authorization: Basic base64(사번:비밀번호)
@@ -83,9 +81,7 @@ export class AuthController {
   }
 
   //* (개인) 로그아웃 - refreshToken 쿠키 삭제 + 이 기기의 세션 폐기
-  //      - access token이 만료된 상태에서도 로그아웃할 수 있도록 공개 라우트로 둔다.
-  //      - 세션은 refresh 쿠키의 sid로 찾는다. (Path=/api/auth라 이 요청에 자동으로 실려 온다)
-  //      - 다른 기기의 로그인은 그대로 유지된다.
+  // access token이 만료돼도 로그아웃할 수 있게 공개 라우트로 둔다.
   @Post('logout')
   @IsPublic()
   @ApiOperation({ summary: '로그아웃 (이 기기)', description: 'refresh 쿠키를 지우고 이 기기의 세션을 폐기한다. access token이 만료된 상태에서도 쓸 수 있게 공개 라우트다. 다른 기기의 로그인은 유지된다. 응답 본문은 true.' })
@@ -93,7 +89,7 @@ export class AuthController {
     @Request() req: any,
     @Res({ passthrough: true }) res: Response,
   ): Promise<boolean>{
-    // DB 처리가 실패해도 이 기기의 쿠키는 지워지도록 먼저 삭제한다.
+    // DB 처리가 실패해도 쿠키는 지워지게 먼저 삭제한다
     clearRefreshTokenCookie(res);
 
     await this.authService.logout(req.cookies?.refreshToken);
@@ -102,8 +98,7 @@ export class AuthController {
   }
 
   //* (개인) 모든 기기에서 로그아웃 - 지금 기기만 유지
-  //      - tokenVersion이 올라가 다른 기기의 access·refresh 토큰이 즉시 무효가 된다.
-  //      - 지금 기기에는 새 토큰을 발급하므로 프론트는 응답의 access token으로 교체해야 한다. (비밀번호 변경과 같음)
+  // 프론트는 응답의 access token으로 바꿔야 한다.
   @Post('logout/all')
   @ApiOperation({ summary: '모든 기기에서 로그아웃 (지금 기기만 유지)', description: 'tokenVersion이 올라가 다른 기기의 access·refresh 토큰이 즉시 무효가 된다. 지금 기기에는 새 토큰을 발급하므로 응답의 access token으로 교체해야 한다.' })
   async postLogoutAll(
@@ -119,7 +114,7 @@ export class AuthController {
     return { accessToken };
   }
 
-  //* (개인) 로그인된 기기 목록 - current: 지금 요청한 기기
+  //* (개인) 로그인된 기기 목록
   @Get('sessions')
   @ApiOperation({ summary: '로그인된 기기 목록', description: '마지막 재발급 시각 최신순. `current`가 true인 행이 지금 요청한 기기다.' })
   getSessions(
@@ -130,8 +125,7 @@ export class AuthController {
   }
 
   //* (개인) 특정 기기 로그아웃
-  //      - 그 기기의 refresh token이 무효가 된다. 이미 발급된 access token은 만료(최대 10분)까지 유효하다.
-  //      - 지금 기기를 지정하면 쿠키도 함께 지운다. (일반 로그아웃과 같은 결과)
+  // 지금 기기를 고르면 쿠키도 지운다.
   @Delete('sessions/:sessionId')
   @ApiOperation({ summary: '특정 기기 로그아웃', description: '그 기기의 refresh token이 무효가 된다. 이미 발급된 access token은 만료(최대 10분)까지 유효하다. 지금 기기를 지정하면 쿠키도 함께 지운다. 응답 본문은 true.' })
   @ApiBadRequestResponse({ description: 'sessionId가 uuid 형식이 아님' })
@@ -200,7 +194,6 @@ export class AuthController {
   }
 
   //* (관리자) 회원 비밀번호 초기화
-  //      - tokenVersion이 올라가 대상 회원의 모든 기기가 로그아웃된다.
   @Patch('reset/pw/:userId')
   @RequireAdmin(AdminPermission.USERS)
   @ApiOperation({ summary: '(관리자) 회원 비밀번호 초기화', description: '서버가 임시 비밀번호를 만들어 응답으로 한 번만 돌려준다. 대상 회원의 모든 기기가 로그아웃되고(tokenVersion 증가), 로그인 잠금도 함께 해제된다. 관리자 계정은 슈퍼관리자만 초기화할 수 있다.' })
@@ -214,7 +207,6 @@ export class AuthController {
   }
 
   //* (관리자) 회원 로그인 잠금 해제 - 실패 횟수·잠금 단계 초기화
-  //      - 잠긴 적이 없으면 { unlocked: false } (오류 아님)
   @Patch('unlock/:userId')
   @RequireAdmin(AdminPermission.USERS)
   @ApiOperation({ summary: '(관리자) 회원 로그인 잠금 해제', description: '로그인 실패 횟수·잠금 단계를 초기화한다. 지울 기록이 없으면 `unlocked: false`(오류 아님). 관리자 계정은 슈퍼관리자만 해제할 수 있다.' })

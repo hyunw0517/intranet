@@ -3,8 +3,7 @@ import type { CalendarRange } from "@/services/api/calendar";
 import type { CalendarEvent } from "@/types/calendar";
 
 // 월간 달력 계산 (KST 기준, 브라우저 시간대와 무관)
-// 날짜는 "yyyy-MM-dd" 문자열로 다룬다. 달력의 날짜 계산은 시간대가 없는 순수 날짜라 Date.UTC로만 계산한다.
-// 일정 시각(UTC ISO)은 toKstParts로 KST 날짜로 바꾼 뒤 날짜끼리 비교한다.
+// 날짜는 "yyyy-MM-dd" 문자열이고 Date.UTC로만 계산한다. 일정 시각은 toKstParts로 바꾼 뒤 비교한다.
 
 export interface YearMonth {
   year: number;
@@ -22,7 +21,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const ymd = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 const ONE_DAY = 24 * 60 * 60 * 1000;
 
-// 요일 색: 일요일 빨강, 토요일 파랑, 나머지 기본 글자색 (사용자 결정)
+// 요일 색: 일요일 빨강, 토요일 파랑, 나머지 기본 글자색
 export function weekdayColor(weekday: number) {
   if (weekday === 0) return "text-red-600 dark:text-red-400";
   if (weekday === 6) return "text-blue-600 dark:text-blue-400";
@@ -99,7 +98,7 @@ export function eventDateSpan(event: CalendarEvent): { from: string; to: string 
   return { from: s.date, to };
 }
 
-// 날짜별 일정 (여러 날 일정은 걸친 날마다 반복 - 사용자 결정)
+// 날짜별 일정 (여러 날 일정은 걸친 날마다 반복)
 export function eventsByDate(events: CalendarEvent[]): Map<string, CalendarEvent[]> {
   const map = new Map<string, CalendarEvent[]>();
   for (const event of events) {

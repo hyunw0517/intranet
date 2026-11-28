@@ -12,10 +12,10 @@ export interface NotifiedDocument {
     requesterName: string;
 }
 
-//! 전자결재 알림 규칙 (features.md 7.5, 2026-11-10 사용자 결정)
-// - 내 차례 도착 → 그 결재자 (상신, 중간 승인 후 다음 결재자, 관리자 교체로 새 결재자가 PENDING이 된 경우)
-// - 최종 승인·반려 → 기안자. 중간 승인은 기안자에게 알리지 않는다.
-// - 서비스는 트랜잭션이 커밋된 뒤 호출하고, 실패해도 결재는 성공한다(bestEffort). 다른 모듈 알림과 같은 방식.
+//! 전자결재 알림
+// - 내 차례가 오면 그 결재자에게 (상신, 앞 단계 승인, 관리자 교체)
+// - 최종 승인·반려는 기안자에게. 중간 승인은 알리지 않는다.
+// - 커밋 후 호출하고 실패해도 결재는 성공한다(bestEffort).
 @Injectable()
 export class ApprovalNotifier {
 

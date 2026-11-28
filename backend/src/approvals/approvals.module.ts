@@ -11,9 +11,8 @@ import { ApproversService } from './approvers.service';
 import { LineManagersController } from './line-managers.controller';
 import { LineManagersService } from './line-managers.service';
 
-//! 전자결재 (애드온 'approvals') - AppModule에서 addonModule('approvals', ApprovalsModule)로만 등록한다.
-// 핵심(common)의 파일·감사 로그·알림을 직접 쓰고, 핵심의 회원·조직 데이터는 읽기만 한다. (핵심은 이 모듈을 모른다)
-// 휴가 옵션(leaves)은 이 모듈을 import해 ApprovalHandlerRegistry에 자기 문서 유형 처리기를 등록한다. (features.md 7.4)
+//! 전자결재 (애드온 'approvals')
+// 휴가 옵션(leaves)이 이 모듈을 import해 ApprovalHandlerRegistry에 처리기를 등록한다.
 @Module({
     imports: [ PrismaModule, CommonModule ],
     controllers: [
@@ -30,6 +29,6 @@ import { LineManagersService } from './line-managers.service';
         ApprovalDocumentsService,
         ApprovalNotifier,
     ],
-    exports: [ ApprovalHandlerRegistry, ApprovalDocumentsService ], // 휴가 옵션: 처리기 등록 + 업무 데이터와 함께 임시저장·수정, 열람 권한 확인
+    exports: [ ApprovalHandlerRegistry, ApprovalDocumentsService ], // 휴가 옵션이 쓴다
 })
 export class ApprovalsModule {}

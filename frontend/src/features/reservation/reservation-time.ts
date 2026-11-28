@@ -1,7 +1,6 @@
 // 시설 예약 화면의 날짜·시각 계산 (모두 KST 기준)
-// - 날짜는 "YYYY-MM-DD" 문자열, 시각은 그날 00:00부터의 분(minute)으로 다룬다. (분류 규칙과 같은 단위)
-// - 서버로 보낼 때는 "+09:00"이 붙은 ISO 문자열로 만든다. 브라우저 시간대와 관계없이 같은 값이 된다.
-// - 서버 응답(UTC ISO)을 표시할 때는 lib/format의 toKstParts를 쓴다.
+// - 날짜는 "YYYY-MM-DD", 시각은 그날 00:00부터의 분으로 다룬다.
+// - 서버로는 "+09:00"이 붙은 ISO 문자열로 보내고, 응답 표시는 lib/format의 toKstParts를 쓴다.
 import { toKstParts } from "@/lib/format";
 import { WEEKDAY_LABEL, type ReservationRules } from "@/types/reservation";
 

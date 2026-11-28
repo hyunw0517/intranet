@@ -1,6 +1,5 @@
 // 회원가입 동의 문서 본문
-// 본문을 바꾸면 version을 올리고 백엔드 users/const/consent.const.ts의 버전도 함께 올린다.
-// (버전이 다르면 서버가 가입을 거부한다)
+// 본문을 바꾸면 version과 백엔드 consent.const.ts의 버전을 같이 올린다 (다르면 서버가 가입을 거부한다).
 import type { ConsentType } from "@/services/api/auth";
 
 export interface TermsArticle {

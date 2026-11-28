@@ -18,10 +18,9 @@ import { ProjectFormDialog, type ProjectFormState } from "./project-form-dialog"
 
 type StatusTab = ProjectStatus | "ALL";
 
-// 프로젝트 목록 - 상태 탭 + 검색 + 범위(내 프로젝트 / 전체 프로젝트)
-// 전체 목록은 누구나 본다(2026-11-17 사용자 결정: 목록만 공개). 상세는 참여자·과제 관리 관리자만 들어갈 수 있어서(canOpen)
-// 들어갈 수 없는 행은 이름에 링크를 걸지 않는다. 서버도 상세에서 403을 낸다.
-// 표는 PC, 좁은 화면에서는 카드 목록으로 바꾼다.
+// 프로젝트 목록 - 상태 탭 + 검색 + 범위(내 프로젝트 / 전체)
+// 전체 목록은 누구나 보지만 상세는 참여자·관리자만이라, 못 들어가는 행에는 링크를 걸지 않는다.
+// 좁은 화면에서는 카드 목록으로 바꾼다.
 export function ProjectListView() {
   const [scope, setScope] = useState<"mine" | "all">("mine");
   const [status, setStatus] = useState<StatusTab>("ALL");

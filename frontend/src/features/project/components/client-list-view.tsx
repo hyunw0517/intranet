@@ -21,8 +21,8 @@ import { ClientFormDialog, type ClientFormState } from "./client-form-dialog";
 
 type Tab = "active" | "deleted";
 
-// 거래처 - [거래처] / [삭제된 거래처] (2026-11-16 사용자 결정: 누구나 등록·수정·삭제, 삭제된 목록에서 삭제자 확인·복구)
-// 발주처·하청기업을 한 목록에 둔다. 역할은 연결에서 계산해 "발주 프로젝트 / 협력 프로젝트" 수로 보여 준다((a)안, 2026-11-17)
+// 거래처 - [거래처] / [삭제된 거래처]
+// 발주처·하청기업을 한 목록에 두고, 역할은 연결에서 계산해 "발주 / 협력 프로젝트" 수로 보여 준다
 export function ClientListView() {
   const [tab, setTab] = useState<Tab>("active");
   const [searchInput, setSearchInput] = useState("");

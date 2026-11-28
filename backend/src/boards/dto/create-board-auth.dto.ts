@@ -2,7 +2,7 @@ import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsInt, IsOptional } from
 import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
 
 //* 게시판 권한 규칙 입력 기준 DTO (Update는 이 클래스에서 파생)
-// 조건(부서·최소 직급·허용 직책)은 비어 있으면 "해당 조건 없음", 모든 조건이 비어 있으면 전체 허용 규칙이다.
+// 비어 있는 조건은 "조건 없음"이라, 모두 비어 있으면 전 직원 규칙이다.
 export class CreateBoardAuthDto {
 
     /** 부서 id (NULL이면 부서 조건 없음) */

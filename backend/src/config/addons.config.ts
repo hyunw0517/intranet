@@ -1,7 +1,7 @@
 import { DynamicModule, Type } from "@nestjs/common";
 import { ConditionalModule } from "@nestjs/config";
 
-//! 애드온 ON/OFF (AGENTS.md 10.1, 2026-11-09 사용자 결정)
+//! 애드온 ON/OFF (AGENTS.md)
 // - backend/.env의 ADDONS에 켤 애드온 이름을 쉼표로 나열한다. ex) ADDONS=reservations,approvals,leaves
 // - 변수가 없거나 비어 있으면 전부 꺼짐(핵심만 동작). 명시한 것만 켠다.
 // - 꺼진 애드온은 AppModule에 모듈이 등록되지 않아 API 자체가 없다(404). 데이터는 지우지 않는다.

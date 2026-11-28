@@ -1,11 +1,11 @@
 import { LeaveType, LeaveUnit } from "src/generated/prisma/client";
 import { daysInclusive } from "./leave-grant.calc";
 
-//! 휴가 신청 규칙 (features.md 7.4 "휴가 신청 규칙", 2026-11-12 사용자 결정)
-// - 종일(FULL) 사용 일수 = 시작일~종료일 달력 일수. 주말·공휴일을 가정하지 않는다(쉬는 날은 신청자가 나눠 신청).
-// - 반차 0.5일 / 반반차 0.25일, 하루 안. 시작 시각만 받고 종료 = 시작 + 4시간 / 2시간 (30분 단위, 24:00 넘으면 안 됨)
-// - 같은 회원의 결재 진행 중·승인된 휴가와 시간이 겹치면 안 되고(2026-11-12), 합쳐서 하루 합계 1일까지
-// - 날짜는 "YYYY-MM-DD", 시각은 "HH:mm", 일수는 quarter(0.25일 = 1) 정수로 다룬다.
+//! 휴가 신청 규칙
+// - 종일 사용 일수 = 달력 일수. 주말·공휴일은 가정하지 않는다(쉬는 날은 나눠 신청).
+// - 반차 0.5일(4시간) / 반반차 0.25일(2시간), 하루 안, 시작 시각만 받는다.
+// - 같은 회원의 결재 진행 중·승인된 휴가와 시간이 겹치면 안 되고, 합쳐서 하루 합계 1일까지
+// - 일수는 quarter(0.25일 = 1) 정수로 다룬다.
 
 export const LEAVE_TYPE_LABEL: Record<LeaveType, string> = { ANNUAL: '연차', SICK: '병가', OFFICIAL: '공가' };
 export const LEAVE_UNIT_LABEL: Record<LeaveUnit, string> = { FULL: '종일', HALF: '반차', QUARTER: '반반차' };
@@ -77,7 +77,7 @@ export function buildLeavePeriod( input: LeaveInput ): { period: LeavePeriod } |
     };
 }
 
-//* 하루 합계 검사: mine과 others(같은 회원의 진행 중·승인된 휴가)를 합쳐 어느 날이든 1일을 넘으면 그 날짜, 아니면 null
+//* 하루 합계 검사: 어느 날이든 1일을 넘으면 그 날짜, 아니면 null
 export function findOverbookedDate(
     mine: Pick<LeavePeriod, 'unit' | 'startDate' | 'endDate'>,
     others: Pick<LeavePeriod, 'unit' | 'startDate' | 'endDate'>[],
@@ -95,9 +95,9 @@ export function findOverbookedDate(
 
 type TimedPeriod = Pick<LeavePeriod, 'unit' | 'startDate' | 'endDate' | 'startTime' | 'endTime'>;
 
-//* 시간 겹침 검사 (2026-11-12 사용자 결정): mine과 시간이 겹치는 휴가가 있으면 { date, other }, 없으면 null
-// - 종일은 그날 00:00~24:00 전체, 반차·반반차는 [시작, 종료) - 끝나는 시각에 다음 휴가가 시작하는 것은 겹치지 않음 (09:00~13:00 + 13:00~17:00 가능)
-// - 하루 합계 1일 검사(findOverbookedDate)와 함께 쓴다. 시간이 안 겹쳐도 하루 합계가 넘으면 막힌다.
+//* 시간 겹침 검사: mine과 시간이 겹치는 휴가가 있으면 { date, other }, 없으면 null
+// 종일은 그날 전체, 반차는 [시작, 종료)라 09:00~13:00 + 13:00~17:00은 겹치지 않는다.
+// 시간이 안 겹쳐도 하루 합계가 넘으면 findOverbookedDate에서 막힌다.
 export function findTimeConflict<T extends TimedPeriod>( mine: TimedPeriod, others: T[] ): { date: string; other: T } | null {
     const range = ( p: TimedPeriod ): [ number, number ] =>
         p.unit === LeaveUnit.FULL || !p.startTime || !p.endTime ? [ 0, DAY_MINUTES ] : [ timeToMinutes( p.startTime ), timeToMinutes( p.endTime ) ];
@@ -115,8 +115,7 @@ export function findTimeConflict<T extends TimedPeriod>( mine: TimedPeriod, othe
     return null;
 }
 
-//* 캘린더용: 휴가를 날짜별로 묶기 (조회 범위 from~to 안의 날짜만, 휴가가 있는 날짜만, 날짜 오름차순)
-// 여러 날짜에 걸친 종일 휴가는 범위 안의 날마다 들어간다. 날짜 안의 순서는 rows 순서를 따른다.
+//* 캘린더용: 휴가를 날짜별로 묶기 (범위 안, 휴가가 있는 날만, 날짜순)
 export function groupLeavesByDate<T extends Pick<LeavePeriod, 'startDate' | 'endDate'>>( rows: T[], from: string, to: string ): { date: string; items: T[] }[] {
     const byDate = new Map<string, T[]>();
     for ( const row of rows ) {

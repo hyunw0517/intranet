@@ -2,7 +2,7 @@
 import { mergeAttributes, Node } from "@tiptap/react";
 
 // 외부 영상 임베드 (YouTube·Vimeo만)
-// 서버(sanitize-html.util.ts의 VIDEO_EMBED_SRC_REGEX)가 같은 형식의 주소만 남긴다. 둘을 함께 고쳐야 한다.
+// 서버(sanitize-html.util.ts)가 같은 형식만 남기므로 둘을 같이 고쳐야 한다.
 // - YouTube: youtube-nocookie.com (재생 전 추적 쿠키를 남기지 않는 주소)
 // - Vimeo: player.vimeo.com/video/<id>, 일부 공개 영상은 ?h=<해시>
 export const VIDEO_EMBED_SRC_REGEX =
@@ -54,8 +54,7 @@ declare module "@tiptap/core" {
 }
 
 // 에디터 영상 노드: <div data-video-embed><iframe src="임베드 주소"></iframe></div>
-// - atom: 안에 글을 쓸 수 없는 한 덩어리 (이미지처럼 선택·삭제·이동)
-// - parseHTML은 허용 주소만 받는다. (서버가 지울 영상을 에디터에서도 처음부터 받지 않음 - ServerImage와 같은 원칙)
+// atom이라 이미지처럼 한 덩어리로 다루고, parseHTML은 허용 주소만 받는다.
 export const VideoEmbed = Node.create({
   name: "videoEmbed",
   group: "block",

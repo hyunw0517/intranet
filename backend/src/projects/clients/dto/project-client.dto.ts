@@ -4,7 +4,7 @@ import { IsEmail, IsNotEmpty, IsOptional, IsString, Length, Matches, MaxLength }
 import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
 import { PagePaginationDto } from 'src/common/dto/page-pagination.dto';
 
-// 사업자등록번호는 숫자만 저장한다(하이픈 등 표시 형식은 화면이 맡는다). "123-45-67890"과 "1234567890"이 같은 번호로 중복 검사되도록.
+// 사업자등록번호는 숫자만 저장한다 ("123-45-67890"과 "1234567890"이 같은 번호로 중복 검사되게)
 const digitsOnly = ({ value }: { value: unknown }) => typeof value === 'string' ? value.replace( /[^0-9]/g, '' ) : value;
 
 //* 거래처 등록 (USER 이상 누구나)

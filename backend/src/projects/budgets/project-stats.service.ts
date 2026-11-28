@@ -7,12 +7,11 @@ import { ProjectStatsQueryDto } from "./dto/project-budget.dto";
 
 const TOP_CLIENTS = 10;
 
-//! 전사 통계 (과제 관리 관리자, docs/design/projects.md 5-3장)
-// - 기간: 기본은 최근 12개월, 연도를 고르면 그해 1~12월. 프로젝트·거래처를 고르면 그 범위만(둘 다 고르면 둘 다 만족하는 것만). 삭제된 프로젝트는 뺀다.
-// - 매출: 청구한 건의 합계(부가세 포함), 청구일 기준 - 프로젝트 매출 탭의 "청구 매출"과 같은 기준
-// - 지출: 공급가액, 지출일 기준 - 예산 비교와 같은 기준
-// - 항목별 예산 대비 지출은 기간과 관계없는 누적이다. 예산에 연도가 없어 한 해의 지출만 잘라 비교하면 숫자가 맞지 않는다.
-// - 달로 묶는 집계는 Prisma groupBy로 할 수 없어 SQL로 한다.
+//! 전사 통계 (과제 관리 관리자)
+// - 기간은 기본 최근 12개월, 연도를 고르면 그해 1~12월. 삭제된 프로젝트는 뺀다.
+// - 매출은 청구한 건의 합계(부가세 포함, 청구일 기준), 지출은 공급가액(지출일 기준).
+// - 항목별 예산 대비 지출은 기간과 상관없는 누적이다. 예산에 연도가 없어서 한 해만 자르면 숫자가 맞지 않는다.
+// - 달로 묶는 집계는 Prisma groupBy로 안 돼서 SQL로 한다.
 @Injectable()
 export class ProjectStatsService {
 
@@ -75,7 +74,7 @@ export class ProjectStatsService {
         };
     }
 
-    //* 필터 선택지: 데이터가 있는 연도(올해는 항상 포함, 최근 연도부터) + 삭제되지 않은 프로젝트 + 그 프로젝트의 발주처
+    //* 필터 선택지 (데이터가 있는 연도·삭제되지 않은 프로젝트·그 발주처)
     async filters() {
         const [ rows, projects, clients ] = await Promise.all([
             this.prisma.$queryRaw<{ year: number }[]>`

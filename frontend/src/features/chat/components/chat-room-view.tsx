@@ -39,7 +39,7 @@ type Panel = "chat" | "members" | "invite" | "files";
 type NameDialog = "room" | "mine" | null;
 
 // 채팅방 화면: 대화 + 입력, 메뉴(참여자·초대·이름·나가기)
-// 참여자·초대 화면으로 바꿔도 대화와 입력란은 숨기기만 해서 입력 중인 글이 남는다.
+// 다른 화면으로 바꿔도 대화와 입력란은 숨기기만 해서 입력 중인 글이 남는다.
 export function ChatRoomView({ roomId }: { roomId: number }) {
   const { showList } = useChat();
   const { user } = useAuth();
@@ -145,7 +145,7 @@ export function ChatRoomView({ roomId }: { roomId: number }) {
   );
 }
 
-// 방 이름 (2026-11-13 사용자 결정)
+// 방 이름
 // - 기본 이름(room): 그룹 방장만, 모두에게 보이고 시스템 메시지가 남는다.
 // - 나만 보는 이름(mine): 누구나, 나에게만 보인다. 비우면 기본 이름으로 돌아간다.
 function RoomNameDialog({ room, kind, onClose }: { room: ChatRoomDetail; kind: "room" | "mine"; onClose: () => void }) {
@@ -212,9 +212,9 @@ function RoomNameDialog({ room, kind, onClose }: { room: ChatRoomDetail; kind: "
   );
 }
 
-// 나가기 (features.md 8.3)
-// - 1:1: 내 목록에서 숨기기. 상대가 다시 보내면 같은 방이 다시 나타난다(나간 뒤 기록은 보이지 않음).
-// - 그룹 방장: 다음 방장을 고를 수 있고, 고르지 않으면 가장 오래 참여한 사람이 맡는다.
+// 나가기
+// - 1:1은 내 목록에서 숨긴다. 상대가 다시 보내면 같은 방이 다시 나타난다.
+// - 그룹 방장은 다음 방장을 고를 수 있고, 안 고르면 가장 오래 참여한 사람이 맡는다.
 function LeaveDialog({
   room,
   userId,

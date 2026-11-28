@@ -5,8 +5,8 @@ import { HM_REGEX } from './create-facility-category.dto';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
-//* 반복 예약 - 기간(KST 날짜) 중 고른 요일마다 같은 시간대로 예약을 하나씩 만든다. (묶음 정보는 없음)
-// 이미 예약된 날짜·사용 불가 기간·운영하지 않는 요일·이미 지난 시각은 건너뛰고 응답에 이유를 담는다.
+//* 반복 예약 - 기간 중 고른 요일마다 같은 시간대로 예약을 하나씩 만든다
+// 예약할 수 없는 날짜는 건너뛰고 응답에 이유를 담는다.
 export class CreateRecurringReservationDto {
 
     /** 시설 id */

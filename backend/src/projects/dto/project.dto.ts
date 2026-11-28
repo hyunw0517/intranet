@@ -11,7 +11,7 @@ import { sanitizeEditorHtml } from 'src/common/util/sanitize-html.util';
 export const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 export const DATE_ONLY_MESSAGE = '날짜는 YYYY-MM-DD 형식입니다.';
 
-// 부가세율(%) 검사 - 견적·매출·협력사 DTO 공용 (0 ~ 100, 소수 둘째 자리까지, 2026-11-17 사용자 결정: 직접 입력, 기본 10)
+// 부가세율(%) 검사 - 견적·매출·협력사 공용 (0~100, 소수 둘째 자리까지, 기본 10)
 export const VatRateField = () => applyDecorators(
     StringToNumber(),
     IsNumber( { maxDecimalPlaces: 2 }, { message: '부가세율은 소수 둘째 자리까지 입력합니다.' } ),
@@ -20,7 +20,7 @@ export const VatRateField = () => applyDecorators(
     IsOptional(),
 );
 
-// 에디터 본문(HTML) 최대 길이 - 서식 태그까지 세므로 일반 텍스트보다 넉넉하게 (프로젝트 설명·과제 내용)
+// 에디터 본문(HTML) 최대 길이 (태그까지 세므로 넉넉하게)
 export const EDITOR_HTML_MAX_LENGTH = 50_000;
 
 //* 프로젝트 생성 (USER 이상 누구나, 만든 사람 = 책임자)
@@ -31,7 +31,7 @@ export class CreateProjectDto {
     @Length(1, 100)
     name: string;
 
-    /** Tiptap HTML - 저장 시 허용 태그만 남긴다(본문 이미지 없음). 한도는 태그 포함 길이 (2026-11-17 사용자 결정: 공용 에디터) */
+    /** Tiptap HTML - 저장 시 허용 태그만 남긴다(본문 이미지 없음). 한도는 태그 포함 길이 (공용 에디터) */
     @IsString()
     @MaxLength(EDITOR_HTML_MAX_LENGTH)
     @IsOptional()
@@ -68,7 +68,7 @@ export class CreateProjectDto {
 export class UpdateProjectDto extends PartialType( CreateProjectDto ) {}
 
 //* 프로젝트 목록
-// - scope=mine(기본): 내가 참여한 프로젝트 / scope=all: 전체 (과제 관리 관리자만)
+// scope=mine(기본): 내가 참여한 프로젝트 / scope=all: 전체
 export class ProjectListQueryDto extends PagePaginationDto {
 
     /** mine: 내가 참여한 프로젝트 / all: 전체 목록 (USER 이상 누구나, 목록에는 설명·금액 없음) */
@@ -114,7 +114,7 @@ export class UpdateProjectMemberDto {
     role: ProjectMemberRole;
 }
 
-//* 에디터 본문 정제 (게시판·결재와 같은 허용 목록, 본문 이미지는 모두 제거 - 공개 uuid 주소라 참여자만 보는 프로젝트에 맞지 않음)
+//* 에디터 본문 정제 (본문 이미지는 공개 주소라 모두 지운다)
 // undefined(보내지 않음)는 그대로 두고, 빈 본문(<p></p> 등)은 null
 export function toEditorHtml( value: string | null | undefined ): string | null | undefined {
     if ( value === undefined ) return undefined;

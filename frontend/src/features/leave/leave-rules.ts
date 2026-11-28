@@ -1,5 +1,4 @@
-// 휴가 입력 화면 규칙 (features.md 7.4 "휴가 신청 규칙") - 최종 판단은 서버(leave-request.util.ts)가 한다.
-// 화면에서는 입력을 돕고 미리 보여 주는 용도로만 같은 계산을 한다.
+// 휴가 입력 화면 규칙 (입력을 돕는 용도, 최종 판단은 서버 leave-request.util.ts)
 import type { LeaveType, LeaveUnit } from "@/types/leave";
 
 export const REASON_MAX = 500;

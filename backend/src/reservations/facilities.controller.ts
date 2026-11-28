@@ -26,7 +26,7 @@ export class FacilitiesController {
         return this.facilitiesService.findActive( query );
     }
 
-    //* 관리자 목록 (사용 안 함 포함) - 'admin'은 ':id'보다 먼저 선언
+    //* 관리자 목록 (사용 안 함 포함, 'admin'은 ':id'보다 먼저)
     @Get('admin')
     @RequireAdmin() // 여러 관리자 화면이 같이 쓰는 조회
     @ApiOperation({ summary: '(관리자) 시설 목록', description: '사용 안 함 시설 포함. 여러 관리자 화면이 같이 쓴다.' })

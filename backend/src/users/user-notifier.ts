@@ -5,9 +5,8 @@ import { NotificationsService } from "src/common/notifications.service";
 import { bestEffort } from "src/common/util/best-effort.util";
 import { PrismaService } from "src/prisma/prisma.service";
 
-//! 회원 알림 규칙 (가입 승인 대기·승인 완료)
-// - UsersService가 업무 트랜잭션이 **커밋된 뒤** 한 줄 호출한다. 실패해도 업무를 막지 않는다(bestEffort).
-// - 받는 사람·문구·이동 주소는 여기서 정한다.
+//! 회원 알림 (가입 승인 대기·승인 완료)
+// UsersService가 커밋 후 호출하고, 알림이 실패해도 업무는 성공으로 둔다(bestEffort).
 @Injectable()
 export class UserNotifier {
 
@@ -18,7 +17,8 @@ export class UserNotifier {
         private readonly notificationsService: NotificationsService,
     ){}
 
-    //* 신규 가입 → 재직 중인 회원 관리 담당(슈퍼관리자 + 회원 관리 기능을 가진 관리자)에게 승인 대기 알림 (발신자 = 가입한 회원, 로그인 전 요청이라 명시)
+    //* 가입 승인 대기 알림 (회원 관리 담당 관리자에게)
+    // 로그인 전 요청이라 발신자를 가입한 회원으로 직접 넣는다.
     signupRequested( newUser: Pick<Users, 'id' | 'name' | 'empNo'> ){
         return bestEffort( this.logger, `가입 승인 대기 알림(user ${newUser.id})`, async () => {
             const admins = await this.prisma.users.findMany({
@@ -43,8 +43,8 @@ export class UserNotifier {
         });
     }
 
-    //* 가입 승인(GUEST → USER/ADMIN) → 승인된 회원 각자에게
-    // 승인된 회원의 access token은 다음 재발급(최대 10분)까지 GUEST 권한이라 그동안은 알림 API를 호출할 수 없다.
+    //* 가입 승인 알림 (승인된 회원에게)
+    // access token이 재발급되기 전(최대 10분)까지는 GUEST라 알림 API를 못 부른다.
     signupApproved( userIds: number[] ){
         return bestEffort( this.logger, `가입 승인 알림(${userIds.length}명)`, async () => {
             await this.notificationsService.send({

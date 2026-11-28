@@ -6,7 +6,7 @@ import { NotificationListDto } from "./dto/notification-list.dto";
 import { NotificationsService } from "./notifications.service";
 import { ApiNoContentResponse, ApiNotFoundResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-//* 내 알림 (본인 알림만 조회·읽음·삭제. 알림 생성은 API가 없고 업무 서비스가 NotificationsService.send()로 보낸다)
+//* 내 알림 (본인 알림만 조회·읽음·삭제, 생성은 업무 서비스가 send()로 한다)
 // 고정 경로('unread-count', 'read-all')를 ':id'보다 먼저 선언한다.
 @ApiTags('Notifications (알림)')
 @Controller('common/notifications')

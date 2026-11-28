@@ -4,7 +4,7 @@ import { AdminProjectsView } from "@/features/project/components/admin-projects-
 
 export const metadata: Metadata = { title: "프로젝트 관리" };
 
-// 전체 프로젝트 열람은 직원 화면 과제 관리의 "전체 프로젝트" 범위에서 한다. 여기서는 전사 통계·비용 항목·삭제된 프로젝트 복구.
+// 전체 프로젝트 열람은 직원 화면에서 한다. 여기서는 전사 통계·비용 항목·삭제된 프로젝트 복구.
 export default function AdminProjectsPage() {
   return (
     <>

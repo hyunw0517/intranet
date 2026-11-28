@@ -12,7 +12,7 @@ import { ProjectsService } from './projects.service';
 import { ProjectTasksService } from './tasks/project-tasks.service';
 import { ApiBadRequestResponse, ApiConflictResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-//* 프로젝트 - 생성은 USER 누구나, 열람은 참여자·관리자, 수정·삭제는 책임자·관리자 (서비스에서 프로젝트마다 확인)
+//* 프로젝트 - 생성은 USER 누구나, 열람·수정·삭제 권한은 서비스가 프로젝트마다 확인
 // 고정 경로(deleted, my-tasks)는 ':id'보다 먼저 선언한다.
 @ApiTags('Projects (프로젝트)')
 @Controller('projects')

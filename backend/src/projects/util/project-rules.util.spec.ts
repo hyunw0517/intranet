@@ -1,5 +1,4 @@
 //! project-rules.util.ts 단위 테스트 (진척도, 담당자 부재, 칸반 재정렬)
-// DB를 쓰지 않는다. 규칙은 docs/design/projects.md 5장.
 
 import { UserStatus } from 'src/generated/prisma/client';
 import { calcProgress, isAssigneeAbsent, reorderColumn } from './project-rules.util';

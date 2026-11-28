@@ -12,9 +12,9 @@ import { useAuth } from "@/providers/auth-provider";
 import { submitQuote } from "@/services/api/project-quotes";
 import { useProjectMutation } from "../hooks/use-projects";
 
-// 견적 결재 요청 창 (결재가 켜져 있을 때만, 2026-11-17 사용자 결정: 견적 화면에서 바로 상신)
-// 결재라인만 지정한다. 제목·본문은 서버가 견적에서 만든다(본문 = 견적 스냅샷 표).
-// 결재라인 편집은 전자결재 화면의 컴포넌트를 그대로 쓴다(과제 관리 → 결재 방향, 결재가 꺼지면 이 창 자체가 안 보인다).
+// 견적 결재 요청 창 (결재가 켜져 있을 때만)
+// 결재라인만 지정하고 제목·본문은 서버가 견적에서 만든다.
+// 결재라인 편집은 전자결재 화면의 컴포넌트를 그대로 쓴다.
 export function QuoteSubmitDialog({
   open,
   onOpenChange,

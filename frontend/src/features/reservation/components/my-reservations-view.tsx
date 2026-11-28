@@ -25,13 +25,13 @@ type Tab = "upcoming" | "past" | "cancelled";
 
 type Pending = { kind: "cancel" | "delete"; ids: number[] } | null;
 
-// 내 예약 (알림의 이동 주소 /reservations/me)
-// - 예정: 아직 시작하지 않은 예약 (가까운 순) - 여러 건을 골라 한 번에 취소할 수 있다. (반복 예약 정리용)
-// - 지난: 시작한 예약 (최근 순) - 본인은 수정·취소·삭제할 수 없다.
-// - 취소: 취소한 예약 (기록) - 시작 전이면 삭제(목록에서 숨김)만 가능
+// 내 예약
+// - 예정: 시작 전 예약 (여러 건을 골라 한 번에 취소할 수 있다)
+// - 지난: 시작한 예약 (본인은 수정·취소·삭제 불가)
+// - 취소: 취소한 예약 (시작 전이면 삭제만)
 export function MyReservationsView() {
   const { user } = useAuth();
-  // "지금"은 화면을 열 때 한 번만 정한다. (렌더마다 바뀌면 queryKey가 바뀌어 계속 다시 조회된다)
+  // "지금"은 화면을 열 때 한 번만 정한다 (렌더마다 바뀌면 queryKey가 바뀌어 계속 다시 조회된다)
   const [now] = useState(() => new Date().toISOString());
   const [tab, setTab] = useState<Tab>("upcoming");
   const [page, setPage] = useState(1);

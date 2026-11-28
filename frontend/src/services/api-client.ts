@@ -1,8 +1,6 @@
 // 공통 API 클라이언트 (브라우저 → /api/* → NestJS)
-// - 상대 경로 /api 를 사용하므로 Client Component(TanStack Query)에서 호출한다.
-// - access token은 이 모듈의 메모리 변수에만 둔다. (localStorage에 JWT를 저장하지 않음)
-// - refresh token은 NestJS가 HttpOnly 쿠키로 관리하므로 JS에서 다루지 않는다.
-//   같은 출처 요청이라 브라우저가 /api/auth/* 요청에 쿠키를 자동으로 붙인다.
+// - access token은 이 모듈의 메모리 변수에만 둔다 (localStorage에 저장하지 않음).
+// - refresh token은 HttpOnly 쿠키라 JS에서 다루지 않고, 같은 출처라 브라우저가 자동으로 붙인다.
 
 const API_BASE_PATH = "/api";
 
@@ -34,9 +32,8 @@ export class ApiError extends Error {
   }
 }
 
-// 서버에 닿지 못한 요청 (서버 꺼짐, 네트워크 끊김, 프록시 오류 등)
-// fetch는 이때 TypeError를 던지는데, 화면 코드의 버그도 TypeError라 둘을 구분하려고 여기서만 바꿔 던진다.
-// (예전에는 모든 TypeError를 "서버에 연결할 수 없습니다"로 보여 줘 코드 버그가 네트워크 문제처럼 보였다 - 11/05 캘린더 버그)
+// 서버에 닿지 못한 요청 (서버 꺼짐, 네트워크 끊김 등)
+// fetch는 이때 TypeError를 던지는데, 화면 코드 버그도 TypeError라서 여기서만 바꿔 던져 구분한다.
 export class NetworkError extends Error {
   constructor(cause: unknown) {
     super("서버에 연결할 수 없습니다.", { cause });
@@ -163,9 +160,9 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   return data as T;
 }
 
-// 업로드 진행률이 필요한 multipart 요청 (fetch는 업로드 진행률을 알려 주지 않아 이 요청만 XHR로 보낸다)
-// - onProgress(loaded): 지금까지 보낸 바이트 수 (multipart 경계·헤더가 섞여 있어 파일 크기 합과 조금 다르다)
-// - access token 만료(401)면 apiFetch와 같이 재발급 1회 → 원래 요청 1회 재시도 (재시도하면 진행률은 처음부터 다시)
+// 업로드 진행률이 필요한 multipart 요청 (fetch는 진행률을 못 알려서 XHR로 보낸다)
+// - onProgress(loaded): 보낸 바이트 수 (multipart 경계가 섞여 파일 크기 합과 조금 다르다)
+// - 401이면 apiFetch처럼 재발급 1회 후 다시 보낸다 (진행률은 처음부터)
 export async function apiUpload<T>(path: string, form: FormData, onProgress?: (loaded: number) => void): Promise<T> {
   const once = () =>
     new Promise<{ status: number; data: unknown }>((resolve, reject) => {

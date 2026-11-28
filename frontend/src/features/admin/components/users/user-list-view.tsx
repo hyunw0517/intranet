@@ -100,7 +100,7 @@ function toQuery(f: Filters): UserListQuery {
   };
 }
 
-// 관리자 회원 목록: 검색·권한·상태·직급·직책 필터, 머리글 정렬, 표시 개수·페이지 이동, 선택 회원 일괄 처리, 삭제된 회원 보기(복구)
+// 관리자 회원 목록
 export function UserListView() {
   const router = useRouter();
   const pathname = usePathname();
@@ -303,9 +303,8 @@ function primaryDepartmentLabel(user: AdminUserListItem) {
   return primary.jobTitle ? `${primary.department.name} · ${primary.jobTitle.name}` : primary.department.name;
 }
 
-// 관리자 화면은 PC 우선이므로 좁은 화면에서는 표를 가로 스크롤한다. (Table 컨테이너가 overflow-x-auto)
-// 왼쪽 체크박스로 선택한 회원은 하단 [권한·상태] [삭제]로 일괄 처리하고, 오른쪽 ⋯ 메뉴로 한 명씩 모달에서 변경한다.
-// 권한·상태, 직급·소속 변경은 이 목록에서만 한다. (상세 페이지는 조회 + 기본 정보 수정 + 계정 관리)
+// 좁은 화면에서는 표를 가로 스크롤한다 (관리자 화면은 PC 우선).
+// 체크박스로 고른 회원은 하단에서 일괄 처리하고, ⋯ 메뉴로 한 명씩 모달에서 바꾼다.
 function UserTable({
   users,
   sort,
@@ -447,8 +446,8 @@ function SortableHead({
   );
 }
 
-// 행 끝 ⋯ 메뉴: 상세보기 / 권한·상태 / 직급·소속 (버튼을 행마다 나열하지 않아 표가 깔끔하다)
-// modal={false}: 메뉴 항목에서 모달(Dialog)을 열 때 메뉴의 포커스 잠금과 겹쳐 화면 클릭이 막히는 Radix 문제를 피한다.
+// 행 끝 ⋯ 메뉴: 상세보기 / 권한·상태 / 직급·소속
+// modal={false}: 메뉴에서 Dialog를 열 때 포커스 잠금이 겹쳐 클릭이 막히는 Radix 문제를 피한다.
 function UserRowMenu({
   user,
   onOpenDialog,

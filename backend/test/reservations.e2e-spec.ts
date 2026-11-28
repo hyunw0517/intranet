@@ -1,6 +1,6 @@
-//! 시설 예약 e2e (애드온 reservations, docs/design/features.md 6장)
+//! 시설 예약 e2e (애드온 reservations, docs/design/features.md)
 // 실제 앱(AppModule) + 테스트 DB(intranet_test)로 API를 호출해 확인한다.
-// ⭐ 핵심: 같은 시설·같은 시간에 동시에 요청해도 예약은 하나만 저장된다. (트랜잭션 검사 + DB exclusion constraint)
+// 핵심: 같은 시설·같은 시간에 동시에 요청해도 예약은 하나만 저장된다. (트랜잭션 검사 + DB exclusion constraint)
 //
 // 애드온 등록 여부는 app.module.ts를 처음 import할 때 한 번 정해지므로(addonModule이 @Module 평가 시점에 실행),
 // .env.test의 ADDONS=reservations로 켜 둔다. 꺼진 경우는 맨 아래 테스트에서 모듈을 새로 불러와 확인한다.
@@ -93,7 +93,7 @@ describe('시설 예약', () => {
         await app.close();
     });
 
-    //* ⭐ 동시 예약
+    //* 동시 예약
     describe('동시 예약', () => {
         // 같은 시설·같은 시간에 10명이 동시에 요청 → 1건만 201, 나머지 9건 409, DB에도 1건
         it('같은 시간에 동시에 10건을 요청해도 하나만 예약된다', async () => {
@@ -141,7 +141,7 @@ describe('시설 예약', () => {
             expect( res.body.message ).toContain( '이미 다른 예약' );
         });
 
-        // 같은 분류의 다른 시설끼리는 같은 시간도 된다. (사용자 결정)
+        // 같은 분류의 다른 시설끼리는 같은 시간도 된다.
         it('다른 시설은 같은 시간에 예약할 수 있다', async () => {
             await reserve( otherToken, roomB, daysFromToday( 5 ), '10:00', '11:00' ).expect( 201 );
         });
@@ -179,7 +179,7 @@ describe('시설 예약', () => {
 
     //* 사용 불가 기간
     describe('사용 불가 기간', () => {
-        // 겹치는 예약이 있어도 저장하고 경고만 준다. 기존 예약은 그대로 RESERVED. (사용자 결정)
+        // 겹치는 예약이 있어도 저장하고 경고만 준다. 기존 예약은 그대로 RESERVED.
         it('겹치는 예약이 있어도 저장하고 conflicts로 경고, 기존 예약은 그대로', async () => {
             const date = daysFromToday( 7 );
             const existing = await reserve( userToken, roomB, date, '13:00', '14:00' ).expect( 201 );
@@ -293,7 +293,7 @@ describe('시설 예약', () => {
             expect( kstDateString( new Date( res.body.startAt ) ) ).toBe( daysFromToday( 30 ) );
         });
 
-        // 지난 예약(시작 후): 본인은 아무것도 못 하고, 관리자는 삭제만 (사용자 결정)
+        // 지난 예약(시작 후): 본인은 아무것도 못 하고, 관리자는 삭제만
         it('시작된 예약: 본인은 수정·취소·삭제 불가', async () => {
             await http().patch( `/reservations/${startedId}` ).set( auth( userToken ) ).send({ title: 'x' }).expect( 403 );
             await http().patch( `/reservations/${startedId}/cancel` ).set( auth( userToken ) ).expect( 403 );
@@ -305,7 +305,7 @@ describe('시설 예약', () => {
             await http().delete( `/reservations/${startedId}` ).set( auth( adminToken ) ).expect( 200 );
         });
 
-        // 관리자가 남의 예약을 취소·삭제하면 예약자에게 알림 (사용자 결정)
+        // 관리자가 남의 예약을 취소·삭제하면 예약자에게 알림
         it('관리자가 남의 예약을 취소·삭제하면 예약자에게 알림이 간다', async () => {
             await http().patch( `/reservations/${futureId}/cancel` ).set( auth( adminToken ) ).expect( 200 );
 
@@ -324,7 +324,7 @@ describe('시설 예약', () => {
             expect( await prisma.notification.count({ where: { targetId: own.body.id } }) ).toBe( 0 );
         });
 
-        // 관리자가 남의 예약 시간을 바꾸면 예약자에게 알림 (바뀌기 전 → 후 시간). 제목만 고치면 보내지 않는다. (사용자 결정)
+        // 관리자가 남의 예약 시간을 바꾸면 예약자에게 알림 (바뀌기 전 → 후 시간). 제목만 고치면 보내지 않는다.
         it('관리자가 남의 예약 시간을 바꾸면 예약자에게 알림, 제목만 바꾸면 없음', async () => {
             const date = daysFromToday( 32 );
             const target = await reserve( userToken, roomB, date, '09:00', '10:00' ).expect( 201 );
@@ -361,7 +361,7 @@ describe('시설 예약', () => {
             await http().delete( `/reservations/facilities/${roomA}` ).set( auth( adminToken ) ).expect( 409 );
         });
 
-        // 사용 안 함: 새 예약만 막고 기존 예약은 유지 (사용자 결정)
+        // 사용 안 함: 새 예약만 막고 기존 예약은 유지
         it('사용 안 함으로 바꾸면 새 예약은 400, 기존 예약은 그대로', async () => {
             const before = await prisma.facilityReservation.count({ where: { facilityId: weekdayRoom, status: FacilityReservationStatus.RESERVED, deleted: false } });
 
@@ -392,7 +392,7 @@ describe('시설 예약', () => {
             await http().get( '/reservations/facilities' ).set( auth( userToken ) ).expect( 200 );
         });
 
-        // 시간표에는 제목·예약자 이름이 공개된다. (사용자 결정) 내 예약은 isMine
+        // 시간표에는 제목·예약자 이름이 공개된다. 내 예약은 isMine
         it('시간표: 제목·예약자 이름·isMine, 사용 불가 기간 포함', async () => {
             const date = daysFromToday( 7 );
             const res = await http().get( '/reservations/schedule' ).set( auth( otherToken ) )

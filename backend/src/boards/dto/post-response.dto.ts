@@ -3,9 +3,8 @@ import { PageMetaResponse } from 'src/common/dto/page-meta-response.dto';
 import { CalendarEventColor } from 'src/generated/prisma/client';
 import { BoardInfoResponse, BoardPermResponse } from './board-response.dto';
 
-//* 게시글·캘린더 응답 (문서용 클래스, docs/api.md 3.4)
-// - 서비스는 Prisma 결과를 그대로 반환하고, 컨트롤러 반환 타입을 이 클래스로 적어 필드가 맞는지 typecheck가 검사한다.
-// - 익명 게시판의 다른 사람 글은 author와 작성자 소속 이름이 null로 내려간다.
+//* 게시글·캘린더 응답 (Swagger 문서용 클래스)
+// 익명 게시판의 다른 사람 글은 작성자 정보가 null로 내려간다.
 
 /** 작성자 */
 export class PostAuthorResponse {

@@ -33,9 +33,8 @@ import { AdminReservationBulkActions } from "./admin-reservation-bulk-actions";
 const ALL = "all";
 
 // 전체 예약 관리 (관리자)
-// - 시설·상태·기간(시작 날짜)으로 거른다. 기본은 최신 시작 순
-// - 관리자: 시작 전이면 시간 변경·취소·삭제, 시작 후에는 삭제만. 남의 예약이면 서버가 예약자에게 알림을 보낸다.
-// - 왼쪽 체크박스로 고른 예약을 일괄 시간 변경·취소·삭제한다. 선택은 지금 페이지 안에서만 (페이지·필터를 바꾸면 해제)
+// - 시작 전이면 시간 변경·취소·삭제, 시작 후에는 삭제만. 남의 예약이면 서버가 예약자에게 알린다.
+// - 선택은 지금 페이지 안에서만 (페이지·필터를 바꾸면 해제)
 export function AdminReservationList() {
   const { user } = useAuth();
   const [facilityId, setFacilityId] = useState(ALL);

@@ -8,7 +8,7 @@ import { ApprovalDocumentType, ApprovalStatus } from "src/generated/prisma/clien
 import { ApprovalBox, MAX_APPROVAL_STEPS } from "../const/approval.const";
 import { ApprovalStepInputDto } from "./approval-line.dto";
 
-//* 결재 문서 임시저장(DRAFT) 생성 - 상신은 PATCH :id/submit 따로 (2026-11-10 사용자 결정)
+//* 결재 문서 임시저장(DRAFT) 생성 - 상신은 PATCH :id/submit 따로
 // 결재라인은 비워 둘 수 있다. (상신할 때 검사)
 export class CreateApprovalDocumentDto {
 

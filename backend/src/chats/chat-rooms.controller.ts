@@ -6,7 +6,7 @@ import { ChatRoomsService } from './chat-rooms.service';
 import { ChatUserSearchQueryDto, CreateGroupChatDto, InviteChatMembersDto, LeaveChatDto, OpenDirectChatDto, ReadChatDto, RenameChatRoomDto, SetMyChatRoomNameDto } from './dto/chat-room.dto';
 import { ApiBadRequestResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-//* 채팅방 (features.md 8.3, 8.5) - 모두 USER 이상, 내가 참여한 방만 다룬다(아니면 404)
+//* 채팅방 - 모두 USER 이상, 내가 참여한 방만 다룬다(아니면 404)
 // 고정 경로(unread-count, users, direct, group)는 ':roomId'보다 먼저 선언한다.
 @ApiTags('Chats · Rooms (채팅방)')
 @Controller('chats')
@@ -68,7 +68,7 @@ export class ChatRoomsController {
         return this.chatRoomsService.createGroup( userId, body );
     }
 
-    //* 방 상세 (참여자별 lastReadMessageId·joinedAt 포함 → 화면이 메시지별 안 읽은 사람 수 계산)
+    //* 방 상세 (메시지별 안 읽은 사람 수는 화면이 계산한다)
     @Get(':roomId')
     @Roles(UserRole.USER)
     @ApiOperation({ summary: '채팅방 상세', description: '참여자별 lastReadMessageId·joinedAt을 함께 준다. 화면이 메시지별 안 읽은 사람 수를 계산한다(room:read 이벤트를 받으면 다시 계산). 활성 참여자만 볼 수 있고 관리자도 남의 채팅은 볼 수 없다.' })

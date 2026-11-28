@@ -5,7 +5,7 @@ import { BoardAuthView } from "@/features/admin/components/boards/board-auth-vie
 
 export const metadata: Metadata = { title: "게시판 권한" };
 
-// URL의 id만 숫자로 확인하고, 조회·표시는 클라이언트 컴포넌트가 한다. (토큰이 브라우저 메모리에 있음)
+// URL의 id만 숫자로 확인하고, 조회·권한 표시는 클라이언트 컴포넌트가 한다 (토큰이 브라우저 메모리에 있어서)
 export default async function AdminBoardAuthsPage({ params }: PageProps<"/admin/boards/[id]/auths">) {
   const { id } = await params;
   const boardId = Number(id);

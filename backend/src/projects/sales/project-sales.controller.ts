@@ -8,7 +8,7 @@ import { BillProjectSaleDto, CreateProjectSaleDto, CreateSalePaymentDto, UpdateP
 import { ProjectSalesService } from './project-sales.service';
 import { ApiBadRequestResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 
-//* 매출 (청구 건·수금·세금계산서) - 참여자 누구나 (서비스에서 프로젝트 권한 확인, docs/design/projects.md 5-2장)
+//* 매출 (청구 건·수금·세금계산서) - 참여자 누구나 (서비스에서 프로젝트 권한 확인)
 @ApiTags('Projects · Sales (매출)')
 @Controller('projects/:projectId/sales')
 export class ProjectSalesController {
@@ -120,7 +120,7 @@ export class ProjectSalesController {
         return this.salesService.deletePayment( user, projectId, saleId, paymentId );
     }
 
-    //* 세금계산서 파일 다운로드 - 게시글·결재 첨부와 같은 응답 형식
+    //* 세금계산서 파일 다운로드
     @Get(':saleId/files/:fileId')
     @Roles(UserRole.USER)
     @ApiOperation({ summary: '세금계산서 파일 다운로드', description: '프로젝트를 볼 수 있는 사람만. 게시글·결재 첨부와 같은 응답 형식(application/octet-stream + attachment).' })

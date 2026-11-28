@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { QUOTE_TAX_LABEL, type QuoteTaxType } from "@/types/project";
 import { sanitizeVatRate } from "../quote-calc";
 
-// 과세/면세 선택 + 부가세율(%) 입력 - 견적·매출·협력사가 같이 쓴다 (2026-11-17 사용자 결정, 기본 과세 10%)
+// 과세/면세 선택 + 부가세율(%) 입력 - 견적·매출·협력사가 같이 쓴다 (기본 과세 10%)
 // 면세면 부가세율 칸은 잠근다(값은 그대로 두었다가 다시 과세로 바꾸면 쓴다).
 export function TaxFields({
   idPrefix,

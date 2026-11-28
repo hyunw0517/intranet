@@ -31,9 +31,9 @@ export interface PostInput {
   eventEndAt?: string | null;
   isAllDay?: boolean | null;
   eventColor?: CalendarEventColor | null; // 캘린더 게시판만 (null = 기본색, 수정에서 생략하면 유지)
-  // 첨부파일 id 최종 목록 (먼저 uploadAttachment로 올린 파일, 순서 = 표시 순서)
-  // 수정에서 생략하면 기존 첨부 유지, 배열을 보내면 이 목록으로 맞춘다. (빠진 파일은 삭제)
-  // 본문 이미지는 보내지 않는다. 서버가 본문 <img>에서 찾아 연결하고, 다른 글의 이미지는 본문에서 제거한다.
+  // 첨부파일 id 최종 목록 (먼저 올린 파일, 순서 = 표시 순서)
+  // 수정에서 생략하면 기존 첨부 유지, 배열을 보내면 이 목록으로 맞춘다.
+  // 본문 이미지는 서버가 본문 <img>에서 찾아 연결한다.
   attachmentIds?: number[];
 }
 

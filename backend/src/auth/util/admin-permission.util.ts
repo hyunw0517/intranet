@@ -1,9 +1,7 @@
 import { AdminPermission, UserRole } from "src/generated/prisma/client";
 
-//* 관리자 기능 권한 판단 (컨트롤러 가드·서비스 분기·알림 받는 사람 공용)
-//  - SUPER_ADMIN: 모든 기능
-//  - ADMIN: Users.adminPermissions에 있는 기능만 (access token의 perms 또는 DB 값)
-//  - 그 외: 없음
+//* 관리자 기능 권한 판단 (가드·서비스·알림 대상 조회 공용)
+// SUPER_ADMIN은 모든 기능, ADMIN은 adminPermissions에 있는 기능만
 export type AdminPermissionUser = {
     role: UserRole;
     adminPermissions?: AdminPermission[] | null;

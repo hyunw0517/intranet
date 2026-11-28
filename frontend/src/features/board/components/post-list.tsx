@@ -13,8 +13,8 @@ interface PostListProps {
   posts: PostListItem[];
 }
 
-// 열 수 있는 글인지 (목록·앨범 그리드 공용): 비밀글은 작성자 본인·게시판 관리자만. 서버는 볼 수 없는 비밀글의 작성자를 null로 보낸다.
-// (익명 게시판에서도 본인 글은 작성자가 오므로, 작성자가 있으면 본인 글이거나 볼 수 있는 글이다)
+// 열 수 있는 글인지: 볼 수 없는 비밀글은 서버가 작성자를 null로 보낸다.
+// (익명 게시판에서도 본인 글은 작성자가 오므로, 작성자가 있으면 볼 수 있는 글이다)
 export function canOpenPost(post: PostListItem, perm: BoardPermission) {
   return !post.isSecret || perm.admin || post.author !== null;
 }
@@ -23,8 +23,8 @@ export function canOpenPost(post: PostListItem, perm: BoardPermission) {
 const COLUMNS = "lg:grid lg:grid-cols-[minmax(0,1fr)_11rem_5.5rem_3.5rem_3.5rem] lg:items-center lg:gap-4";
 
 // 게시글 목록
-// - 넓은 화면(lg 이상, 사이드바를 뺀 본문이 충분할 때): 표처럼 열을 맞춘 행 / 모바일: 제목 아래에 작성자·날짜·수치를 한 줄로
-// - 표(<table>) 대신 목록(<ul>)을 쓴 이유: 모바일에서 행을 카드 모양으로 바꾸기 쉽고, 행 전체가 링크다.
+// - 넓은 화면은 열을 맞춘 행, 모바일은 제목 아래에 작성자·날짜·수치를 한 줄로
+// - <table> 대신 <ul>: 모바일에서 카드 모양으로 바꾸기 쉽고 행 전체가 링크다.
 export function PostList({ boardId, board, perm, pinned, posts }: PostListProps) {
   return (
     <div className="overflow-hidden rounded-lg border">

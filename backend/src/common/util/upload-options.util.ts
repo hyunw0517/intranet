@@ -5,12 +5,9 @@ import { extname } from "path";
 import { ATTACHMENT_EXTENSIONS, IMAGE_MIME_BY_EXT, MAX_ATTACHMENT_SIZE, MAX_ATTACHMENTS_PER_TARGET, MAX_IMAGE_SIZE } from "../const/file.const";
 
 //* 엔드포인트별 multer 옵션 (FileInterceptor에 넘긴다)
-// 전역 MulterModule.register 하나로 두면 이미지·첨부의 용량·확장자 제한을 나눌 수 없어 업로드 종류마다 만든다.
-//
-// 저장은 multer가 하지 않는다. (memoryStorage → FilesService가 검사 후 FileStorage에 저장)
-// multer diskStorage로 바로 쓰면 저장 위치가 로컬 디스크에 묶여 S3로 바꿀 때 업로드 경로까지 고쳐야 한다.
-// 최대 용량(첨부 200MB)까지 요청마다 메모리에 올라온다. 동시 업로드가 몰리면 메모리 부담이 커지므로,
-// 운영에서 S3를 쓰게 되면 대용량은 presigned URL 직접 업로드로 전환한다.
+// 전역 설정 하나로는 이미지·첨부의 제한을 나눌 수 없어 업로드 종류마다 만든다.
+// memoryStorage로 받고 저장은 FilesService가 한다 (diskStorage면 S3로 바꿀 때 업로드 경로까지 고쳐야 한다).
+// 첨부 200MB까지 메모리에 올라오므로, S3를 쓰게 되면 대용량은 presigned URL 직접 업로드로 바꾼다.
 function uploadOptions(
     maxSize: number,
     allowedExtensions: string[],
@@ -49,9 +46,8 @@ export const ATTACHMENT_UPLOAD_OPTIONS = uploadOptions(
 );
 
 //* 첨부로 받는 이미지 여러 장 (비공개 이미지 묶음. 예: 채팅 이미지 메시지)
-// 장당 이미지 한도(MAX_IMAGE_SIZE), 최대 MAX_ATTACHMENTS_PER_TARGET장. 초과 시 413
-// 요청의 파일이 모두 메모리에 올라오므로 한도는 여기(multer)서 걸어야 한다. 받은 뒤 검사하면 이미 메모리에 올라온 뒤다.
-//   → 요청 하나의 최대 = 20MB × 10장 = 200MB (첨부 한도로 받으면 200MB × 10 = 2GB까지 올라올 수 있었다)
+// 장당 MAX_IMAGE_SIZE, 최대 MAX_ATTACHMENTS_PER_TARGET장 (요청 하나 최대 200MB)
+// 파일이 모두 메모리에 올라오므로 한도는 받은 뒤가 아니라 multer에서 걸어야 한다.
 const IMAGE_EXTENSIONS = Object.keys( IMAGE_MIME_BY_EXT );
 export const ATTACHMENT_IMAGES_UPLOAD_OPTIONS = uploadOptions(
     MAX_IMAGE_SIZE,
@@ -61,7 +57,7 @@ export const ATTACHMENT_IMAGES_UPLOAD_OPTIONS = uploadOptions(
 );
 
 //* 이미지가 아닌 첨부 하나 (동영상·문서 등. 예: 채팅 파일 메시지)
-// 이미지 확장자는 받지 않는다. 받으면 이미지가 위의 20MB 한도를 피해 200MB로 올라올 수 있다.
+// 이미지 확장자는 받지 않는다 (이미지가 20MB 한도를 피해 200MB로 올라오지 않게)
 const NON_IMAGE_ATTACHMENT_EXTENSIONS = ATTACHMENT_EXTENSIONS.filter( ( ext ) => !IMAGE_EXTENSIONS.includes( ext ) );
 export const ATTACHMENT_NON_IMAGE_UPLOAD_OPTIONS = uploadOptions(
     MAX_ATTACHMENT_SIZE,

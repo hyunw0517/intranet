@@ -33,13 +33,11 @@ const reservationInclude = {
     user: { select: { id: true, name: true } },
 } satisfies Prisma.FacilityReservationInclude;
 
-//! 시설 예약 (features.md 6장, 2026-11-09 사용자 결정)
-// - 범위는 [시작, 종료). 예약 시간 규칙(단위·운영 시간·요일·예약 가능 기간)은 시설의 분류가 정한다.
-// - 겹침 방지는 이중: ① 트랜잭션 안에서 겹치는 예약·사용 불가 기간을 검사해 메시지를 만들고
-//   ② 검사와 저장 사이에 끼어든 동시 요청은 DB exclusion constraint가 막는다 → 409로 바꿔 응답
-// - 권한: 예약자 본인·관리자. 시작한 예약(지난 예약)은 본인 불가, 관리자는 삭제만.
-// - 취소 = status CANCELLED(기록이 남고 그 시간은 다시 예약 가능), 삭제 = soft delete(목록에서 숨김)
-// - 관리자가 남의 예약을 취소·삭제하면 커밋 후 예약자에게 알림 (ReservationNotifier)
+//! 시설 예약
+// - 범위는 [시작, 종료). 시간 규칙은 시설의 분류가 정한다.
+// - 겹침 방지는 이중: 트랜잭션 안에서 먼저 검사해 메시지를 만들고, 그 사이 끼어든 동시 요청은 DB exclusion constraint가 막는다(409).
+// - 지난 예약(시작 후)은 본인 불가, 관리자는 삭제만.
+// - 취소는 status CANCELLED(기록이 남고 그 시간은 다시 예약 가능), 삭제는 soft delete.
 @Injectable()
 export class ReservationsService {
 
@@ -56,7 +54,7 @@ export class ReservationsService {
     //! 조회
 
     //* 시간표: 시설 하나 또는 분류 하나의 [from, to) 유효한 예약 + 사용 불가 기간
-    // 예약 제목·예약자 이름은 모든 회원에게 공개한다. (2026-11-09 사용자 결정)
+    // 예약 제목·예약자 이름은 모든 회원에게 공개한다.
     async schedule( user: Actor, query: ScheduleQueryDto ) {
         if ( ( query.facilityId === undefined ) === ( query.categoryId === undefined ) ) {
             throw new BadRequestException( 'facilityId와 categoryId 중 하나만 보내야 합니다.' );
@@ -153,10 +151,9 @@ export class ReservationsService {
     }
 
     //* 반복 예약 → { created, skipped }
-    // - 기간 중 고른 요일마다 같은 시간대로 예약을 하나씩 만든다. (묶음 정보 없음 - 취소는 날짜별·일괄 취소)
-    // - 건너뜀: 운영하지 않는 요일·이미 지난 시각(규칙 검사) / 이미 예약됨·사용 불가 기간(트랜잭션 안 조회)
-    // - 시간대 자체가 규칙에 안 맞으면(운영 시간 밖·단위) 모든 날짜가 같으므로 요청 전체를 400으로 거부한다.
-    // - 검사와 저장 사이에 다른 요청이 같은 시간을 잡으면 DB 제약으로 요청 전체가 409 (다시 시도하면 그 날짜는 건너뜀)
+    // - 기간 중 고른 요일마다 같은 시간대로 하나씩 만든다 (묶음 정보 없음).
+    // - 운영하지 않는 요일·지난 시각·이미 예약됨·사용 불가 기간은 건너뛴다.
+    // - 시간대 자체가 규칙에 안 맞으면 모든 날짜가 같으므로 전체를 400으로 거부한다.
     async createRecurring( user: Actor, body: CreateRecurringReservationDto ) {
         const facility = await this.findBookableFacility( body.facilityId );
         const rules = facility.category;
@@ -203,7 +200,7 @@ export class ReservationsService {
         const created = await this.withOverlapGuard( () => this.prisma.$transaction( async ( tx ) => {
             if ( candidates.length === 0 ) return [];
 
-            // 2) 기간 전체의 기존 예약·사용 불가 기간을 한 번에 읽어 날짜별로 메모리에서 비교한다. (날짜 수만큼 쿼리하지 않음)
+            // 2) 기간 전체의 기존 예약·사용 불가 기간을 한 번에 읽어 날짜별로 비교한다
             const range = { startAt: { lt: candidates[ candidates.length - 1 ].endAt }, endAt: { gt: candidates[0].startAt } };
             const [ reserved, unavailable ] = await Promise.all([
                 tx.facilityReservation.findMany({
@@ -269,7 +266,7 @@ export class ReservationsService {
         const endAt = body.endAt ?? before.endAt;
         const timeChanged = startAt.getTime() !== before.startAt.getTime() || endAt.getTime() !== before.endAt.getTime();
 
-        // 시간을 바꿀 때만 규칙을 다시 본다. (분류 규칙이 바뀐 뒤에도 제목만 고치는 건 막지 않기 위해)
+        // 시간을 바꿀 때만 규칙을 다시 본다 (규칙이 바뀐 뒤에도 제목은 고칠 수 있게)
         if ( timeChanged ) {
             const facility = await this.findBookableFacility( before.facilityId );
             this.assertRule( checkReservationTime( startAt, endAt, facility.category, new Date() ) );
@@ -282,7 +279,7 @@ export class ReservationsService {
                 await this.assertNoConflict( tx, before.facilityId, startAt, endAt, id );
             }
 
-            // 검사한 상태(유효·시작 전)일 때만 바꾼다. (그 사이 취소·삭제되면 0건 → 409)
+            // 검사한 상태일 때만 바꾼다 (그 사이 취소·삭제되면 0건 → 409)
             const { count } = await tx.facilityReservation.updateMany({
                 where: { id, deleted: false, status: FacilityReservationStatus.RESERVED, startAt: { gt: new Date() } },
                 data: { ...data, updatedId: user.id },
@@ -299,7 +296,7 @@ export class ReservationsService {
             return tx.facilityReservation.findUniqueOrThrow({ where: { id }, include: reservationInclude });
         }) );
 
-        // 관리자가 남의 예약 시간을 바꿨으면 커밋 후 예약자에게 알림 (2026-11-09 사용자 결정)
+        // 관리자가 남의 예약 시간을 바꿨으면 커밋 후 예약자에게 알림
         if ( timeChanged && this.isAdmin( user ) ) {
             await this.notifier.timeChangedByAdmin( before, updated, user.id );
         }
@@ -312,15 +309,14 @@ export class ReservationsService {
         return this.cancelMany( user, [ id ] );
     }
 
-    //* 일괄 취소 (반복 예약 여러 건 등) - 한 건이라도 취소할 수 없으면 전체 실패 (기존 일괄 처리 규칙)
+    //* 일괄 취소 - 한 건이라도 취소할 수 없으면 전체 실패
     async bulkCancel( user: Actor, body: ReservationIdsDto ) {
         return this.cancelMany( user, body.ids );
     }
 
-    //* 일괄 시간 변경 (2026-11-14 사용자 결정) - 날짜는 예약마다 그대로, 시작·종료 시각만 같은 시간대로 맞춘다.
-    // - 권한은 단건 수정과 같다(본인·관리자, 유효한 예약, 시작 전). 한 건이라도 바꿀 수 없으면 전체 실패.
-    // - 같은 시설·같은 날짜 예약이 둘 이상이면 같은 시간대가 되어 반드시 겹치므로 먼저 거부한다.
-    //   (그 밖의 선택 예약끼리는 시설이나 날짜가 달라 서로 겹칠 수 없다 → 예약마다 기존 예약과의 겹침만 보면 된다)
+    //* 일괄 시간 변경 - 날짜는 예약마다 그대로, 시작·종료 시각만 같은 시간대로 맞춘다.
+    // - 권한은 단건 수정과 같고, 한 건이라도 안 되면 전체 실패.
+    // - 같은 시설·같은 날짜 예약이 둘 이상이면 반드시 겹치므로 먼저 거부한다.
     async bulkChangeTime( user: Actor, body: BulkReservationTimeDto ) {
         const startMinute = parseHm( body.startTime );
         const endMinute = parseHm( body.endTime );
@@ -365,7 +361,7 @@ export class ReservationsService {
             for ( const t of targets ) {
                 await this.assertNoConflict( tx, t.before.facilityId, t.startAt, t.endAt, t.before.id, `${t.before.facility.name} ${t.date}` );
 
-                // 검사한 상태(유효·시작 전)일 때만 바꾼다. (그 사이 취소·삭제되면 0건 → 전체 롤백)
+                // 검사한 상태일 때만 바꾼다 (그 사이 취소·삭제되면 전체 롤백)
                 const { count } = await tx.facilityReservation.updateMany({
                     where: { id: t.before.id, deleted: false, status: FacilityReservationStatus.RESERVED, startAt: { gt: new Date() } },
                     data: { startAt: t.startAt, endAt: t.endAt, updatedId: user.id },
@@ -402,7 +398,7 @@ export class ReservationsService {
             });
         }) );
 
-        // 관리자가 남의 예약 시간을 바꿨으면 커밋 후 예약자에게 알림 (단건 수정과 같은 규칙, 시간이 실제로 바뀐 예약만)
+        // 관리자가 남의 예약 시간을 바꿨으면 커밋 후 예약자에게 알림 (시간이 실제로 바뀐 예약만)
         if ( this.isAdmin( user ) ) {
             for ( const t of targets ) {
                 if ( t.startAt.getTime() === t.before.startAt.getTime() && t.endAt.getTime() === t.before.endAt.getTime() ) continue;
@@ -418,7 +414,7 @@ export class ReservationsService {
         return this.deleteMany( user, [ id ] );
     }
 
-    //* 단건·일괄 삭제 공통 - 한 건이라도 삭제할 수 없으면 전체 실패 (기존 일괄 처리 규칙)
+    //* 단건·일괄 삭제 공통 - 한 건이라도 삭제할 수 없으면 전체 실패
     async deleteMany( user: Actor, ids: number[] ) {
         const reservations = await this.findManyOrThrow( ids );
         const isAdmin = this.isAdmin( user );
@@ -434,7 +430,7 @@ export class ReservationsService {
         }
 
         await this.prisma.$transaction( async ( tx ) => {
-            // 검사 조건을 WHERE에 다시 걸고, 바뀐 건수가 요청 수와 다르면 전체 롤백 (검사와 수정 사이 경쟁 상태 대비)
+            // 검사 조건을 WHERE에 다시 걸고, 바뀐 건수가 다르면 전체 롤백
             const { count } = await tx.facilityReservation.updateMany({
                 where: {
                     id: { in: ids },
@@ -478,7 +474,7 @@ export class ReservationsService {
         return hasAdminPermission( user, AdminPermission.RESERVATIONS );
     }
 
-    //* 수정·취소 공통 권한: 본인·관리자, 유효한 예약, 시작 전 (관리자도 시작 후에는 삭제만)
+    //* 수정·취소 공통 권한: 본인·관리자, 유효한 예약, 시작 전
     private assertCanChange( user: Actor, reservation: Pick<FacilityReservation, 'userId' | 'status' | 'startAt'>, action: string ) {
         if ( !this.isAdmin( user ) && reservation.userId !== user.id ) {
             throw new ForbiddenException( `본인 예약만 ${action}할 수 있습니다.` );
@@ -513,7 +509,7 @@ export class ReservationsService {
         const isAdmin = this.isAdmin( user );
 
         await this.prisma.$transaction( async ( tx ) => {
-            // 검사 조건을 WHERE에 다시 걸고, 바뀐 건수가 요청 수와 다르면 전체 롤백 (검사와 수정 사이 경쟁 상태 대비)
+            // 검사 조건을 WHERE에 다시 걸고, 바뀐 건수가 다르면 전체 롤백
             const { count } = await tx.facilityReservation.updateMany({
                 where: {
                     id: { in: ids },
@@ -568,8 +564,8 @@ export class ReservationsService {
         return facility;
     }
 
-    //* 트랜잭션 안의 겹침 검사 (사용자에게 보여 줄 메시지용, 동시 요청은 DB 제약이 최종 방어)
-    // label: 일괄 처리에서 어느 예약이 겹쳤는지 메시지 앞에 붙인다.
+    //* 트랜잭션 안의 겹침 검사 (메시지용, 동시 요청은 DB 제약이 막는다)
+    // label은 일괄 처리에서 어느 예약이 겹쳤는지 메시지 앞에 붙인다.
     private async assertNoConflict( tx: Tx, facilityId: number, startAt: Date, endAt: Date, exceptId?: number, label?: string ) {
         const overlap = { startAt: { lt: endAt }, endAt: { gt: startAt } };
         const message = ( text: string ) => label ? `${label}: ${text}` : text;

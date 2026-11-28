@@ -18,7 +18,7 @@ export interface CalendarEvent {
 
 export interface CalendarEventsResult {
   boards: { id: number; name: string; showLeaves: boolean }[];
-  // 휴가자 표시: 보고 있는 게시판 중 하나라도 켜져 있으면 true → 휴가 애드온이 켜져 있으면 휴가 API를 한 번만 불러 "휴가 N명"
+  // 보고 있는 게시판 중 하나라도 휴가자 표시가 켜져 있으면 true
   showLeaves: boolean;
   events: CalendarEvent[]; // 시작 시각 순
 }

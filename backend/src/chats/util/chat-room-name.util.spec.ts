@@ -1,5 +1,5 @@
 //! chat-room-name.util.ts 단위 테스트
-// 그룹 이름을 비웠을 때 참여자 이름으로 만드는 규칙 (영문 먼저 → 한글 가나다, 3명 초과는 "외 N명"). DB를 쓰지 않는다.
+// 그룹 이름을 비웠을 때 참여자 이름으로 만드는 규칙
 
 import { defaultGroupName } from './chat-room-name.util';
 

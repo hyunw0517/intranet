@@ -1,5 +1,5 @@
 //! approval-rules.util.ts 단위 테스트
-// 결재라인 결재자 검사, 결재라인 관리자 범위 계산, 승인 후 다음 상태를 DB 없이 확인한다. (features.md 7.5)
+// 결재자 검사, 결재라인 관리자 범위, 승인 후 다음 상태를 DB 없이 확인한다.
 
 import { ApprovalLineManagerScope, ApprovalLineScope, ApprovalStatus } from 'src/generated/prisma/client';
 import {

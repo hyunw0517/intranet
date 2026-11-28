@@ -9,8 +9,8 @@ import {
 import { ProjectClientsService } from './project-clients.service';
 import { ApiBadRequestResponse, ApiConflictResponse, ApiNotFoundResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-//* 거래처 - USER 이상 누구나 등록·수정·삭제·복구 (2026-11-16·17 사용자 결정)
-// 'projects/:id'보다 먼저 등록해야 한다(ProjectsModule controllers 배열 순서). 고정 경로 'deleted'는 ':id'보다 먼저 선언.
+//* 거래처 - USER 이상 누구나 등록·수정·삭제·복구
+// 'projects/:id'보다 먼저 등록하고, 고정 경로 'deleted'는 ':id'보다 먼저 선언한다.
 @ApiTags('Projects · Clients (거래처)')
 @Controller('projects/clients')
 export class ProjectClientsController {

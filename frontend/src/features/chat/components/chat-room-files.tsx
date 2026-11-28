@@ -11,10 +11,8 @@ import { useChatRoomFiles } from "../hooks/use-chats";
 import { ChatImageViewer, ChatThumbnail, FileKindIcon, useChatFileDownload } from "./chat-file-content";
 import { ChatPanelHeader } from "./chat-window";
 
-// 파일 보관함 (방 메뉴 → 파일 보관함, 2026-11-13 사용자 결정)
-// - 이 방에서 주고받은 파일을 최신순 격자로. 이미지는 미리보기(없으면 엑스박스), 그 밖의 파일은 아이콘(동영상 · 압축 · 파일) + 이름
-// - 이미지를 누르면 원본 보기, 그 밖의 파일은 [내려받기]
-// - 보이는 범위는 대화와 같다(참여 시점 이후, 삭제된 메시지의 파일은 빠짐)
+// 채팅방 파일 보관함
+// 참여 전 파일과 삭제된 메시지의 파일은 서버에서 빠져서 온다.
 export function ChatRoomFilesPanel({ room, onBack }: { room: ChatRoomDetail; onBack: () => void }) {
   const query = useChatRoomFiles(room.id);
   const files = useMemo(() => query.data?.pages.flatMap((page) => page.data) ?? [], [query.data]);
@@ -66,9 +64,7 @@ export function ChatRoomFilesPanel({ room, onBack }: { room: ChatRoomDetail; onB
   );
 }
 
-// 이미지가 아닌 파일 칸: 가운데 회색 아이콘 + 이름 · 크기, 오른쪽 위 다운로드 아이콘
-// 칸 전체가 하나의 내려받기 버튼이고, 글자는 드래그로 선택되지 않는다 (2026-11-14 사용자 요청)
-// 누르면 한 번 묻고 받는다. 확인 창은 버튼 바깥에 그린다 (useChatFileDownload 주석)
+// 이미지가 아닌 파일 칸 (누르면 확인 후 내려받기)
 function FileTile({ roomId, file }: { roomId: number; file: ChatRoomFile }) {
   const { download, pending, confirmDialog } = useChatFileDownload(roomId, file);
   return (

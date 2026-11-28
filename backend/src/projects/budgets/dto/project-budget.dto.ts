@@ -19,7 +19,7 @@ export class SaveBudgetCategoryDto {
     name: string;
 }
 
-//* 전사 통계 조회 조건 (모두 선택) - 연도가 없으면 최근 12개월, 프로젝트·거래처가 없으면 전체
+//* 전사 통계 조회 조건 (연도가 없으면 최근 12개월, 프로젝트·거래처가 없으면 전체)
 export class ProjectStatsQueryDto {
 
     @StringToNumber()

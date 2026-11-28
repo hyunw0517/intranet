@@ -18,9 +18,9 @@ import { MEMBER_ROLE_LABEL, type ProjectDetail, type ProjectMember, type Project
 import { useProjectMutation } from "../hooks/use-projects";
 import { UserSearchPicker } from "./user-search-picker";
 
-// 참여자 탭 - 목록은 참여자 누구나, 추가·역할·제외는 책임자·관리자(myAccess.canManage)
-// - 책임자는 여러 명 가능, 마지막 책임자는 빼거나 참여자로 바꿀 수 없다(서버 400 메시지를 그대로 보여 준다).
-// - 빠진 참여자가 담당인 과제는 담당자가 그대로 남고 칸반에 "부재"로 표시된다.
+// 참여자 탭 - 추가·역할·제외는 책임자·관리자만
+// - 마지막 책임자는 빼거나 바꿀 수 없다 (서버 400 메시지를 보여 준다).
+// - 빠진 참여자가 담당인 과제는 칸반에 "부재"로 표시된다.
 export function ProjectMembers({ project }: { project: ProjectDetail }) {
   const canManage = project.myAccess.canManage;
   const [adding, setAdding] = useState(false);

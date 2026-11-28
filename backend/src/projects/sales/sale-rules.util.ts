@@ -1,11 +1,10 @@
 import { Prisma, ProjectQuoteTaxType } from "src/generated/prisma/client";
 import { calcVat, DEFAULT_VAT_RATE, MAX_AMOUNT } from "../quotes/quote-rules.util";
 
-//! 매출 순수 규칙 (DB 없이 단위 테스트, docs/design/projects.md 5-2장)
+//! 매출 순수 규칙 (DB 없이 단위 테스트)
 
 //* 공급가액 → 부가세·합계 (매출 청구·협력사 외주 금액 공용)
-// 과세 = floor(공급가액 × 부가세율 ÷ 100), 면세 = 0. 부가세율은 직접 입력(기본 10%, 2026-11-17 사용자 결정) - 견적과 같은 규칙(calcVat)
-// 999조를 넘으면 null (호출한 쪽이 400)
+// 견적과 같은 규칙(calcVat), 999조를 넘으면 null (호출한 쪽이 400)
 export function calcSaleAmounts(
     supplyAmount: number | string | Prisma.Decimal,
     taxType: ProjectQuoteTaxType,

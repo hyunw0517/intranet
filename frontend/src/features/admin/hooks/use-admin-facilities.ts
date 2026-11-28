@@ -10,7 +10,7 @@ import { reservationKeys } from "@/features/reservation/hooks/use-reservations";
 type AdminReservationQuery = Parameters<typeof fetchAdminReservations>[0];
 
 // 관리자 시설·예약 queryKey
-// 분류·시설·사용 불가 기간을 바꾸면 직원용 시간표(reservationKeys)도 함께 다시 조회한다. (관리자 본인 화면 기준)
+// 분류·시설·사용 불가 기간을 바꾸면 직원용 시간표도 다시 조회한다
 export const adminFacilityKeys = {
   all: ["admin", "facilities"] as const,
   categories: () => [...adminFacilityKeys.all, "categories"] as const,

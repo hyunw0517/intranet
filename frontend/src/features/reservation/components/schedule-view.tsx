@@ -20,9 +20,9 @@ type ViewMode = "day" | "week";
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 // 시설 예약 시간표
-// - 분류 탭 + 날짜 이동 + 보기 전환(하루: 분류의 시설별 열 / 주간: 시설 하나의 월~일) (2026-11-09 사용자 결정)
-// - 보고 있는 분류·날짜·보기·시설은 URL(?category=&date=&view=week&facility=)에 둔다. (새로고침·뒤로 가기에도 유지)
-// - 빈 칸을 누르거나 [예약]을 누르면 예약 창, 예약을 누르면 상세(권한이 있으면 수정·취소·삭제)
+// - 분류 탭 + 날짜 이동 + 보기 전환(하루: 분류의 시설별 / 주간: 시설 하나의 월~일)
+// - 분류·날짜·보기·시설은 URL에 둔다 (새로고침·뒤로 가기에도 유지).
+// - 빈 칸이나 [예약]은 예약 창, 예약을 누르면 상세
 export function ScheduleView() {
   const router = useRouter();
   const pathname = usePathname();

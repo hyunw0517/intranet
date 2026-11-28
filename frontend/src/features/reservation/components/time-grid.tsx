@@ -32,8 +32,8 @@ const MIN_SLOT_PX = 22;
 const HOUR_PX = 48;
 
 // 시간표 격자 (세로 = 운영 시간, 가로 = 열)
-// - 빈 칸은 버튼이다: 누르면 그 시설·시각으로 예약 창이 열린다. (지난 칸·운영하지 않는 요일은 비활성)
-// - 예약·사용 불가 기간은 시각에 맞춰 칸 위에 겹쳐 그린다. 사용 불가 기간이 여러 날이면 그날 운영 시간만큼 잘라 그린다.
+// - 빈 칸은 버튼이라 누르면 그 시설·시각으로 예약 창이 열린다 (지난 칸·쉬는 요일은 비활성).
+// - 예약·사용 불가 기간은 시각에 맞춰 칸 위에 겹쳐 그린다.
 // - 열이 많으면 가로 스크롤 (시간 축은 왼쪽에 고정)
 export function TimeGrid({ columns, rules, reservations, unavailable, onSlotClick, onReservationClick }: TimeGridProps) {
   const { openMinute, closeMinute, slotMinutes } = rules;

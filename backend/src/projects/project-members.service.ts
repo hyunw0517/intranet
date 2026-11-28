@@ -9,11 +9,10 @@ import { ProjectNotifier } from "./project-notifier";
 
 const LAST_MANAGER_ERROR = '책임자는 최소 한 명 있어야 합니다.';
 
-//! 프로젝트 참여자 (책임자·관리자만 관리, docs/design/projects.md 5장)
-// - 빼면 soft delete(참여 이력 보존), 다시 넣으면 새 행. 활성 참여자 중복은 DB 부분 unique가 막는다.
-// - 빠진 참여자가 담당인 과제는 담당자를 그대로 둔다("담당자 부재", 과제 서비스가 판단).
-// - ⭐ 마지막 책임자는 빼거나 참여자로 바꿀 수 없다. 두 책임자가 동시에 서로를 바꾸는 경우를 막으려고
-//   그 프로젝트의 책임자 행을 FOR UPDATE로 잠근 뒤 센다. (마지막 슈퍼관리자 보호와 같은 방식, features.md 5.1)
+//! 프로젝트 참여자 (책임자·관리자만 관리)
+// - 빼면 soft delete(이력 보존), 다시 넣으면 새 행.
+// - 빠진 참여자가 담당인 과제는 담당자를 그대로 둔다("담당자 부재").
+// - 마지막 책임자는 빼거나 바꿀 수 없다. 두 책임자가 동시에 서로를 바꾸지 못하게 책임자 행을 잠그고 센다.
 @Injectable()
 export class ProjectMembersService {
 
@@ -103,7 +102,7 @@ export class ProjectMembersService {
         return true;
     }
 
-    // ⭐ 책임자 행을 잠근 뒤 센다. 먼저 잠근 쪽이 커밋하면, 기다리던 쪽은 바뀐 행(이미 참여자·삭제)을 제외하고 다시 읽는다(READ COMMITTED).
+    // 책임자 행을 잠근 뒤 센다. 기다리던 쪽은 앞 커밋 뒤의 행으로 다시 읽는다(READ COMMITTED).
     private async assertNotLastManager( tx: Prisma.TransactionClient, projectId: number, memberId: number ) {
         const managers = await tx.$queryRaw<{ id: number }[]>`
             SELECT id FROM project_member_model

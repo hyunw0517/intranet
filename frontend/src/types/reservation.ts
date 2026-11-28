@@ -1,5 +1,5 @@
 // 시설 예약 공통 타입 (백엔드 reservations 모듈의 JSON 응답 기준, 시각은 UTC ISO 문자열)
-// 규칙 원본: docs/design/features.md 6장, API: docs/backend/reservations.md
+// 규칙 원본: docs/design/features.md, API: docs/backend/reservations.md
 
 export type ReservationStatus = "RESERVED" | "CANCELLED";
 

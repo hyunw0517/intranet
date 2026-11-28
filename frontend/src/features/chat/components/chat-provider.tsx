@@ -24,9 +24,8 @@ interface ChatContextValue {
 const ChatContext = createContext<ChatContextValue | null>(null);
 
 // 채팅 전체 상태 (떠 있는 창 + 소켓 연결)
-// - 루트(AppProviders)에 둔다. 페이지를 옮겨도, 직원 화면 ↔ 관리자 화면을 오가도 다시 만들어지지 않아
-//   열린 방·입력 중인 글·소켓 연결이 그대로 남는다. (각 레이아웃에 두면 (main)·admin 사이를 옮길 때 사라진다)
-// - 로그인 전·GUEST·채팅 애드온이 꺼져 있으면 아무것도 하지 않는다(소켓 연결도 없음).
+// 루트에 둬서 페이지나 (main)·admin 레이아웃을 오가도 열린 방·입력 중인 글·소켓이 유지된다.
+// 로그인 전·GUEST·애드온 꺼짐이면 아무것도 하지 않는다.
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const canUse = !!user && user.role !== "GUEST";
@@ -58,7 +57,7 @@ function ChatState({ enabled, userId, children }: { enabled: boolean; userId: nu
 
   useChatSocket({ enabled, userId, onRoomRemoved: handleRoomRemoved });
 
-  // 창을 닫으면(× 또는 헤더 아이콘) 다음에 열 때 목록부터 보인다. 페이지 이동은 닫는 것이 아니라 보던 방이 유지된다.
+  // 창을 닫으면 다음에 열 때 목록부터 보인다 (페이지 이동은 닫는 것이 아니다)
   const value = useMemo<ChatContextValue>(() => {
     const close = () => {
       setOpen(false);

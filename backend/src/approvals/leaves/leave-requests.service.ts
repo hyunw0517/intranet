@@ -17,10 +17,10 @@ const COUNTED_STATUSES: ApprovalStatus[] = [ ApprovalStatus.REQUESTED, ApprovalS
 // 캘린더 조회 최대 기간 (달력 한 화면 = 6주 42일, 여유를 둔다)
 const CALENDAR_MAX_DAYS = 62;
 
-//! 휴가 신청 (결재의 옵션 'leaves', features.md 7.4 "휴가 신청 규칙", 2026-11-12 사용자 결정)
-// - 신청 = 결재 문서(LEAVE) + LeaveRequest 1:1. 둘은 같은 트랜잭션에서 만든다(결재 서비스가 tx를 넘겨 준다).
-// - 상신·회수·승인·반려·삭제·다시 기안은 결재 문서 API를 그대로 쓰고, 휴가 규칙은 처리기(LeaveDocumentHandler)가 같은 tx에서 검사한다.
-// - LeaveRequest에는 상태가 없다. 진행 중·승인 여부는 결재 문서 상태로 판단한다.
+//! 휴가 신청 (결재의 옵션 'leaves')
+// - 신청 = 결재 문서(LEAVE) + LeaveRequest 1:1, 같은 트랜잭션에서 만든다.
+// - 상신·승인 등은 결재 문서 API를 쓰고, 휴가 규칙은 처리기가 같은 tx에서 검사한다.
+// - LeaveRequest에는 상태가 없고 결재 문서 상태로 판단한다.
 @Injectable()
 export class LeaveRequestsService {
 
@@ -49,7 +49,7 @@ export class LeaveRequestsService {
     }
 
     async update( user: Actor, documentId: number, body: UpdateLeaveDto ){
-        await this.documents.assertVisible( user, documentId ); // 남의 문서면 입력 검사보다 먼저 404 (기안자 확인은 updateWithData)
+        await this.documents.assertVisible( user, documentId ); // 남의 문서면 입력 검사보다 먼저 404
         const leave = await this.findLeave( documentId );
         const saved = this.fromRow( leave );
 
@@ -100,10 +100,9 @@ export class LeaveRequestsService {
         return this.grants.summary( user.id, year );
     }
 
-    //* 캘린더 휴가자 (2026-11-12 사용자 결정): 전 직원, 최종 승인된 휴가만, 날짜별로 묶어서
-    // - 화면은 하루에 "휴가 N명" 항목 하나만 그리고, 마우스를 올리면 명단(이름(직급/소속): 종일 또는 시각)을 보여 준다.
-    // - 휴가 유형(병가·공가 등)은 민감할 수 있어 응답에 넣지 않는다.
-    // - 캘린더는 핵심(게시판)이라 휴가를 모른다 → 화면이 게시판 일정 API와 이 API를 따로 불러 합친다.
+    //* 캘린더 휴가자: 전 직원, 최종 승인된 휴가만, 날짜별로 묶어서
+    // - 휴가 유형(병가 등)은 민감할 수 있어 내보내지 않는다.
+    // - 캘린더는 핵심이라 휴가를 몰라서, 화면이 두 API를 따로 불러 합친다.
     async calendar( start: Date, end: Date ){
         if ( end <= start ) {
             throw new BadRequestException( '종료가 시작보다 늦어야 합니다.' );
@@ -167,11 +166,10 @@ export class LeaveRequestsService {
 
     //! 처리기에서 호출 (결재 트랜잭션 안)
 
-    //* 상신·최종 승인 검사: 시간 겹침 + 하루 합계 1일 + 연차 잔여 (features.md 7.4)
-    // ⭐ 같은 회원이 동시에 두 건을 상신(또는 두 문서가 동시에 최종 승인)하면 둘 다 "아직 다른 신청이 없다"고 볼 수 있다.
-    //    회원 행을 잠가 같은 회원의 검사를 한 줄로 세운다. 뒤의 요청은 앞 요청이 커밋된 뒤의 합계로 검사한다.
-    //    FOR NO KEY UPDATE: 서로는 막지만, 다른 테이블이 이 회원을 FK로 참조하며 INSERT할 때 거는 KEY SHARE 잠금과는 충돌하지 않는다.
-    //    잠금 순서는 항상 결재 문서 행(결재 서비스) → 회원 행이라 교착이 생기지 않는다.
+    //* 상신·최종 승인 검사: 시간 겹침 + 하루 합계 1일 + 연차 잔여
+    // 같은 회원이 동시에 두 건을 상신하면 둘 다 "다른 신청이 없다"고 볼 수 있어서 회원 행을 잠가 한 줄로 세운다.
+    // FOR NO KEY UPDATE라 다른 테이블의 FK 참조 INSERT(KEY SHARE)와는 충돌하지 않는다.
+    // 잠금 순서는 항상 결재 문서 행 → 회원 행이라 교착이 없다.
     async assertCanUse( tx: Tx, documentId: number ){
         const leave = await tx.leaveRequest.findUnique({ where: { approvalDocumentId: documentId } });
         if ( !leave ) {
@@ -193,7 +191,7 @@ export class LeaveRequestsService {
             },
         }) ).map( ( o ) => this.fromRow( o ) );
 
-        // ① 시간 겹침 (2026-11-12 사용자 결정)
+        // ① 시간 겹침
         const conflict = findTimeConflict( mine, others );
         if ( conflict ) {
             throw new BadRequestException( `이미 신청한 휴가(${LEAVE_TYPE_LABEL[conflict.other.type]} ${periodLabel( conflict.other )})와 ${conflict.date}에 시간이 겹칩니다.` );

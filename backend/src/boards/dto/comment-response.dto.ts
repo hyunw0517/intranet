@@ -1,7 +1,6 @@
 import { PostAuthorResponse } from './post-response.dto';
 
-//* 댓글 응답 (문서용 클래스, docs/api.md 3.4)
-// - 서비스는 Prisma 결과를 그대로 반환하고, 컨트롤러 반환 타입을 이 클래스로 적어 필드가 맞는지 typecheck가 검사한다.
+//* 댓글 응답 (Swagger 문서용 클래스)
 
 /** 내가 할 수 있는 동작 (버튼 표시용) */
 export class CommentCanResponse {

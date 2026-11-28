@@ -17,7 +17,7 @@ export class AuditLogsService {
     ){}
 
     //* 감사 로그 목록 (최신순, 커서 페이지네이션)
-    // id는 시간순으로 늘어나므로 기본키 순서로 정렬한다. (별도 인덱스 없이 최신순 조회)
+    // id가 시간순으로 늘어나서 기본키 순서로 정렬한다 (별도 인덱스 없이 최신순)
     async findList( dto: AuditLogListDto ) {
         if ( dto.from && dto.to && dto.from > dto.to ) {
             throw new BadRequestException('조회 시작일은 종료일보다 늦을 수 없습니다.');

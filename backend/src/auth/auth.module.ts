@@ -15,8 +15,8 @@ import { AuthNotifier } from './auth-notifier';
       secret: process.env.JWT_SECRET,
     }),
     UsersModule,
-    PrismaModule, // AuthSessionsService (로그인 세션 테이블)
-    CommonModule, // 감사 로그 (로그인·로그아웃·비밀번호·토큰 재사용)
+    PrismaModule,
+    CommonModule, // 감사 로그·알림
   ],
   exports: [
     AuthService,

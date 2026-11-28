@@ -136,8 +136,8 @@ export class PositionsService {
     }
 
     //* 직급 순서 변경 (드래그 정렬)
-    // - 화면의 최종 순서대로 받은 id 배열의 위치를 sortOrder로 저장한다. (sortOrder는 "이 직급 이상" 판단에도 쓰인다)
-    // - 현재 직급 전체와 정확히 일치해야 한다. (다른 관리자가 추가·삭제했다면 순서가 어긋나므로 거부)
+    // 받은 id 배열의 위치를 sortOrder로 저장한다 (게시판 권한의 "이 직급 이상" 판단에도 쓰인다).
+    // 다른 관리자가 추가·삭제했으면 어긋나므로 전체와 정확히 같아야 한다.
     async updatePositionOrder(
         user: Pick<Users, 'id'>,
         body: UpdateSortOrderDto,
@@ -164,7 +164,7 @@ export class PositionsService {
                 });
             }
 
-            // 변경 전·후 순서를 id 배열로 남김 (직급 순서는 게시판 권한 "이 직급 이상" 판단에도 쓰이므로 중요)
+            // 변경 전·후 순서를 id 배열로 남긴다
             await this.audit.logBatch({
                 targetIds: body.ids,
                 actionType: AuditActionType.UPDATE,

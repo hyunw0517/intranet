@@ -14,7 +14,7 @@ import { CardEmpty, CardState, DashboardCard, StatTile } from "./dashboard-card"
 
 const RECENT_AUDIT_COUNT = 6;
 
-// 관리자 대시보드: 카드마다 그 기능을 가진 관리자에게만 보인다. (API 권한은 서버가 다시 검사한다)
+// 관리자 대시보드: 카드마다 그 기능을 가진 관리자에게만 보인다
 export function AdminDashboard() {
   const { user } = useAuth();
   const { data: addons, isPending } = useEnabledAddons();

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 
 // 아이디·비밀번호 찾기 안내
-// 백엔드에 찾기·메일 재설정 기능이 없으므로 안내만 한다. (메일 재설정은 추후 개선 - Plan.md)
+// 백엔드에 찾기·메일 재설정 기능이 없어서 안내만 한다.
 export function FindAccountDialog() {
   return (
     <Dialog>

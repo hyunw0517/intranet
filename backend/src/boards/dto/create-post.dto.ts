@@ -5,7 +5,7 @@ import { CalendarEventColor } from "src/generated/prisma/client";
 import { StringToBoolean } from "src/common/decorator/string-to-boolean.decorator";
 import { StringToDate } from "src/common/decorator/string-to-date.decorator";
 
-//* 게시판 입력 기준 DTO (Update 등은 이 클래스에서 파생)
+//* 게시글 입력 기준 DTO (Update는 이 클래스에서 파생)
 export class CreatePostDto {
 
     /** 제목 (1~100자) */

@@ -18,7 +18,7 @@ export class LineManagersController {
         private readonly lineManagersService: LineManagersService,
     ){}
 
-    //* 내 관리 범위 { all, departmentIds, departments } - 프론트가 관리 메뉴·버튼 표시와 부서 선택지를 정한다
+    //* 내 관리 범위 (프론트의 관리 메뉴·부서 선택지용)
     @Get('me')
     @Roles(UserRole.USER)
     @ApiOperation({ summary: '내 결재라인 관리 범위', description: '`{ all, departmentIds, departments }`. 프론트가 관리 메뉴·버튼 표시와 부서 선택지를 정한다. 위임 규칙은 토큰에 넣지 않고 요청마다 DB로 판정해 지정·해제가 즉시 반영된다.' })

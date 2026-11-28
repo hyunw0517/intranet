@@ -36,9 +36,8 @@ export function deleteMyProfileImage() {
   return apiFetch<CurrentUser>("/users/me/profile-image", { method: "DELETE" });
 }
 
-// GET /users/search - 회원을 고르는 화면용 공용 검색 (USER 이상, 재직 중인 승인 회원만, 최대 20명)
-// 이메일·연락처 등 개인정보는 오지 않는다. 검색어가 없으면 이름순 앞 20명.
-// 사용처: 과제 관리 참여자 추가, 결재자 선택 (결재 전용 /approvals/approvers는 2026-11-17에 이것으로 합침)
+// GET /users/search - 회원을 고르는 화면용 공용 검색 (재직 중인 승인 회원, 최대 20명)
+// 개인정보는 오지 않고, 검색어가 없으면 이름순 앞 20명이다.
 export interface UserSearchItem {
   id: number;
   name: string;
@@ -131,10 +130,10 @@ export interface AdminUpdateUserInput {
   joinAt: string;
 }
 
-// PATCH /users/:id/role (UpdateUserRoleDto) - GUEST → USER/ADMIN이 가입 승인
-// - 회원 관리 기능을 가진 ADMIN: GUEST·USER → USER만 / ADMIN·SUPER_ADMIN 지정, 관리자 계정 변경, 기능 지정은 SUPER_ADMIN만 (서버 403)
-// - adminPermissions: role이 ADMIN일 때만. 생략하면 지금 값 유지
-// 입사일은 받지 않는다. 승인 대기 회원은 입사일이 먼저 등록되어 있어야 한다. (없으면 서버 400)
+// PATCH /users/:id/role - GUEST → USER/ADMIN이 가입 승인
+// - 관리자 지정·관리자 계정 변경·기능 지정은 SUPER_ADMIN만 (서버 403)
+// - adminPermissions는 ADMIN일 때만, 생략하면 지금 값 유지
+// 승인 대기 회원은 입사일이 먼저 등록돼 있어야 한다 (없으면 400)
 export type ApprovedRole = Exclude<UserRole, "GUEST">;
 
 // (관리자) 회원 현황 건수 - 가입 승인 대기, 재직, 비활성, 로그인 잠금

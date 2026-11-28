@@ -27,7 +27,7 @@ export class CommentsService {
         this.audit = auditService.target( AuditTargetType.COMMENT );
     }
 
-    //* 댓글 조회 (전체 트리, 페이지 없음 - 화면이 스레드 단위로 나눠 보여 준다)
+    //* 댓글 조회 (전체 트리)
     async getCommentTree(
         user: Pick<Users, 'id' | 'role' | 'adminPermissions'>, 
         boardId: number, 
@@ -92,11 +92,11 @@ export class CommentsService {
             ( a, b ) => a.createdAt.getTime() - b.createdAt.getTime() || a.id - b.id,
         );
         
-        // 행마다 가리기·권한        삭제 댓글 → 내용·작성자 제거 / 익명 → 본인 아니면 작성자 제거 / can 계산
+        // 행마다 삭제·익명 가리기와 버튼 권한 계산
         return tree.map( ( c ) => {
             const isAuthor = c.author.id === user.id;
 
-            // 삭제된 댓글: 자리만 남기고 내용·작성자는 응답에서 제외 (화면: 회색 "(삭제된 댓글입니다)")
+            // 삭제된 댓글은 자리만 남기고 내용·작성자를 뺀다
             if( c.deleted ){
                 return {
                     id: c.id, 
@@ -184,7 +184,7 @@ export class CommentsService {
             return newComment;
         });
 
-        // 커밋 후: 글 작성자·부모 댓글 작성자에게 알림 (규칙은 BoardNotifier, 실패해도 댓글 작성은 성공)
+        // 커밋 후 알림 (실패해도 댓글 작성은 성공)
         await this.boardNotifier.newComment({
             boardId,
             post,
@@ -232,7 +232,7 @@ export class CommentsService {
                 }
             });
 
-            // 댓글은 짧으므로 내용 전후를 남긴다. (게시글 본문은 크기 때문에 바뀌었는지만 남김)
+            // 댓글은 짧아서 내용 전후를 남긴다 (게시글 본문은 바뀌었는지만)
             await this.audit.updated( tx, commentId, '댓글 수정', diffChanges( before, { comment: body.comment } ), { boardId, postId } );
 
             return updatedComment;
@@ -267,7 +267,7 @@ export class CommentsService {
 
         });
 
-        // 커밋 후: 남의 댓글이면 작성자에게 알림 (본인 삭제는 BoardNotifier가 거른다)
+        // 커밋 후 알림 (본인 삭제는 BoardNotifier가 거른다)
         await this.boardNotifier.commentDeletedByAdmin({ boardId, post, comment, deleterId: user.id });
 
         return true;

@@ -26,10 +26,10 @@ const contactRows = ( contacts: PartnerContactDto[] ) => contacts.map( ( c, i ) 
     email: c.email ?? null,
 }) );
 
-//! 프로젝트 협력사 (하청기업, docs/design/projects.md "협력사", 2026-11-17 사용자 결정)
-// - 발주처(Project.clientId, 돈을 받는 쪽)와 반대로 우리가 돈을 주는 쪽. 한 프로젝트에 여러 개.
-// - 참여자 누구나 등록·수정·빼기. 금액도 참여자 전원이 본다(금액 열람 규칙 없음).
-// - 빼면 soft delete(예산 집행·매입 세금계산서가 연결될 예정이라 기록 유지). 같은 회사는 활성 한 행(DB 부분 unique).
+//! 프로젝트 협력사 (하청기업)
+// - 발주처(돈을 받는 쪽)와 반대로 우리가 돈을 주는 쪽. 한 프로젝트에 여러 개.
+// - 참여자 누구나 등록·수정·빼기, 금액도 참여자 전원이 본다.
+// - 빼면 soft delete(지출 기록이 연결돼 있어 남긴다). 같은 회사는 활성 한 행(DB 부분 unique).
 @Injectable()
 export class ProjectPartnersService {
 
@@ -91,7 +91,7 @@ export class ProjectPartnersService {
         const endDate = body.endDate !== undefined ? body.endDate : before.endDate?.toISOString().slice( 0, 10 ) ?? null;
         this.assertPeriod( startDate, endDate );
 
-        // 금액·과세·부가세율 중 하나라도 바뀌면 저장된 나머지 값과 합쳐 부가세·합계를 다시 계산한다
+        // 금액·과세·부가세율 중 하나라도 바뀌면 저장된 값과 합쳐 다시 계산한다
         const moneyChanged = body.contractAmount !== undefined || body.taxType !== undefined || body.vatRate !== undefined;
         const money = moneyChanged
             ? this.money(
@@ -120,7 +120,7 @@ export class ProjectPartnersService {
                 },
                 include: partnerInclude,
             });
-            // 감사 로그: 담당자는 "이름(역할) 연락처 이메일" 목록 한 줄로 비교한다
+            // 감사 로그: 담당자는 목록 한 줄로 비교한다
             const contactSummary = ( list: { name: string; role: string | null; hp: string | null; email: string | null }[] ) =>
                 list.map( ( c ) => [ c.role ? `${c.name}(${c.role})` : c.name, c.hp, c.email ].filter( Boolean ).join( ' ' ) ).join( ', ' );
             await this.audit.updated( tx, partnerId, `협력사 수정: [${access.projectName}] ${partner.client.name}`,
@@ -175,7 +175,7 @@ export class ProjectPartnersService {
         return Object.fromEntries( Object.entries( row ).map( ( [ k, v ] ) => [ k, v instanceof Prisma.Decimal ? v.toString() : v ] ) );
     }
 
-    // DB CHECK 제약 project_partner_model_period_check와 같은 규칙 (친절한 400 메시지용)
+    // DB CHECK 제약(project_partner_model_period_check)과 같은 규칙 (400 메시지용)
     private assertPeriod( start: string | null | undefined, end: string | null | undefined ) {
         if ( start && end && start > end ) {
             throw new BadRequestException( PERIOD_ERROR );

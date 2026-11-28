@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 // 트리(부서·게시판)의 접힌 항목 id
-// 화면 표시 상태일 뿐이라 서버 요청이 없다. (하위 목록은 처음 조회 때 전부 받아 둔 상태)
-// 메모리에만 두므로 페이지를 다시 열면 전부 펼친 상태로 시작한다.
+// 화면 상태라 메모리에만 두고, 페이지를 다시 열면 전부 펼친 상태로 시작한다.
 export function useCollapsedIds() {
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
 

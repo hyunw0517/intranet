@@ -47,8 +47,8 @@ export type ReservationFormState =
   | null;
 
 // 예약 만들기(단건·반복)·수정 창
-// - 시각 선택지는 분류 규칙(운영 시간·예약 단위)으로 만든다. 날짜는 오늘 ~ 예약 가능 마지막 날
-// - 규칙의 최종 확인과 겹침 확인은 서버가 한다. (400·409 메시지를 그대로 보여 준다)
+// - 시각 선택지는 분류 규칙으로 만들고, 날짜는 오늘부터 예약 가능 마지막 날까지
+// - 최종 규칙·겹침 확인은 서버가 한다 (400·409 메시지를 그대로 보여 준다).
 export function ReservationFormDialog({ state, onClose }: { state: ReservationFormState; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
@@ -119,7 +119,7 @@ function ReservationForm({
 
   const setPending = (value: boolean) => onBusyChange(value);
 
-  // 시작 시각 선택지 (오늘이면 지난 시각 제외, 수정 중이면 기존 시각도 넣는다 - 분류 규칙이 바뀌었을 수 있으므로)
+  // 시작 시각 선택지 (오늘이면 지난 시각 제외, 수정 중이면 기존 시각도 넣는다)
   const isRecurring = !editing && tab === "recurring";
   const starts = startOptions(rules).filter((m) => isRecurring || date !== today || isFutureSlot(date, m));
   if (editing && !starts.includes(initial.start) && date === initial.date) starts.unshift(initial.start);

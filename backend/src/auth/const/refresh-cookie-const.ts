@@ -1,10 +1,8 @@
 import type { Response } from "express";
 
 //* Refresh 토큰 쿠키 옵션
-//  - 쿠키를 등록하지는 않고 옵션 객체만 반환한다. (등록은 setRefreshTokenCookie)
-//  - 등록과 삭제에 같은 옵션을 써야 하므로 한 곳에서 관리한다.
-//  - maxAge는 refresh token의 남은 유효시간과 맞춘다. (세션 절대 만료가 가까우면 1일보다 짧아짐)
-//  - maxAgeSeconds가 없으면 세션 쿠키가 된다. (로그인 유지 미선택 → 브라우저를 닫으면 사라짐)
+// 저장과 삭제에 같은 옵션을 써야 지워지므로 한 곳에 둔다.
+// maxAgeSeconds가 없으면 세션 쿠키 (브라우저를 닫으면 사라짐)
 export const refreshTokenCookieOptions = ( maxAgeSeconds?: number ) => ({
   httpOnly: true,                                // JS(document.cookie)에서 읽을 수 없음 -> XSS로 탈취 방지
   path: '/api/auth',                             // 인증 라우트 요청에만 브라우저가 쿠키를 보냄
@@ -19,7 +17,6 @@ export const setRefreshTokenCookie = (res: Response, token: string, maxAgeSecond
 };
 
 //* Refresh 토큰 쿠키 삭제 (로그아웃, 회원 탈퇴)
-//  - 저장할 때와 path 등이 같아야 지워진다. (maxAge는 clearCookie에서 쓰지 않음)
 export const clearRefreshTokenCookie = (res: Response) => {
   res.clearCookie('refreshToken', refreshTokenCookieOptions());
 };

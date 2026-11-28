@@ -20,7 +20,7 @@ import { useAdminUserMutation } from "../../hooks/use-admin-users";
 import { AdminPermissionsText, RoleBadge, StatusBadge } from "./user-badges";
 
 // 고를 수 있는 권한 (GUEST로 되돌리기는 서버가 막는다)
-// - 슈퍼관리자: 직원·관리자·슈퍼관리자 / 회원 관리 기능만 가진 관리자: 직원(가입 승인)만 (서버도 403)
+// 슈퍼관리자는 직원·관리자·슈퍼관리자, 회원 관리 기능만 가진 관리자는 직원(가입 승인)만
 function approvedRolesFor(isSuperAdmin: boolean): ApprovedRole[] {
   return isSuperAdmin ? ["USER", "ADMIN", "SUPER_ADMIN"] : ["USER"];
 }
@@ -75,8 +75,8 @@ export function UserAccountSection({ user, isSelf }: Props) {
   );
 }
 
-// 가입 승인: GUEST → USER (슈퍼관리자는 ADMIN·SUPER_ADMIN도, 관리자 기능은 승인 후 권한 변경에서 지정)
-// 입사일(연차 계산에 필요)이 먼저 등록되어 있어야 승인할 수 있다. 입사일은 회원 상세의 기본 정보에서 등록한다. (서버도 400으로 검사)
+// 가입 승인: GUEST → USER (슈퍼관리자는 ADMIN·SUPER_ADMIN도)
+// 입사일이 먼저 등록돼 있어야 승인할 수 있다 (회원 상세의 기본 정보에서 등록, 서버도 400).
 function ApproveForm({ user, roles }: { user: AdminUserDetail; roles: ApprovedRole[] }) {
   const [role, setRole] = useState<ApprovedRole>("USER");
   const mutation = useAdminUserMutation((next: ApprovedRole) => updateUserRole(user.id, next));
@@ -129,8 +129,7 @@ function ApproveForm({ user, roles }: { user: AdminUserDetail; roles: ApprovedRo
 }
 
 // 권한 변경 (슈퍼관리자만): 권한 + ADMIN이면 관리자 기능 체크
-// - 관리자 → 직원이면 서버가 관리자 기능을 비운다.
-// - 관리자 권한이 줄어드는 회원(강등·기능 해제)은 서버가 tokenVersion을 올려 다시 로그인하게 한다.
+// 관리자 권한이 줄어드는 회원은 서버가 tokenVersion을 올려 다시 로그인하게 한다.
 function RoleForm({ user }: { user: AdminUserDetail }) {
   const [role, setRole] = useState<ApprovedRole>(user.role === "GUEST" ? "USER" : user.role);
   const [permissions, setPermissions] = useState<AdminPermission[]>(user.adminPermissions);
@@ -199,7 +198,7 @@ function RoleForm({ user }: { user: AdminUserDetail }) {
   );
 }
 
-// 재직이 아닌 상태로 바꾸면 해당 회원의 다음 요청부터 바로 차단된다. (가드가 요청마다 상태 확인)
+// 재직이 아닌 상태로 바꾸면 다음 토큰 재발급부터 막힌다 (이미 받은 access token은 최대 10분 유효).
 function StatusForm({ user }: { user: AdminUserDetail }) {
   const [status, setStatus] = useState<UserStatus>(user.status);
   const mutation = useAdminUserMutation((next: UserStatus) => updateUserStatus(user.id, next));

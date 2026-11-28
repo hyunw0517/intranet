@@ -7,7 +7,7 @@ import { CreateFacilityDto } from "./dto/create-facility.dto";
 import { UpdateFacilityDto } from "./dto/update-facility.dto";
 import { FacilityListQueryDto } from "./dto/facility-list-query.dto";
 
-// 목록·상세 응답에 함께 주는 분류 정보 (예약 화면이 규칙을 알아야 입력을 제한할 수 있다)
+// 목록·상세에 같이 주는 분류 정보 (예약 화면의 입력 제한용)
 const categorySelect = {
     id: true, name: true, sortOrder: true,
     slotMinutes: true, openMinute: true, closeMinute: true, operatingDays: true, maxAdvanceDays: true,
@@ -46,7 +46,7 @@ export class FacilitiesService {
         });
     }
 
-    //* 상세 (사용 안 함인 시설도 볼 수 있다 - 기존 예약 화면에서 들어올 수 있으므로)
+    //* 상세 (사용 안 함인 시설도 본다 - 기존 예약 화면에서 들어올 수 있어서)
     async findOne( id: number ) {
         const facility = await this.prisma.facility.findFirst({
             where: { id, deleted: false },
@@ -83,7 +83,7 @@ export class FacilitiesService {
         });
     }
 
-    //* 시설 수정 - 사용 안 함(isActive: false)으로 바꾸면 새 예약만 막고 기존 예약은 유지한다. (2026-11-09 사용자 결정)
+    //* 시설 수정 (사용 안 함이면 새 예약만 막는다)
     async update( user: Pick<Users, 'id'>, id: number, body: UpdateFacilityDto ) {
         const before = await this.findOne( id );
 
@@ -116,7 +116,7 @@ export class FacilitiesService {
         });
     }
 
-    //* 시설 삭제 - 앞으로의 예약(아직 끝나지 않은 유효한 예약)이 있으면 409 (2026-11-09 사용자 결정)
+    //* 시설 삭제 (끝나지 않은 유효한 예약이 있으면 409)
     async delete( user: Pick<Users, 'id'>, id: number ) {
         const facility = await this.findOne( id );
 
@@ -146,7 +146,7 @@ export class FacilitiesService {
         }
     }
 
-    // 같은 분류 안에서만 이름이 겹치지 않게 한다. (분류가 다르면 같은 이름 허용: "1호" 회의실 / "1호" 차량)
+    // 같은 분류 안에서만 이름이 겹치지 않게 한다 (회의실 "1호"와 차량 "1호"는 가능)
     private async assertNameAvailable( categoryId: number, name: string, exceptId?: number ) {
         const exists = await this.prisma.facility.findFirst({
             where: { categoryId, name, deleted: false, id: exceptId ? { not: exceptId } : undefined },

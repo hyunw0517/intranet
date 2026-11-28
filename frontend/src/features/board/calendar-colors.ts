@@ -1,6 +1,5 @@
-// 캘린더 일정 색 (2026-11-12 사용자 결정: 정해진 색 중 일정마다 작성자가 선택, null = 기본색)
-// 서버는 색 이름(enum)만 저장하고, 실제 색은 여기서 라이트/다크 모두 글자가 잘 보이게 정한다.
-// 초록은 "휴가 N명" 항목 색이라 선택지에 없다 (leave-day-chip.tsx).
+// 캘린더 일정 색 (서버는 색 이름만 저장하고 실제 색은 여기서 정한다)
+// 초록은 "휴가 N명" 항목 색이라 선택지에 없다.
 import type { CalendarEventColor } from "@/types/calendar";
 
 export interface EventColorOption {

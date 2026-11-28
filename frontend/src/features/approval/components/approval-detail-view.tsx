@@ -62,8 +62,8 @@ const CONFIRM_TEXT: Record<ConfirmKind, { title: string; description: string; la
   delete: { title: "임시저장 문서를 삭제할까요?", description: "삭제한 문서는 되돌릴 수 없습니다.", label: "삭제", destructive: true },
 };
 
-// 결재 문서 상세 (알림의 이동 주소 /approvals/:id)
-// 버튼은 서버가 준 permissions로만 보여 준다. 최종 판단은 서버(409 = 그사이 상태가 바뀜 → 다시 조회)
+// 결재 문서 상세
+// 버튼은 서버가 준 permissions로만 보여 주고, 409면 그사이 상태가 바뀐 것이라 다시 조회한다.
 export function ApprovalDetailView({ id }: { id: number }) {
   const router = useRouter();
   const { data, isPending, isError, error, refetch } = useApprovalDocument(id);
@@ -288,11 +288,9 @@ function ApprovalSteps({ doc, onReplace }: { doc: ApprovalDocument; onReplace: (
   );
 }
 
-// 결재선 접기·펼치기 (2026-11-10 사용자 결정 - 결재선이 화면을 많이 차지해서)
-// - 마우스: 버튼에 올리면 펼침, 버튼·펼친 영역 밖으로 나가면 접힘
-// - 클릭(모바일 터치 포함): 펼친 채로 고정 / 다시 누르거나 바깥을 누르면 접힘
-// Radix Popover는 바깥 클릭·Esc 닫기와 포커스 처리를 맡고, 마우스 올리기는 pointerType이 mouse일 때만 직접 연다.
-// (터치는 pointerenter도 발생시키므로 구분하지 않으면 누르자마자 열렸다 닫힌다)
+// 결재선 접기·펼치기
+// - 마우스를 올리면 펼치고, 클릭(터치 포함)하면 펼친 채로 고정한다.
+// 터치도 pointerenter를 내서, 마우스 올리기는 pointerType이 mouse일 때만 직접 연다.
 function StepsDisclosure({ summary, children }: { summary: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -546,7 +544,7 @@ function ApprovalAttachments({ docId, files }: { docId: number; files: FileInfo[
   );
 }
 
-// 이력 한 줄의 동작 이름 (서버는 변경 전·후 상태만 저장한다 - 중간 승인은 결재중 → 결재중, 결재자 교체는 같은 상태)
+// 이력 한 줄의 동작 이름 (서버는 변경 전·후 상태만 저장한다)
 function historyAction(h: ApprovalHistory) {
   if (h.fromStatus === h.toStatus && h.toStatus !== "IN_PROGRESS") return "결재자 변경";
   switch (h.toStatus) {
@@ -567,7 +565,7 @@ function historyAction(h: ApprovalHistory) {
 }
 
 // 처리 이력 (상태 변경·승인·결재자 교체)
-// 작성(임시저장 생성, 변경 전 상태 없음) 행은 표시하지 않는다 - 상신 이력으로 충분 (2026-11-10 사용자 결정, 서버 데이터는 그대로)
+// 임시저장 생성 행은 표시하지 않는다 (상신 이력으로 충분)
 function ApprovalHistoryList({ doc }: { doc: ApprovalDocument }) {
   const histories = doc.histories.filter((h) => h.fromStatus !== null);
   if (histories.length === 0) return null;

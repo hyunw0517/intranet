@@ -1,4 +1,4 @@
-//! 전자결재 상수 (features.md 7.5)
+//! 전자결재 상수
 
 // 결재라인 결재자 수 (템플릿·문서 공통)
 export const MAX_APPROVAL_STEPS = 10;
@@ -16,5 +16,5 @@ export enum ApprovalBox {
     ALL = 'all',                // 전체 문서: 관리자, DRAFT 제외
 }
 
-// 동시 처리(두 탭·더블 클릭·회수와 승인이 겹침 등)로 조건부 UPDATE가 0행일 때
+// 동시 처리로 조건부 UPDATE가 0행일 때
 export const STATE_CHANGED_MESSAGE = '문서 상태가 바뀌었습니다. 새로고침 후 다시 시도하세요.';

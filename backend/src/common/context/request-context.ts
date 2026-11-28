@@ -4,11 +4,8 @@ import type { NextFunction, Request, Response } from "express";
 import type { TokenUserPayload } from "src/auth/types/jwt-payload.type";
 
 //! 요청 컨텍스트 (AsyncLocalStorage)
-// - 서비스는 req를 모른다. 감사 로그에 필요한 작업자 id·IP·User-Agent를 서비스 인자로 넘기지 않도록,
-//   요청마다 req를 저장해 두고 같은 요청 안의 비동기 흐름(await 포함)에서 꺼내 쓴다.
-// - Node 내장 기능(node:async_hooks)이라 라이브러리를 추가하지 않는다.
-// - req 자체를 저장하는 이유: 미들웨어는 가드보다 먼저 실행되므로 저장 시점에는 req.user가 없다.
-//   꺼낼 때 req.user를 읽으면 가드가 채운 값을 볼 수 있다.
+// 감사 로그용 작업자·IP·User-Agent를 서비스 인자로 넘기지 않으려고 요청마다 req를 저장해 둔다.
+// req 자체를 저장하는 이유: 미들웨어는 가드보다 먼저 돌아서 저장 시점에는 req.user가 없다.
 
 const storage = new AsyncLocalStorage<Request>();
 
@@ -35,9 +32,8 @@ export const RequestContext = {
 };
 
 //* 모든 요청을 컨텍스트 안에서 실행 (AppModule에서 forRoutes('*')로 등록)
-// - main.ts의 app.use()가 아니라 Nest 미들웨어로 등록한다. app.use()는 body-parser보다 먼저 실행되는데,
-//   body-parser는 스트림 이벤트 콜백에서 next()를 부르므로 그 뒤로 컨텍스트가 끊길 수 있다.
-//   Nest 미들웨어는 body-parser 다음에 실행되고, 그 뒤의 가드·컨트롤러·서비스가 모두 next() 안에서 실행된다.
+// app.use()로 등록하면 body-parser보다 먼저 돌고, body-parser가 스트림 콜백에서 next()를 불러 컨텍스트가 끊길 수 있다.
+// Nest 미들웨어는 body-parser 다음에 돌아서 이 문제가 없다.
 @Injectable()
 export class RequestContextMiddleware implements NestMiddleware {
     use( req: Request, _res: Response, next: NextFunction ) {

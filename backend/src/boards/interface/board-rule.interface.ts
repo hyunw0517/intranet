@@ -1,5 +1,5 @@
-// 권한 판정에 쓰는 게시판 규칙 (BoardAuth 조회 결과 한 행, evaluateBoardPermission 입력값)
-// 조회 select와 모양이 같아야 한다. select를 바꾸면 이 interface도 함께 수정한다.
+// 권한 판정에 쓰는 게시판 규칙 (evaluateBoardPermission 입력값)
+// 조회 select와 모양이 같아야 해서, select를 바꾸면 여기도 고친다.
 export interface BoardRule {
     boardId: number;                          // 내비게이션에서 게시판별로 묶을 때 사용
     departmentId: number | null;              // null이면 부서 조건 없음

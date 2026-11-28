@@ -32,7 +32,7 @@ import { BoardNotifier } from './board-notifier';
     BoardsService,
     PostsService,
     CommentsService,
-    BoardNotifier, // 게시판 알림 규칙 (댓글·공지·관리자 삭제)
+    BoardNotifier,
   ],
 })
 export class BoardsModule {}

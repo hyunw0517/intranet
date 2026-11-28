@@ -13,11 +13,10 @@ export interface ChatUploadProgress {
   total: number; // 이번에 고른 파일 수
 }
 
-// 파일 보내기 (첨부 버튼·끌어다 놓기 공용) - 방 화면이 만들어 입력란에 넘긴다.
-// - 이미지는 한 요청(묶음 메시지), 동영상·그 밖의 파일은 하나씩 차례로 보낸다.
-// - 진행 상황: 파일 하나가 끝날 때마다 done이 1씩 오른다 → 여러 개면 스피너 아래 "3/7", 다 끝나면 null
-// - 보낸 메시지는 응답으로 바로 캐시에 넣는다 (소켓으로 같은 메시지가 와도 id로 걸러짐)
-// - 하나가 실패해도 나머지는 계속 보내고, 실패한 것만 안내한다.
+// 파일 보내기 (첨부 버튼·끌어다 놓기 공용)
+// - 이미지는 한 요청(묶음), 그 밖의 파일은 하나씩 차례로 보낸다.
+// - 파일 하나가 끝날 때마다 done이 1씩 오른다.
+// - 하나가 실패해도 나머지는 계속 보내고 실패한 것만 안내한다.
 export function useChatFileUpload(roomId: number) {
   const queryClient = useQueryClient();
   const [progress, setProgress] = useState<ChatUploadProgress | null>(null);

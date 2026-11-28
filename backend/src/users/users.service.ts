@@ -20,10 +20,10 @@ import { isAdminRole } from 'src/auth/util/admin-permission.util';
 import { FilesService } from 'src/common/files.service';
 import { FileKind } from 'src/common/const/file.const';
 
-//* 감사 로그 요약에 쓰는 회원 표시 (이름(사번))
+//* 감사 로그용 회원 표시: 이름(사번)
 const userLabel = ( user: Pick<Users, 'name' | 'empNo'> ) => `${user.name}(${user.empNo})`;
 
-//* 관리자 작업을 하는 회원 (access token payload의 id·role)
+// 작업하는 관리자 (token payload)
 type ActorUser = Pick<Users, 'id' | 'role'>;
 
 @Injectable()
@@ -47,7 +47,7 @@ export class UsersService {
   ) {
     
     const where: Prisma.UsersWhereInput = {
-      deleted: query.deletedOnly === true, // 삭제 회원 조회 true 플래그가 있다면 삭제된 회원만 표시
+      deleted: query.deletedOnly === true,
       empNo: query.empNo ? { contains: query.empNo } : undefined,
       email: query.email ? { contains: query.email, mode: 'insensitive' } : undefined,
       name: query.name ? { contains: query.name, mode: 'insensitive' } : undefined,
@@ -55,8 +55,7 @@ export class UsersService {
       role: query.role, 
       status: query.status,
       positionId: query.positionId,
-      // 부서명 검색·직책 필터: 삭제되지 않은 소속 중 하나라도 맞으면 포함 (겸직 포함)
-      // 둘 다 있으면 같은 소속 행이 두 조건을 모두 만족해야 한다. (예: 개발팀의 팀장)
+      // 부서·직책 조건은 같은 소속 안에서 함께 맞아야 한다 (예: 개발팀의 팀장)
       departments: ( query.departmentName || query.jobTitleId ) ? {
         some: {
           deleted: false,
@@ -66,7 +65,7 @@ export class UsersService {
       } : undefined,
     };
 
-    // 소속(1:N 관계) 정렬은 Prisma orderBy로 지정할 수 없어 따로 처리한다.
+    // 소속(1:N)은 Prisma orderBy로 정렬할 수 없어서 따로 처리
     if ( query.sortBy === UserSortBy.DEPARTMENT ) {
       return this.paginateUserByDepartment( where, query );
     }
@@ -88,8 +87,8 @@ export class UsersService {
     );
   }
 
-  //* (관리자) 회원 현황 건수: 가입 승인 대기, 재직, 비활성, 로그인 잠금
-  // 재직·비활성은 승인된 회원만 센다. 잠금은 없는 사번의 시도(userId NULL)를 제외한다.
+  //* (관리자) 회원 현황 건수
+  // 잠금 건수에서 없는 사번으로 시도한 기록(userId NULL)은 뺀다.
   async getUserStats() {
     const approved = { deleted: false, role: { not: UserRole.GUEST } };
 
@@ -103,20 +102,19 @@ export class UsersService {
     return { pending, active, inactive, locked };
   }
 
-  //* 회원 목록 select (일반 조회·소속 정렬 조회 공용)
+  //* 회원 목록 select
   private userListSelect( query: PaginateUserQueryDto ) {
     return {
       id: true,
-      empNo: true, 
-      email: true, 
-      name: true, 
-      nickname: true, 
+      empNo: true,
+      email: true,
+      name: true,
+      nickname: true,
       birthday: true,
       status: true,
       role: true,
-      deletedAt: true, // 삭제된 회원 조회(deletedOnly) 시 삭제 시각
+      deletedAt: true,
 
-      // 직급
       position: {
         select: {
           id: true,
@@ -124,19 +122,16 @@ export class UsersService {
         }
       },
 
-      // 소속 (부서+직책)
       departments: {
         select: {
           id: true,
           isPrimary: true,
-          // 부서
           department: {
             select: {
               id: true,
               name: true,
             }
           },
-          // 직책
           jobTitle: {
             select: {
               id: true,
@@ -146,18 +141,18 @@ export class UsersService {
         },
         where: { 
           deleted: false, 
-          isPrimary: ( query.allDepartments === true ) ? undefined : true, // 전체 소속 조회 true 플래그가 없다면 대표 소속만 표시
+          isPrimary: ( query.allDepartments === true ) ? undefined : true, // 기본은 대표 소속만
         },
+        // 대표 소속 먼저, 그다음 등록순
         orderBy: [
-          // orderBy 배열 이유: Prisma는 orderBy 객체 하나에 필드가 정확히 1개만 있어야 함
-          { isPrimary: 'desc' }, //1순위(대표 지정 소속)
-          { createdAt: 'asc' } //2순위(등록순)
-        ], 
+          { isPrimary: 'desc' },
+          { createdAt: 'asc' }
+        ],
       },
     } satisfies Prisma.UsersSelect;
   }
 
-  //* 정렬 컬럼 → Prisma orderBy (소속 정렬은 paginateUserByDepartment에서 처리)
+  //* 목록 정렬 조건
   private userOrderBy( query: PaginateUserQueryDto ): Prisma.UsersOrderByWithRelationInput {
     switch ( query.sortBy ) {
       case UserSortBy.EMP_NO:
@@ -165,18 +160,16 @@ export class UsersService {
       case UserSortBy.NAME:
         return { name: query.order };
       case UserSortBy.POSITION:
-        // 직급은 이름이 아닌 순위(sortOrder)로 정렬한다.
-        // 직급이 없는 회원은 LEFT JOIN 결과가 NULL이라 PostgreSQL 기본값대로 오름차순은 맨 뒤, 내림차순은 맨 앞에 온다.
+        // 직급 이름이 아니라 순위로 정렬. 직급이 없으면 NULL이라 오름차순일 때 맨 뒤에 온다.
         return { position: { sortOrder: query.order } };
       default:
         return { createdAt: query.order };
     }
   }
 
-  //* 대표 소속 부서명 정렬 조회
-  // - to-many 관계(소속)는 Prisma orderBy에서 _count 정렬만 지원해 부서명으로 정렬할 수 없다.
-  // - 조건에 맞는 회원의 id와 대표 부서명만 전부 조회해 메모리에서 정렬하고, 해당 페이지의 id만 목록 데이터로 조회한다.
-  // - 사내 회원 수(수백~수천 명) 기준으로는 충분하다. 규모가 커지면 raw SQL(LEFT JOIN + ORDER BY)로 바꾼다.
+  //* 대표 부서명 정렬 조회
+  // id와 부서명만 전부 읽어 메모리에서 정렬한 뒤 해당 페이지만 다시 조회한다.
+  // 사내 회원 수로는 충분하고, 많아지면 raw SQL로 바꾼다.
   private async paginateUserByDepartment(
     where: Prisma.UsersWhereInput,
     query: PaginateUserQueryDto,
@@ -192,8 +185,7 @@ export class UsersService {
       where,
     });
 
-    // 대표 부서명 → id 순으로 정렬 (일반 조회의 { id: order } 보조 정렬과 같은 기준)
-    // 대표 소속이 없는 회원은 정렬 방향과 관계없이 맨 뒤
+    // 부서명, 같으면 id 순. 대표 소속이 없으면 항상 맨 뒤
     const direction = ( query.order === SortOrder.ASC ) ? 1 : -1;
     const sorted = rows
       .map( (row) => ({ id: row.id, departmentName: row.departments[0]?.department.name ?? null }) )
@@ -205,7 +197,7 @@ export class UsersService {
       });
 
     return PaginatePage( query,
-      // list: 정렬된 id에서 해당 페이지만 잘라 조회
+      // list
       async ({ skip, take }) => {
         const pageIds = sorted.slice( skip, skip + take ).map( (row) => row.id );
 
@@ -214,19 +206,19 @@ export class UsersService {
           where: { id: { in: pageIds } },
         });
 
-        // IN 조회는 순서를 보장하지 않으므로 정렬된 id 순서로 다시 맞춘다.
+        // IN 조회는 순서를 보장하지 않아 다시 맞춘다
         const userById = new Map( users.map( (user) => [user.id, user] ) );
         return pageIds
           .map( (id) => userById.get(id) )
           .filter( (user) => user !== undefined );
       },
-      // total: 이미 전체를 조회했으므로 개수만 반환
+      // total
       () => Promise.resolve( sorted.length ),
     );
   }
 
   //* (관리자) 회원 상세 조회
-  // - 개인정보(hp, tel, birthday)를 포함하므로 관리자 API에서만 사용한다.
+  // 연락처·생일이 들어 있어 관리자 API에서만 쓴다.
   async getUserDetail(userId: number) {
     const user = await this.prisma.users.findFirst({
       select: {
@@ -240,11 +232,10 @@ export class UsersService {
         tel: true,
         joinAt: true,
         role: true,
-        adminPermissions: true, // 관리자 기능 (ADMIN만 값이 있음)
+        adminPermissions: true, // ADMIN만 값이 있음
         status: true,
         createdAt: true,
 
-        // 직급
         position: {
           select: {
             id: true,
@@ -252,7 +243,6 @@ export class UsersService {
           }
         },
 
-        // 소속 (부서+직책), 대표 소속 먼저
         departments: {
           select: {
             id: true,
@@ -287,8 +277,8 @@ export class UsersService {
       throw new BadRequestException('존재하지 않는 회원입니다.');
     }
 
-    // 로그인 잠금 상태 (관리자 화면의 "잠금 해제" 표시용, 기록이 없으면 null)
-    // - LoginHistory는 인증 쪽 테이블이지만, AuthModule이 UsersModule을 import하므로 반대로 import하지 않고 직접 읽는다.
+    // 로그인 잠금 상태 (잠금 해제 버튼 표시용)
+    // AuthModule이 UsersModule을 import하고 있어서 auth 쪽 서비스를 쓰지 않고 테이블을 직접 읽는다.
     const loginHistory = await this.prisma.loginHistory.findUnique({
       select: { failCount: true, lockLevel: true, lockedUntil: true },
       where: { empNo: user.empNo },
@@ -304,20 +294,18 @@ export class UsersService {
   }
 
   //* (관리자) 회원 정보 수정
-  // - 본인 수정(updateUser)과 달리 현재 비밀번호 확인이 없고, 사번·입사일도 수정할 수 있다.
+  // 본인 수정과 달리 비밀번호 확인 없이 사번·입사일까지 바꿀 수 있다.
   async adminUpdateUser(
     userId: number,
     body: AdminUpdateUserDto,
   ) {
     const targetUser = await this.getUserDetail(userId);
 
-    // 승인된 회원(USER·ADMIN)은 입사일을 비울 수 없다. (연차 계산에 필요, 승인 시 입사일 필수 규칙과 일관)
-    // - null: 비우기 요청 (빈 문자열은 EmptyToNull로 null), undefined: 변경 안 함
+    // 승인된 회원은 입사일이 있어야 한다 (연차 계산)
     if( targetUser.role !== UserRole.GUEST && body.joinAt === null ){
       throw new BadRequestException('승인된 회원은 입사일을 비울 수 없습니다.');
     }
 
-    // 대상 회원을 제외한 다른 회원이 이미 사용 중인 이메일·사번인지 확인한다.
     const emailExists = await this.prisma.users.findFirst({
       where: {
         email: body.email,
@@ -369,13 +357,9 @@ export class UsersService {
   }
 
   //* (관리자) 가입 승인 및 권한 변경
-  // - GUEST -> USER/ADMIN 변경이 가입 승인이다.
-  // - 승인하는 회원은 입사일이 먼저 등록되어 있어야 한다. (연차 계산에 필요, 관리자 회원 정보 수정에서 등록)
-  // - 회원 관리 기능을 가진 ADMIN: GUEST·USER를 USER로만 바꿀 수 있다. (가입 승인)
-  //   ADMIN·SUPER_ADMIN으로 바꾸기, ADMIN·SUPER_ADMIN 회원 바꾸기, 관리자 기능 지정은 슈퍼관리자만.
-  // - ADMIN이 아닌 권한으로 바뀌면 관리자 기능(adminPermissions)을 비운다.
-  // - 관리자 권한이 줄어드는 회원(강등, 기능 해제)은 tokenVersion을 올려 다시 로그인하게 한다.
-  //   (access token은 stateless라 남은 유효시간(최대 10분)은 막지 못하고, 그 뒤 재발급이 거부된다)
+  // GUEST에서 바꾸는 것이 가입 승인이고, 승인하려면 입사일이 있어야 한다.
+  // ADMIN은 USER로만 바꿀 수 있다. 관리자 지정과 관리자 기능 지정은 슈퍼관리자만 한다.
+  // 관리자 권한이 줄면 tokenVersion을 올려 재발급을 막는다. 이미 받은 access token은 만료(최대 10분)까지 쓸 수 있다.
   async updateUserRole(
     user: ActorUser,
     userIds: number[],
@@ -394,24 +378,21 @@ export class UsersService {
       throw new ForbiddenException('관리자 지정과 관리자 기능 지정은 슈퍼관리자만 할 수 있습니다.');
     }
 
-    // 관리자 계정(ADMIN·SUPER_ADMIN)이 대상에 있으면 슈퍼관리자만 (validateTargetUsers)
     const { ids, targetUsers } = await this.validateTargetUsers(user, userIds, { requireJoinAt: true });
 
-    // 승인 대기(GUEST)였던 회원 = 이번에 가입 승인되는 회원
+    // 이번에 가입 승인되는 회원
     const approvedUsers = targetUsers.filter( (u) => u.role === UserRole.GUEST );
 
-    // ADMIN: 보낸 목록으로 바꾸거나(생략하면 유지) / 그 외 권한: 비움
+    // ADMIN이면 보낸 기능 목록으로 바꾸고(생략하면 유지), 다른 권한이면 비운다
     const nextPermissions = ( body.role === UserRole.ADMIN )
       ? ( body.adminPermissions ? [ ...new Set(body.adminPermissions) ] : undefined )
       : [];
 
-    // 이번 변경으로 관리자 권한이 줄어드는 회원 → 다시 로그인
     const revokedIds = targetUsers
       .filter( (u) => this.isAdminAccessReduced(u, body.role, nextPermissions) )
       .map( (u) => u.id );
 
     await this.prisma.$transaction( async (tx) => {
-      // 슈퍼관리자가 SUPER_ADMIN이 아닌 권한으로 바뀌면 남는 슈퍼관리자가 있는지 확인
       if( body.role !== UserRole.SUPER_ADMIN ){
         await this.assertSuperAdminRemains( tx, targetUsers.filter( (u) => u.role === UserRole.SUPER_ADMIN ).map( (u) => u.id ) );
       }
@@ -420,7 +401,7 @@ export class UsersService {
         where: {
           id: { in: ids },
           deleted: false,
-          // 입사일 없는 승인 대기 회원은 수정 대상에서 제외
+          // 검사 뒤에 입사일이 지워진 GUEST는 빼서 아래 count 검사에 걸리게 한다
           NOT: { role: UserRole.GUEST, joinAt: null },
         },
         data: {
@@ -458,15 +439,13 @@ export class UsersService {
 
     });
 
-    // 커밋 후: 가입 승인 알림 (승인된 회원 본인에게, 실패해도 권한 변경은 성공)
+    // 커밋 후 가입 승인 알림 (실패해도 권한 변경은 성공)
     await this.userNotifier.signupApproved( approvedUsers.map( (u) => u.id ) );
 
     return true;
   }
 
   //* (관리자) 회원 상태 변경
-  // - 가드가 요청마다 status를 확인하므로 변경 즉시 로그인·API 접근이 막힌다.
-  // - 관리자 계정(ADMIN·SUPER_ADMIN)이 대상에 있으면 슈퍼관리자만, 마지막 재직 슈퍼관리자는 재직 외 상태로 바꿀 수 없다.
   async updateUserStatus(
     user: ActorUser,
     userIds: number[],
@@ -505,17 +484,14 @@ export class UsersService {
     return true;
   }
 
-  //* (관리자) 회원 삭제(soft delete) - 단건은 [id], 일괄은 선택한 id 목록으로 호출한다.
-  // - 모든 회원에게 같은 값을 넣으므로 updateMany 한 번으로 처리한다. (회원 수만큼 update하지 않음)
+  //* (관리자) 회원 삭제 (soft delete, 단건·일괄 공용)
   async adminDeleteUser(
     user: ActorUser,
     userIds: number[],
   ) {
-    //대상 회원 검증 (본인 제외, 존재하고 삭제되지 않은 회원만, 관리자 계정은 슈퍼관리자만)
     const { ids, targetUsers } = await this.validateTargetUsers(user, userIds);
 
     await this.prisma.$transaction( async (tx) => {
-      // 마지막 슈퍼관리자는 삭제할 수 없다.
       await this.assertSuperAdminRemains( tx, targetUsers.filter( (u) => u.role === UserRole.SUPER_ADMIN ).map( (u) => u.id ) );
 
       const { count } = await tx.users.updateMany({
@@ -531,7 +507,7 @@ export class UsersService {
         },
       });
 
-      // 검증과 수정 사이에 다른 관리자가 먼저 삭제한 회원이 있으면 전체를 롤백한다.
+      // 검사 뒤 다른 관리자가 먼저 삭제했으면 전체 롤백
       if( count !== ids.length ){
         throw new BadRequestException("작업 실패. 새로고침 후 다시 시도하세요.");
       }
@@ -546,10 +522,8 @@ export class UsersService {
     return true;
   }
 
-  //* (관리자) 권한·상태 변경, 삭제 대상 회원 검증 (단건·일괄 공용)
-  // - 중복 id 제거 → 본인 포함 여부 → 모두 존재하고 삭제되지 않은 회원인지 → 관리자 계정이면 슈퍼관리자인지 확인
-  // - requireJoinAt: 입사일이 없는 승인 대기(GUEST) 회원이 있으면 거부한다. (가입 승인 시 사용, 메시지에 이름 표시)
-  // - 검증을 통과한 id 목록(중복 제거)과 대상 회원(변경 전 값 - 감사 로그·가입 승인 알림에 사용)을 돌려준다.
+  //* 권한·상태 변경, 삭제 대상 검사 (단건·일괄 공용)
+  // 대상 회원의 변경 전 값을 같이 돌려준다. 감사 로그와 가입 승인 알림에 쓴다.
   private async validateTargetUsers(
     user: ActorUser,
     userIds: number[],
@@ -589,8 +563,8 @@ export class UsersService {
   }
 
   //* (관리자) 삭제 회원 복구
-  // - 삭제된 동안 다른 회원이 같은 이메일·사번으로 가입했을 수 있으므로 중복을 확인한다.
-  // - 삭제 전에 발급된 토큰이 다시 유효해지지 않도록 tokenVersion을 올린다.
+  // 삭제된 동안 같은 이메일·사번으로 가입한 회원이 있을 수 있다.
+  // 삭제 전에 받은 토큰이 다시 살아나지 않게 tokenVersion을 올린다.
   async recoveryUser(user: ActorUser, userId: number) {
     const deletedUser = await this.prisma.users.findFirst({
       where: {
@@ -647,9 +621,7 @@ export class UsersService {
     return this.getUserDetail(userId);
   }
 
-  //* 관리자 본인을 대상으로 하는 권한·상태 변경 또는 삭제 차단
-  //  - 실수로 자기 권한을 잃는 것을 방지.
-  //  - 단건(userId)과 일괄(userIds 배열) 모두 받는다. 모두 배열로 바뀌면 number[]만 남긴다.
+  //* 본인 계정 변경·삭제 차단 (실수로 자기 권한을 잃지 않게)
   private checkNotSelf(user: Pick<Users, 'id'>, userIds: number | number[]) {
     const ids = Array.isArray(userIds) ? userIds : [ userIds ];
 
@@ -658,18 +630,16 @@ export class UsersService {
     }
   }
 
-  //* 관리자 계정(ADMIN·SUPER_ADMIN) 보호 - 권한·상태 변경, 삭제·복구, 비밀번호 초기화, 잠금 해제는 슈퍼관리자만
-  //  - 회원 관리 기능만 받은 ADMIN이 다른 관리자(슈퍼관리자 포함)를 정지·삭제하거나 비밀번호를 바꾸는 것을 막는다.
-  //  - AuthService(비밀번호 초기화·잠금 해제)도 이 함수를 쓴다.
+  //* 관리자 계정은 슈퍼관리자만 관리
+  // AuthService의 비밀번호 초기화·잠금 해제에서도 쓴다.
   assertCanManageAccount( user: Pick<Users, 'role'>, target: Pick<Users, 'role' | 'name'> ){
     if( isAdminRole(target.role) && user.role !== UserRole.SUPER_ADMIN ){
       throw new ForbiddenException(`관리자 계정(${target.name})은 슈퍼관리자만 변경할 수 있습니다.`);
     }
   }
 
-  //* 마지막 슈퍼관리자 보호 - removingIds(강등·재직 외 상태·삭제될 슈퍼관리자)를 빼고 재직 중인 슈퍼관리자가 남는지 확인
-  //  - 두 슈퍼관리자가 동시에 서로를 강등하면 둘 다 "상대가 남는다"고 보고 0명이 될 수 있다.
-  //    그래서 슈퍼관리자 행을 FOR UPDATE로 잠근 뒤 센다. (나중 트랜잭션은 앞 트랜잭션 커밋을 기다렸다가 바뀐 값으로 센다)
+  //* 마지막 슈퍼관리자 보호
+  // 둘이 동시에 서로를 강등하면 0명이 될 수 있어서 행을 잠그고 센다.
   private async assertSuperAdminRemains( tx: Prisma.TransactionClient, removingIds: number[] ){
     if( removingIds.length === 0 ){
       return;
@@ -688,8 +658,7 @@ export class UsersService {
     }
   }
 
-  //* 이번 권한 변경으로 관리자 권한이 줄어드는지 (true면 tokenVersion을 올려 다시 로그인하게 한다)
-  //  - SUPER_ADMIN → 그 아래 / ADMIN → USER / ADMIN의 기능이 하나라도 빠짐
+  //* 관리자 권한이 줄어드는지 (강등, 관리자 기능 해제)
   private isAdminAccessReduced(
     target: Pick<Users, 'role' | 'adminPermissions'>,
     nextRole: UserRole,
@@ -711,8 +680,7 @@ export class UsersService {
   //* 회원 생성
   async createUser( user: CreateUserDto ){
 
-    // nickname은 중복을 허용하며 별도 검사를 하지 않는다.
-    // exist() -> 만약 조건에 해당하는 값이 있으면 true 반환
+    // nickname은 중복 허용
     const emailExists = await this.prisma.users.findFirst({
       where: {
         email: user.email, 
@@ -735,7 +703,6 @@ export class UsersService {
         throw new BadRequestException('이미 사용 중인 사원번호입니다.');
     }
 
-    // 가입 + 감사 로그를 한 트랜잭션으로 (가입은 로그인 전이라 작업자를 가입한 회원으로 명시), 관리자 알림은 커밋 후
     const newUser = await this.prisma.$transaction( async (tx) => {
       const newUser = await tx.users.create({
         data: {
@@ -750,7 +717,7 @@ export class UsersService {
         },
       });
 
-      // 동의 이력: 필수 동의 확인은 AuthService가 끝냈으므로 현재 버전으로 기록한다. (가입과 함께 성공·실패)
+      // 동의 이력 (필수 동의 검사는 AuthService에서 끝남)
       await tx.userConsent.createMany({
         data: ( Object.entries(CURRENT_CONSENT_VERSIONS) as [ConsentType, string][] ).map( ([type, version]) => ({
           userId: newUser.id,
@@ -760,22 +727,20 @@ export class UsersService {
         }) ),
       });
 
-      // 가입은 로그인 전 요청이라 작업자를 가입한 회원으로 명시
+      // 로그인 전 요청이라 작업자를 가입한 회원으로 남긴다
       await this.audit.log({ targetId: newUser.id, actionType: AuditActionType.CREATE, content: `회원가입: ${ userLabel(newUser) }`, actorId: newUser.id }, tx);
 
       return newUser;
     });
 
-    // 커밋 후: 승인 대기 알림 (재직 중인 관리자 전원에게, 실패해도 가입은 성공)
+    // 커밋 후 관리자에게 승인 대기 알림 (실패해도 가입은 성공)
     await this.userNotifier.signupRequested( newUser );
 
     return newUser;
   }
 
-  //* 비밀번호 확인
-  //  - 입력된 비밀번호와 사용자 정보에 저장되어 있는 hash를 비교한다.
-  //  - 로그인된 본인의 비밀번호 재확인(정보 수정·탈퇴·비밀번호 변경)용 → 400
-  //  - 로그인 검증은 AuthService가 따로 한다. (원인을 구분하지 않는 메시지 + 실패 잠금)
+  //* 비밀번호 재확인 (정보 수정·탈퇴·비밀번호 변경)
+  // 로그인 검증은 AuthService가 따로 한다.
   async verifyPassword(user: Pick<Users, 'password'>, password: string) {
     const passOk = await bcrypt.compare( password, user.password );
 
@@ -784,17 +749,14 @@ export class UsersService {
     }
   }
 
-  //* 회원 개인정보 수정
-  //  - 본인 확인을 위해 현재 비밀번호를 먼저 검증.
-  //  - 비밀번호 변경은 별도 요청으로 처리하므로 password는 수정 대상에서 제외한다.
+  //* 내 정보 수정 (비밀번호 변경은 별도 API)
   async updateUser(
-    user: Pick<Users, 'id'>, 
+    user: Pick<Users, 'id'>,
     body: UpdateUserDto,
   ) {
     const hash = await this.getPasswordHashById(user.id);
     await this.verifyPassword({ password: hash }, body.currentPassword);
 
-    // 본인을 제외한 다른 회원이 이미 사용 중인 이메일인지 확인한다.
     const emailExists = await this.prisma.users.findFirst({
       where: {
         email: body.email,
@@ -840,7 +802,7 @@ export class UsersService {
       return updatedUser;
     });
 
-    // 화면이 응답으로 현재 사용자를 바꾸므로 GET /users/me와 같은 형태로 준다
+    // 화면이 이 응답으로 현재 사용자를 갱신해서 GET /users/me와 같은 모양으로 준다
     return { ...updated, profileImageUrl: await this.profileImageUrl( user.id ) };
   }
 
@@ -878,7 +840,6 @@ export class UsersService {
   }
 
   //* 비밀번호 해시 조회
-  //  - 사용자 비밀번호 확인(정보 수정, 탈퇴, 비밀번호 변경 등)에서 사용.
   async getPasswordHashById(id: number){
     const user = await this.prisma.users.findFirst({
       where: {
@@ -897,9 +858,8 @@ export class UsersService {
     return user.password;
   }
 
-  //* 비밀번호 변경
-  //  - 해시는 Auth 모듈에서 생성하고 update는 이곳에서 진행. 
-  //  - tokenVersion -> 기존에 발급된 토큰을 무효화하는 용도. 
+  //* 비밀번호 변경 (해시는 AuthService에서 만든다)
+  // tokenVersion을 올려 기존 토큰을 무효화한다.
   async updatePassword(id: number, hash: string){
     return await this.prisma.users.update({
       where: {
@@ -920,9 +880,8 @@ export class UsersService {
     });
   }
 
-  //* 토큰 버전 증가 (모든 기기에서 로그아웃)
-  //  - 이 사용자에게 발급된 모든 토큰(다른 기기 포함)이 무효가 된다.
-  //  - 지금 기기에 새 토큰을 발급할 수 있도록 바뀐 tokenVersion을 돌려준다.
+  //* 모든 기기 로그아웃 (tokenVersion 증가)
+  // 지금 기기에는 새 토큰을 주기 위해 바뀐 값을 돌려준다.
   async increaseTokenVersion(id: number) {
     return await this.prisma.users.update({
       where: {
@@ -941,9 +900,8 @@ export class UsersService {
     });
   }
 
-  //* 내 정보 조회 (GET /users/me)
-  //  - access token 검증은 DB를 보지 않으므로(req.user = payload) 회원 정보는 여기서 조회한다.
-  //  - 비밀번호 해시는 Prisma 전역 omit으로 제외된다.
+  //* 내 정보 조회
+  // 가드는 DB를 보지 않아서 회원 정보는 여기서 읽는다. 비밀번호는 전역 omit으로 빠진다.
   async getMyInfo(id: number){
     const user = await this.prisma.users.findFirst({
       where: {
@@ -959,26 +917,25 @@ export class UsersService {
     return { ...user, profileImageUrl: await this.profileImageUrl( id ) };
   }
 
-  //* 내 프로필 사진 주소 (썸네일 공개 주소, 없으면 null)
+  //* 프로필 사진 주소 (없으면 null)
   private async profileImageUrl( userId: number ){
     return ( await this.filesService.findProfileImageUrls( [ userId ] ) ).get( userId ) ?? null;
   }
 
-  //* 내 프로필 사진 등록·변경 (PUT /users/me/profile-image)
-  //  - 이미지는 POST /common/files/images로 먼저 올리고 그 id를 연결한다. (게시글 본문 이미지와 같은 공개 uuid 주소)
-  //  - 회원당 1장: syncTargetFiles가 기존 사진은 soft delete하고, 내가 올린 미연결 이미지만 연결한다(아니면 400).
+  //* 프로필 사진 등록·변경
+  // 먼저 올린 이미지(POST /common/files/images)를 연결하고, 기존 사진은 지운다.
   async setMyProfileImage( userId: number, fileId: number ){
     await this.syncMyProfileImage( userId, [ fileId ], '프로필 사진 변경' );
     return this.getMyInfo( userId );
   }
 
-  //* 내 프로필 사진 삭제 (DELETE /users/me/profile-image) - 사진이 없어도 성공
+  //* 프로필 사진 삭제 (사진이 없어도 성공)
   async deleteMyProfileImage( userId: number ){
     await this.syncMyProfileImage( userId, [], '프로필 사진 삭제' );
     return this.getMyInfo( userId );
   }
 
-  //* 프로필 사진 파일 연결 + 감사 로그 (한 트랜잭션)
+  //* 프로필 사진 연결 + 감사 로그
   private async syncMyProfileImage( userId: number, fileIds: number[], action: string ){
     await this.prisma.$transaction( async (tx) => {
       const before = await tx.files.findFirst({
@@ -1001,9 +958,7 @@ export class UsersService {
     });
   }
 
-  //* 회원 삭제 (soft delete)
-  //  - 회원 탈퇴
-  //  - 본인 확인을 위해 현재 비밀번호를 먼저 검증한다.
+  //* 회원 탈퇴 (soft delete)
   async deleteUser(
     user: Pick<Users, 'id'>,
     body: DeleteUserDto,

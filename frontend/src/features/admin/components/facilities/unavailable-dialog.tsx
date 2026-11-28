@@ -18,11 +18,9 @@ import type { Facility, FacilityUnavailable, UnavailableConflict } from "@/types
 import { formatHm, kstIso, kstToday, slotTimes } from "@/features/reservation/reservation-time";
 import { useAdminFacilityMutation, useFacilityUnavailableList } from "../../hooks/use-admin-facilities";
 
-// 시설의 사용 불가 기간 (점검 등) 관리
-// - 겹치는 기존 예약이 있어도 저장되고, 응답의 conflicts를 경고로 보여 준다. 기존 예약은 그대로, 예약자 알림 없음 (2026-11-09 사용자 결정)
-// - 그 기간의 새 예약은 서버가 막는다.
-// - 시각은 분류의 예약 단위마다(00:00부터) 고른다. (2026-11-10, 시간이 애매하게 들어가지 않게)
-//   예전 <input type="datetime-local" step>은 step을 강제하지 않아 13:04 같은 분이 들어갔다. (서버는 검사하지 않음 - 화면 표시 목적)
+// 시설 사용 불가 기간 관리
+// - 겹치는 기존 예약이 있어도 저장되고 conflicts를 경고로 보여 준다 (예약은 그대로, 알림 없음).
+// - 시각은 분류의 예약 단위로만 고른다. datetime-local의 step은 강제되지 않아 13:04 같은 값이 들어갔다.
 export function UnavailableDialog({ facility, onClose }: { facility: Facility | null; onClose: () => void }) {
   return (
     <Dialog open={facility !== null} onOpenChange={(next) => !next && onClose()}>

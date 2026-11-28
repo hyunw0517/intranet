@@ -1,5 +1,4 @@
-//* auth 응답 (문서용 클래스, docs/api.md 3.4)
-// - 서비스는 Prisma 결과·객체를 그대로 반환하고, 컨트롤러 반환 타입을 이 클래스로 적어 필드가 맞는지 typecheck가 검사한다.
+//* auth 응답 (Swagger 문서용 클래스)
 
 /** 토큰 발급 응답. refresh token은 본문이 아니라 HttpOnly 쿠키(Path=/api/auth)로 내려간다. */
 export class AccessTokenResponse {

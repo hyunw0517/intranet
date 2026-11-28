@@ -2,23 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { UserRole, UserStatus } from 'src/generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 
-//* 공용 회원 검색 결과 - 다른 회원에게 보여도 되는 정보만 (이메일·연락처·생일 등은 내보내지 않는다)
+//* 공용 회원 검색 결과 (다른 회원에게 보여도 되는 정보만)
 export interface UserSearchItem {
     id: number;
     name: string;
     empNo: string;
-    departmentName: string | null;  // 주 소속 부서
-    positionName: string | null;    // 직급
-    jobTitleName: string | null;    // 주 소속의 직책
+    departmentName: string | null;  // 대표 소속
+    positionName: string | null;
+    jobTitleName: string | null;    // 대표 소속의 직책
 }
 
 const SEARCH_LIMIT = 20;
 
-//! 공용 회원 검색 (핵심 users, 2026-11-17 사용자 결정)
-// - 회원을 고르는 화면(과제 관리 참여자 추가, 결재자 선택)이 쓴다. 애드온이 꺼져도 동작해야 하므로 핵심에 둔다.
-//   결재의 별도 결재자 검색(/approvals/approvers)은 2026-11-17에 이 API로 합쳤다. 채팅 상대 검색(ChatRoomsService.searchUsers)은 본인을 빼고 채팅용 응답 모양(ChatUserView)을 써서 그대로 둔다(합칠지는 미정).
-//   대상 조건을 바꾸면 결재자 지정 가능 조건(ApproversService.load의 usable)과 어긋나지 않는지 같이 본다.
-// - 대상: 재직(ACTIVE) + 승인된 회원(GUEST 제외) + 삭제 안 됨. 이름·사번·부서명 검색, 최대 20명.
+//! 공용 회원 검색 (과제 관리 참여자 추가, 결재자 선택)
+// 애드온이 꺼져도 동작해야 해서 핵심(users)에 둔다.
+// 대상 조건을 바꾸면 결재자 지정 조건(ApproversService.load의 usable)도 같이 본다.
+// 채팅 상대 검색(ChatRoomsService.searchUsers)은 본인을 빼고 응답 모양도 달라서 따로 있다.
 @Injectable()
 export class UserSearchService {
 

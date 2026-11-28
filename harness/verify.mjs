@@ -21,8 +21,9 @@ import rulesRegistry from './checks/rules-registry.mjs';
 import importBoundaries from './checks/import-boundaries.mjs';
 import routeGuards from './checks/route-guards.mjs';
 import apiDocs from './checks/api-docs.mjs';
+import commentStyle from './checks/comment-style.mjs';
 
-export const CHECKS = [agentsSize, docLinks, docPaths, rulesRegistry, importBoundaries, routeGuards, apiDocs];
+export const CHECKS = [agentsSize, docLinks, docPaths, rulesRegistry, importBoundaries, routeGuards, apiDocs, commentStyle];
 
 export function parseArgs(argv) {
   const opts = { quick: false, changed: false, stop: false, json: false, only: null, scripts: null };

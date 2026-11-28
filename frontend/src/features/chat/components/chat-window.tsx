@@ -21,12 +21,10 @@ const RESIZE_HANDLES: { edge: ResizeEdge; className: string }[] = [
   { edge: "sw", className: "bottom-0 left-0 size-3 cursor-nesw-resize" },
 ];
 
-// 오른쪽 아래에 떠 있는 채팅 창 (뒤 화면을 덮지 않아 창을 띄운 채로 다른 메뉴를 쓸 수 있다)
-// - PC·태블릿: 기본 380px 너비, 화면 높이에 맞춰 최대 640px. 헤더(56px) 아래로 넘어가지 않는다.
-// - 모바일(<640px): 작은 창이 너무 좁아 화면 전체로 연다.
-// - 오른쪽 위 토스트(Toaster top-right)와 겹치지 않도록 아래쪽에 붙인다.
-// - PC·태블릿은 위쪽 줄을 잡고 옮기고, 가장자리·모서리를 끌어 크기를 바꾼다(use-floating-window, 최소·최대 있음).
-//   위치·크기는 이 브라우저에 기억하고, 위쪽 줄을 두 번 누르면 원래 자리·크기(저장값 삭제).
+// 오른쪽 아래에 떠 있는 채팅 창 (뒤 화면을 덮지 않는다)
+// - PC·태블릿은 기본 380px, 최대 높이 640px. 위쪽 줄로 옮기고 가장자리로 크기를 바꾼다.
+// - 모바일(<640px)은 화면 전체로 연다.
+// - 위치·크기는 이 브라우저에 기억하고, 위쪽 줄을 두 번 누르면 원래 자리로 돌아간다.
 export function ChatWindow() {
   const { view } = useChat();
   const { ref, style, active, handlers } = useFloatingWindow();

@@ -4,10 +4,10 @@ import { NotificationsService } from "src/common/notifications.service";
 import { bestEffort } from "src/common/util/best-effort.util";
 import { projectLink, projectTaskLink } from "./const/project.const";
 
-//! 과제 관리 알림 규칙 (2026-11-17 사용자 결정, docs/design/projects.md 5장)
-// - 참여자로 추가됨 → 추가된 사람 / 담당자로 지정됨 → 새 담당자 / 마감 임박 → 담당자 (전날 배치)
-// - 본인이 한 일은 본인에게 보내지 않는다. (NotificationsService.send가 보낸 사람을 받는 사람에서 뺀다)
-// - 서비스는 트랜잭션이 커밋된 뒤 호출하고, 실패해도 업무는 성공한다(bestEffort).
+//! 과제 관리 알림
+// - 참여자 추가, 담당자 지정, 마감 임박(전날 배치)을 그 사람에게 보낸다.
+// - 본인이 한 일은 본인에게 보내지 않는다.
+// - 커밋 후 호출하고 실패해도 업무는 성공한다(bestEffort).
 @Injectable()
 export class ProjectNotifier {
 

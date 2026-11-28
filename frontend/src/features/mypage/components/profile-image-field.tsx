@@ -14,7 +14,7 @@ import { useAuth } from "@/providers/auth-provider";
 import type { CurrentUser } from "@/types/user";
 
 // 프로필 사진 등록·변경·삭제
-// 흐름: 파일 선택 → 안내용 검사(확장자·용량) → 이미지 업로드(POST /common/files/images) → 연결(PUT /users/me/profile-image)
+// 파일 선택 → 확장자·용량 검사 → 이미지 업로드 → 연결(PUT /users/me/profile-image)
 // 승인 대기(GUEST)는 업로드 API가 막혀 있어(USER 이상) 안내만 보여 준다.
 export function ProfileImageField({ user }: { user: CurrentUser }) {
   const { setUser } = useAuth();

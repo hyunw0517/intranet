@@ -28,7 +28,7 @@ import { TaxFields } from "./tax-fields";
 
 type FormState = { mode: "create" } | { mode: "edit"; partner: ProjectPartner } | null;
 
-// 담당자 입력 행 (직접 기재, 여러 명 - 2026-11-17 사용자 결정). 서버 최대 20명
+// 담당자 입력 행 (직접 기재, 여러 명). 서버 최대 20명
 const MAX_CONTACTS = 20;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 interface ContactRow {
@@ -41,9 +41,9 @@ interface ContactRow {
 let contactKeySeq = 0;
 const newContact = (init: Partial<ContactRow> = {}): ContactRow => ({ key: ++contactKeySeq, name: "", role: "", hp: "", email: "", ...init });
 
-// 협력사 탭 - 하청기업 목록 (2026-11-17 사용자 결정: 참여자 누구나 관리, 금액도 참여자 전원)
-// 회사는 거래처 목록에서 고르고, 업무 범위·외주 계약 금액·계약 기간·담당자는 직접 적는다.
-// 금액은 서버가 문자열(Decimal)로 주므로 합계도 BigInt로 더한다(Number로 바꾸면 큰 금액에서 정밀도가 깨질 수 있다).
+// 협력사 탭 - 하청기업 목록 (참여자 누구나 관리)
+// 회사는 거래처 목록에서 고르고, 업무 범위·금액·기간·담당자는 직접 적는다.
+// 금액이 문자열(Decimal)로 와서 합계도 BigInt로 더한다 (Number면 큰 금액에서 정밀도가 깨진다).
 export function ProjectPartners({ projectId }: { projectId: number }) {
   const { data, isPending, isError, error, refetch } = useProjectPartners(projectId);
   const [form, setForm] = useState<FormState>(null);

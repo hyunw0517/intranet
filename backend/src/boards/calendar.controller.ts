@@ -7,9 +7,8 @@ import { PostsService } from "./posts.service";
 import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CalendarEventsResponse, RecentNoticeResponse } from './dto/post-response.dto';
 
-//* 캘린더 일정 조회 (CLAUDE.md 5.3 캘린더 통합 조회)
-// 통합 조회와 단일 게시판 조회가 같은 서비스를 쓴다. (단일 = boardIds가 [boardId]인 경우)
-// 'events'는 BoardsController의 ':boardId'보다 먼저 등록되어야 한다. (BoardsModule에서 이 컨트롤러를 앞에 둠)
+//* 캘린더 일정 조회 (통합·단일 게시판이 같은 서비스를 쓴다)
+// 'events'가 BoardsController의 ':boardId'보다 먼저 등록돼야 해서 BoardsModule에서 앞에 둔다.
 @ApiTags('Calendar (캘린더·최근 공지)')
 @Controller('boards')
 export class CalendarController {
@@ -19,7 +18,7 @@ export class CalendarController {
     ){}
 
     //* 최근 공지 (대시보드): 읽을 수 있는 공지 게시판을 합친 최신 글
-    // 'recent-notices'도 BoardsController의 ':boardId'보다 먼저 등록되어야 해서 이 컨트롤러에 둔다.
+    // 'recent-notices'도 같은 이유로 이 컨트롤러에 둔다.
     @Get('recent-notices')
     @Roles(UserRole.USER)
     @ApiOperation({ summary: '최근 공지 (대시보드)', description: '읽을 수 있는 공지 게시판을 합친 최신 글. 비밀글은 빼고, 익명 게시판의 작성자가 드러나지 않도록 작성자는 주지 않는다.' })

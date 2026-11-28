@@ -30,7 +30,7 @@ export class LeavesController {
         return this.leavesService.mySummary( user, query.year );
     }
 
-    //* 캘린더 휴가자 (?start=&end= 게시판 캘린더와 같은 형식) → [{ date, count, people: [{ name, departmentName, positionName, unit, startTime, endTime, ... }] }]
+    //* 캘린더 휴가자 (?start=&end=, 게시판 캘린더와 같은 형식)
     // 전 직원, 최종 승인된 휴가만, 유형은 내보내지 않는다.
     @Get('calendar')
     @Roles(UserRole.USER)

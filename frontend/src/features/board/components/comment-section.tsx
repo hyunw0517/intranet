@@ -17,12 +17,11 @@ import { useCommentMutation, useComments } from "../hooks/use-posts";
 import { PostAuthorLabel } from "./post-author";
 
 const THREADS_PER_PAGE = 20; // 한 페이지의 최상위 댓글 수 (답글은 부모와 같은 페이지에 붙어 다닌다)
-const MAX_INDENT = 4; // 화면 들여쓰기 한도 (대댓글 깊이 자체는 제한하지 않는다, CLAUDE.md 5.3)
+const MAX_INDENT = 4; // 화면 들여쓰기 한도 (대댓글 깊이 자체는 제한하지 않는다, features.md)
 const COMMENT_MAX = 1000; // CreateCommentDto @MaxLength(1000)
 
-// 트리 순서의 평평한 목록 → 최상위 댓글 단위 묶음(스레드)
-// 서버가 부모 → 자식 순서로 주므로, depth 0이 나올 때마다 새 스레드를 시작하면 된다.
-// 평평한 목록을 개수로 자르면 답글이 부모와 다른 페이지로 떨어지기 때문에 스레드로 나눈다.
+// 트리 순서의 평평한 목록을 최상위 댓글 단위(스레드)로 묶는다.
+// 개수로 자르면 답글이 부모와 다른 페이지로 떨어져서 스레드로 나눈다.
 function toThreads(comments: PostComment[]) {
   const threads: PostComment[][] = [];
   for (const c of comments) {

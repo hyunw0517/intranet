@@ -37,7 +37,7 @@ export function useChatUserProfile(userId: number | null) {
 }
 
 // 헤더 배지: 전체 안 읽은 수
-// - 실시간 갱신은 소켓 이벤트가 이 키를 무효화해서 한다(use-chat-socket). 소켓이 끊긴 동안을 대비해 창으로 돌아올 때도 다시 받는다.
+// 소켓 이벤트가 무효화하고, 소켓이 끊긴 동안을 대비해 창으로 돌아올 때도 다시 받는다.
 export function useChatUnreadTotal(enabled: boolean) {
   return useQuery({
     queryKey: chatKeys.unreadTotal(),
@@ -60,9 +60,9 @@ export function useChatRoom(roomId: number) {
 
 const MESSAGE_PAGE_SIZE = 30;
 
-// 메시지 (최신순 커서 페이지네이션, [이전 메시지]로 이어 받기)
-// - 캐시는 서버 순서 그대로(페이지마다 id 내림차순) 두고, 화면이 뒤집어 오래된 것부터 그린다.
-// - 새 메시지·수정·삭제는 소켓 이벤트로 캐시를 직접 고친다(아래 함수들). 다시 받으면 대화가 깜빡이고 스크롤이 튄다.
+// 메시지 (최신순 커서, [이전 메시지]로 이어 받기)
+// 캐시는 서버 순서대로 두고 화면이 뒤집어 그린다.
+// 새 메시지·수정·삭제는 소켓 이벤트로 캐시를 직접 고친다 (다시 받으면 깜빡이고 스크롤이 튄다).
 export function useChatMessages(roomId: number) {
   return useInfiniteQuery({
     queryKey: chatKeys.messages(roomId),

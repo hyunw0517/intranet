@@ -9,8 +9,8 @@ export function toDateInputValue(value: string | null | undefined) {
   return value ? value.slice(0, 10) : "";
 }
 
-// ── 시각(timestamp) 표기: 서버는 UTC ISO 문자열로 응답하므로 KST로 바꿔 표시한다. ──
-// 위 formatDate(앞 10자리)는 DATE 컬럼용이다. 시각에 쓰면 KST 00~09시가 전날로 보인다.
+// ── 시각 표기: 서버는 UTC ISO로 응답하므로 KST로 바꿔 표시한다. ──
+// 위 formatDate는 DATE 컬럼용이라 시각에 쓰면 KST 00~09시가 전날로 보인다.
 
 const KST_PARTS = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Seoul",

@@ -33,9 +33,7 @@ const PERMISSIONS: { key: Permission; label: string; hint: string }[] = [
   { key: "authAdmin", label: "게시판 관리", hint: "모든 권한에 더해 다른 사람이 쓴 게시글·댓글을 삭제할 수 있습니다." },
 ];
 
-// 권한 포함 관계 (서버 normalizeRule과 같은 규칙)
-// - 게시판 관리는 읽기·글쓰기·댓글을 모두 포함한다.
-// - 글쓰기·댓글은 읽기가 있어야 의미가 있으므로 읽기를 함께 켠다.
+// 권한 포함 관계 (서버 normalizeRule과 같은 규칙): 관리는 전부 포함, 글쓰기·댓글은 읽기도 켠다
 function normalizePerms(perms: Record<Permission, boolean>): Record<Permission, boolean> {
   const next = { ...perms };
   if (next.authAdmin) {
@@ -82,8 +80,8 @@ function BoardAuthForm({
   const [includeSub, setIncludeSub] = useState(rule?.includeSubDepartment ?? false);
   const [positionValue, setPositionValue] = useState(rule?.positionId ? String(rule.positionId) : NONE);
   const [jobTitleIds, setJobTitleIds] = useState<number[]>(rule?.jobTitles.map((j) => j.id) ?? []);
-  // 새 규칙의 기본값은 서버 DTO 기본값과 같다. (읽기·댓글 허용, 글쓰기·관리 불가)
-  // 기존 규칙도 포함 관계로 맞춰서 시작한다. (관리만 켜진 채 저장된 예전 규칙 대비)
+  // 새 규칙의 기본값은 서버 DTO 기본값과 같다 (읽기·댓글 허용).
+  // 기존 규칙도 포함 관계로 맞춰서 시작한다.
   const [perms, setPerms] = useState<Record<Permission, boolean>>(() =>
     normalizePerms({
       authRead: rule?.authRead ?? true,

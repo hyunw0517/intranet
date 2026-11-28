@@ -4,10 +4,8 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchBoardEvents, type CalendarRange } from "@/services/api/calendar";
 import { postKeys } from "./use-posts";
 
-// 캘린더 일정 queryKey (postKeys.events 아래)
-// 글을 쓰거나 고치면 cache.invalidateLists가 이 키도 함께 무효화한다.
-// 주의: postKeys.lists 아래에 두면 상세 조회 시 목록 캐시를 고치는 코드(syncListAfterView)가
-//       일정 응답을 목록 모양으로 다뤄 TypeError가 난다. (11/05 버그)
+// 캘린더 일정 queryKey (postKeys.events 아래, 글을 쓰거나 고치면 같이 무효화된다)
+// postKeys.lists 아래에 두면 syncListAfterView가 일정 응답을 목록 모양으로 고치다 TypeError가 난다.
 export const calendarKeys = {
   board: (boardId: number, range: CalendarRange) => [...postKeys.events(boardId), range.start, range.end] as const,
 };

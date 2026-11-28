@@ -40,11 +40,10 @@ interface ApprovalDocumentFormProps {
   onSave: (values: ApprovalFormValues, submit: boolean) => void;
 }
 
-// 결재 문서 작성·수정 폼 (임시저장 / 상신)
-// - 임시저장: 제목만 있으면 된다 (결재자 0명 허용)
-// - 상신: 결재자 1명 이상. 저장 후 상신을 연달아 호출한다 (API가 나뉘어 있음, features.md 7.5)
-// - 본문 이미지는 쓰지 않는다 (공개 주소라 결재 문서에 맞지 않음 - 서버도 제거). 파일은 첨부로.
-// - 휴가 신청: 제목·본문 대신 휴가 입력 칸. 임시저장도 휴가 항목 검사가 필요하다(서버가 저장 때 일수를 계산).
+// 결재 문서 작성·수정 폼
+// - 임시저장은 제목만 있으면 되고, 상신은 결재자 1명 이상 (저장 후 상신을 이어서 호출)
+// - 본문 이미지는 공개 주소라 쓰지 않고, 파일은 첨부로 받는다.
+// - 휴가 신청은 제목·본문 대신 휴가 입력 칸 (임시저장도 휴가 항목 검사가 필요하다)
 export function ApprovalDocumentForm({ documentType, initial, requesterId, cancelHref, pending, serverError, onSave }: ApprovalDocumentFormProps) {
   const isLeave = documentType === "LEAVE";
   const [leave, setLeave] = useState(initial.leave);
@@ -62,7 +61,7 @@ export function ApprovalDocumentForm({ documentType, initial, requesterId, cance
   const loadTemplate = (id: number) => {
     const line = lines.data?.find((l) => l.id === id);
     if (!line) return;
-    // 삭제·퇴사한 결재자와 기안자 본인은 빼고 불러온다 (서버 규칙과 같음, 그래서 빈 단계는 없앤다). 단계 묶음은 그대로.
+    // 삭제·퇴사한 결재자와 본인은 빼고 불러온다 (그래서 빈 단계는 없앤다)
     const groups = groupStepRows(line.steps, (s) =>
       s.usable && s.approverId !== requesterId
         ? { approverId: s.approverId, name: s.approverName ?? "", departmentName: s.departmentName, positionName: s.positionName, jobTitleName: s.jobTitleName }

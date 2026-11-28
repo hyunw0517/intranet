@@ -11,8 +11,7 @@ import {
   type ScheduleQuery,
 } from "@/services/api/reservations";
 
-// 시설 예약 queryKey - 예약을 만들거나 바꾸면 all 접두사로 시간표·내 예약·상세를 함께 다시 조회한다.
-// (관리자 화면도 분류·시설을 바꾸면 이 접두사를 무효화한다)
+// 시설 예약 queryKey - 바꾸면 all 접두사로 시간표·내 예약·상세를 함께 다시 조회한다
 export const reservationKeys = {
   all: ["reservations"] as const,
   categories: () => [...reservationKeys.all, "categories"] as const,

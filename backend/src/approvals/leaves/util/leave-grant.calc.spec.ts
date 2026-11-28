@@ -1,5 +1,5 @@
 //! leave-grant.calc.ts 단위 테스트
-// 기준표 = docs/design/leave_calculate_manual.md 3.4 예시표 (asOf = 그 연도 12/31). 규칙을 바꾸면 매뉴얼과 이 표를 함께 고친다.
+// 기준표 = docs/design/leave_calculate_manual.md 예시표 (asOf = 그 연도 12/31). 규칙을 바꾸면 매뉴얼과 이 표를 함께 고친다.
 
 import { addMonthsClamped, calcBaseQuarters, daysInclusive, daysToQuarters, quartersToDays, recalcYears } from './leave-grant.calc';
 

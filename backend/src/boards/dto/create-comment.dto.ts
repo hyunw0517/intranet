@@ -2,7 +2,7 @@ import { IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from "class-valida
 import { EmptyToNull } from "src/common/decorator/empty-to-null.decorator";
 import { StringToNumber } from "src/common/decorator/string-to-number.decorator";
 
-//* 게시판 입력 기준 DTO (Update 등은 이 클래스에서 파생)
+//* 댓글 입력 기준 DTO (Update는 이 클래스에서 파생)
 export class CreateCommentDto {
 
     /** 부모 댓글 id (대댓글일 때, 깊이 제한 없음) */

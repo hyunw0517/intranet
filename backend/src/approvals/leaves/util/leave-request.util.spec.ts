@@ -1,5 +1,5 @@
 //! leave-request.util.ts 단위 테스트
-// 휴가 신청 규칙(features.md 7.4 "휴가 신청 규칙")을 DB 없이 확인한다.
+// 휴가 신청 규칙을 DB 없이 확인한다.
 
 import { LeaveType, LeaveUnit } from 'src/generated/prisma/client';
 import { buildLeavePeriod, findOverbookedDate, findTimeConflict, groupLeavesByDate, LeavePeriod, leaveTitle } from './leave-request.util';

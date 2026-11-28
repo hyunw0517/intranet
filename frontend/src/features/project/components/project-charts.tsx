@@ -5,8 +5,8 @@ import { EmptyState } from "@/components/common/data-state";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { formatAmount, type BudgetCategorySummary, type MonthlyAmount } from "@/types/project";
 
-// 매출·예산 그래프 (recharts). 무거운 라이브러리라 charts-lazy.tsx를 거쳐 그래프가 있는 화면에서만 불러온다.
-// 금액은 문자열로 오지만 막대 길이 계산에는 숫자가 필요하다. 999조 이하라 Number로 정확히 표현된다.
+// 매출·예산 그래프 (recharts, charts-lazy.tsx로 그래프가 있는 화면에서만 불러온다)
+// 금액은 문자열로 오지만 999조 이하라 Number로 정확히 바꿀 수 있다.
 const compact = new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 });
 const axisAmount = (value: number) => (value === 0 ? "0" : compact.format(value));
 // 가로축: 첫 칸과 1월에는 연도를 함께 적어 해가 바뀌는 지점을 알 수 있게 한다 ('26.1)

@@ -11,7 +11,7 @@ import { chatKeys } from "../hooks/use-chats";
 import { useChat } from "./chat-provider";
 
 // 다른 화면에서 1:1 채팅 열기 (예: 사원 상세 창)
-// 채팅을 쓸 수 없거나(애드온 꺼짐·GUEST) 본인이면 그리지 않는다. 방이 이미 있으면 그 방이 열린다(서버 openDirect).
+// 채팅을 못 쓰거나 본인이면 그리지 않는다.
 export function StartChatButton({ userId, onOpened }: { userId: number; onOpened?: () => void }) {
   const { user } = useAuth();
   const { enabled, openRoom } = useChat();

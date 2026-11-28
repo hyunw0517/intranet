@@ -39,7 +39,7 @@ export class DepartmentsController {
   }
 
   //* 부서 순서 변경 (드래그 정렬, 같은 상위 부서의 형제 부서끼리)
-  // 'order'는 ':id'보다 먼저 선언해야 한다. (뒤에 두면 'order'가 :id로 매칭되어 ParseIntPipe 400)
+  // 'order'는 ':id'보다 먼저 선언한다 (뒤에 두면 :id로 잡혀 400)
   @Patch('order')
   @RequireAdmin(AdminPermission.ORGANIZATION)
   @ApiOperation({ summary: '부서 순서 변경 (드래그 정렬)', description: '같은 상위 부서 아래의 형제 부서끼리만 바꾼다(상위 부서 이동은 부서 수정). 보낸 id 배열이 그 상위 부서의 하위 부서 전체와 정확히 일치해야 한다.' })

@@ -15,7 +15,7 @@ import { BoardNotFound, NotFoundMessage, PostNotFound } from "./board-not-found"
 import { EMPTY_POST_FORM, PostForm } from "./post-form";
 
 // 게시글 작성 (/boards/[boardId]/write)
-// 게시글이 아직 없어 상세 응답을 쓸 수 없으므로, 게시판 단건 조회(GET /boards/:boardId)로 설정·권한을 받는다.
+// 상세 응답이 없어서 게시판 단건 조회로 설정·권한을 받는다.
 export function PostCreateView({ boardId }: { boardId: number }) {
   const router = useRouter();
   const { data, isPending, isError, error, refetch } = useBoardAccess(boardId);
@@ -66,7 +66,7 @@ export function PostCreateView({ boardId }: { boardId: number }) {
 }
 
 // 게시글 수정 (/boards/[boardId]/posts/[postId]/edit) - 작성자만
-// 상세 응답(본문·게시판 설정·can)을 그대로 쓴다. 상세 조회는 조회수를 올리므로, 상세에서 넘어오면 캐시를 다시 요청하지 않는다.
+// 상세 응답을 그대로 쓴다. 상세 조회는 조회수를 올려서 상세에서 넘어오면 다시 요청하지 않는다.
 export function PostEditView({ boardId, postId }: { boardId: number; postId: number }) {
   const router = useRouter();
   const { data, isPending, isError, error, refetch } = usePost(boardId, postId, { staleTime: Infinity });

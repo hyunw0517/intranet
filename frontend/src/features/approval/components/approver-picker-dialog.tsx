@@ -23,8 +23,8 @@ export function approverMeta(a: Pick<Approver, "departmentName" | "positionName"
   return [a.departmentName, a.positionName, a.jobTitleName].filter(Boolean).join(" · ") || "소속 없음";
 }
 
-// 결재자 검색 창 (공용 회원 검색 GET /users/search - 재직 중인 승인 회원만, 최대 20명)
-// 입력이 멈추고 0.3초 뒤에 검색한다. 검색어를 입력하기 전에는 목록을 보여 주지 않는다.
+// 결재자 검색 창 (공용 회원 검색, 최대 20명)
+// 입력이 멈추고 0.3초 뒤에 검색하고, 검색어가 없으면 목록을 보여 주지 않는다.
 export function ApproverPickerDialog({
   open,
   onOpenChange,

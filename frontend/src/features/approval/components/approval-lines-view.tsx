@@ -28,8 +28,8 @@ import { ApprovalLineEditor, groupStepRows, toStepInputs, type LineStepGroup } f
 type DialogState = { mode: "create"; scope: ApprovalLineScope } | { mode: "edit"; line: ApprovalLine } | null;
 
 // 결재라인 화면
-// - 내 결재라인: 개인(PERSONAL) 템플릿은 본인이 만들고 관리한다.
-// - 공용·부서 결재라인: 결재라인 관리자(ADMIN 또는 ADMIN이 지정한 사람)에게만 보인다. (GET /approvals/line-managers/me)
+// - 개인 결재라인은 본인이 만들고 관리한다.
+// - 공용·부서 결재라인은 결재라인 관리자에게만 보인다.
 export function ApprovalLinesView() {
   const usable = useUsableLines();
   const scope = useMyLineScope();
@@ -203,8 +203,8 @@ function LineList({
   );
 }
 
-// 결재라인 추가·수정 창 - 수정은 이름·단계만 (범위·부서는 바꿀 수 없다)
-// 지정할 수 없게 된 결재자(퇴사 등)는 수정 화면에서 빼고 시작한다. (그대로 저장하면 서버가 400)
+// 결재라인 추가·수정 창 (수정은 이름·단계만)
+// 지정할 수 없게 된 결재자는 빼고 시작한다 (그대로 저장하면 서버가 400)
 function LineFormDialog({ state, scope, onClose }: { state: NonNullable<DialogState>; scope: LineManageScope; onClose: () => void }) {
   const editing = state.mode === "edit" ? state.line : null;
   const lineScope = editing ? editing.scope : (state as { scope: ApprovalLineScope }).scope;

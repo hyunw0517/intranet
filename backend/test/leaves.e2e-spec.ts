@@ -1,8 +1,8 @@
-//! 휴가 e2e (결재의 옵션 leaves, docs/design/features.md 7.4 · leave_calculate_manual.md)
+//! 휴가 e2e (결재의 옵션 leaves, docs/design/features.md · leave_calculate_manual.md)
 // 결재는 .env.test의 ADDONS로 켜져 있고, 휴가 모듈은 이 파일에서 직접 붙인다(createTestApp([ LeavesModule ])).
 //   addonModule()의 조건은 AppModule을 import하는 순간 .env.test 값으로 정해져서, beforeAll에서 process.env.ADDONS를 바꿔도 늦다.
 //   .env.test의 ADDONS에 leaves를 넣어도 같은 모듈 클래스라 한 번만 등록된다.
-// ⭐ 핵심: 상신·최종 승인 때 하루 합계 1일 + 연차 잔여(진행 중 포함)를 결재와 같은 트랜잭션에서 검사하고,
+// 핵심: 상신·최종 승인 때 하루 합계 1일 + 연차 잔여(진행 중 포함)를 결재와 같은 트랜잭션에서 검사하고,
 //    같은 회원이 동시에 두 건을 상신해도 회원 행 잠금으로 한 건만 통과한다.
 
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
@@ -291,7 +291,7 @@ describe('휴가', () => {
             expect( changed.body.showLeaves ).toBe( false );
         });
 
-        it('⭐ 같은 회원이 동시에 두 건을 상신하면 잔여만큼만 통과한다', async () => {
+        it('같은 회원이 동시에 두 건을 상신하면 잔여만큼만 통과한다', async () => {
             // D: 부여 3일. 2일짜리 두 건을 동시에 상신 → 한 건만 200
             await adjust( ids.d, -22 ).expect( 200 );
             const first = await createLeave( token.d, { type: 'ANNUAL', unit: 'FULL', startDate: day( '07-01' ), endDate: day( '07-02' ) } ).expect( 201 );

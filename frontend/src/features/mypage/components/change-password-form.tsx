@@ -16,9 +16,9 @@ type Values = typeof INITIAL;
 type Errors = Partial<Record<keyof Values, string>>;
 
 // 비밀번호 변경 (PATCH /auth/change/pw)
-// [비밀번호 변경] → 새 비밀번호 검증 → 현재 비밀번호 모달 → 확인 시 요청
-// 오류(현재 비밀번호 불일치, 새 비밀번호가 현재와 같음 등)는 모두 비밀번호에 관한 것이라 모달 안에 표시한다.
-// 새 access token 교체는 AuthProvider.changePassword가 처리한다. (다른 기기 로그인은 모두 해제됨)
+// 새 비밀번호를 검증한 뒤 현재 비밀번호 모달에서 확인하면 요청한다.
+// 오류는 모두 비밀번호에 관한 것이라 모달 안에 표시한다.
+// 새 access token 교체는 AuthProvider.changePassword가 한다 (다른 기기 로그인은 해제된다).
 export function ChangePasswordForm() {
   const { changePassword } = useAuth();
   const [values, setValues] = useState<Values>(INITIAL);

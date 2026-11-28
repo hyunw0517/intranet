@@ -11,8 +11,7 @@ import { downloadPostFile } from "@/services/api/posts";
 import type { FileInfo } from "@/types/file";
 
 // 게시글 상세의 첨부파일 목록
-// 다운로드는 Bearer 헤더가 필요해 <a href>를 쓸 수 없다. → fetch로 Blob을 받아 임시 주소(blob:)를 만든 뒤 내려받는다.
-// 받기 전에 한 번 묻는다 - 채팅과 같은 확인 창·보안 경고 (공용 FileDownloadConfirmDialog, 2026-11-14 사용자 요청)
+// 다운로드는 Bearer 헤더가 필요해서 fetch로 Blob을 받아 내려받는다. 받기 전에 한 번 묻는다.
 export function PostAttachments({ boardId, postId, files }: { boardId: number; postId: number; files: FileInfo[] }) {
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   // 확인 창: 대상 파일과 열림을 따로 둔다 (닫히는 동안에도 제목의 파일명이 비지 않게)
@@ -55,7 +54,7 @@ export function PostAttachments({ boardId, postId, files }: { boardId: number; p
           };
           return (
           <li key={file.id} className="flex items-center gap-2 px-3 py-2 text-sm select-none">
-            {/* 파일 아이콘·파일명도 내려받기 링크 (2026-11-14 사용자 요청) */}
+            {/* 파일 아이콘·파일명도 내려받기 링크 */}
             <button
               type="button"
               className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left hover:underline disabled:cursor-default"

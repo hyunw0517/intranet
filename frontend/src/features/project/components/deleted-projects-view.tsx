@@ -16,7 +16,7 @@ import type { ProjectListItem } from "@/types/project";
 import { useDeletedProjects, useProjectMutation } from "../hooks/use-projects";
 import { formatPeriod, ProjectStatusBadge } from "./project-badges";
 
-// 관리자 - 삭제된 프로젝트 목록 + 복구 (과제 관리 관리자, 2026-11-17 사용자 결정)
+// 관리자 - 삭제된 프로젝트 목록 + 복구 (과제 관리 관리자)
 // 복구하면 참여자·과제가 삭제 전 그대로 보인다(삭제는 soft delete).
 export function DeletedProjectsView() {
   const [page, setPage] = useState(1);

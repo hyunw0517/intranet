@@ -3,7 +3,7 @@ import { Prisma } from "src/generated/prisma/client";
 //! 감사 로그 detail 형식 (Audit.detail, jsonb)
 // - 단건:     { changes: { role: { before: "GUEST", after: "USER" } }, ...추가 정보 }
 // - 일괄 처리: { batch: true, targetIds: [5, 7], changes: { role: { before: { "5": "GUEST", "7": "USER" }, after: "ADMIN" } } }
-//   일괄 처리는 대상마다 변경 전 값이 다를 수 있으므로 before를 pk별로 남긴다. (2026-11-09 사용자 결정)
+// 일괄 처리는 대상마다 변경 전 값이 다를 수 있으므로 before를 pk별로 남긴다.
 
 //* 단건 변경 내용: 필드명 → 변경 전/후
 export type AuditChanges = Record<string, { before: unknown; after: unknown }>;
@@ -18,7 +18,6 @@ const SENSITIVE_KEYS = new Set([ 'password', 'tokenHash', 'currentJti', 'previou
 // - after에 없는(undefined) 필드는 수정하지 않은 것으로 보고 제외한다.
 // - Date는 시각 값으로 비교한다. (객체 비교 X)
 // ex) diffChanges( before, body ) → { name: { before: '홍길동', after: '김철수' } }
-// - before(DB 행)와 after(수정 데이터)의 타입이 다를 수 있으므로(예: DTO 문자열 날짜 → Date) 객체로만 받는다.
 export function diffChanges( before: object, after: object ): AuditChanges {
     const changes: AuditChanges = {};
 
@@ -51,7 +50,7 @@ export function batchChanges<T extends { id: number }, K extends keyof T & strin
 
 //* Prisma Json 컬럼에 넣을 수 있는 값으로 변환
 // - Date → ISO 문자열, BigInt → 문자열, undefined 필드 제거 (JSON 직렬화 규칙)
-// - 민감 필드는 어느 깊이에 있든 제거한다. (호출하는 쪽 실수 방지)
+// - 민감 필드는 어느 깊이에 있든 지운다 (호출하는 쪽 실수 방지)
 export function toAuditJson( value: Record<string, unknown> ): Prisma.InputJsonObject {
     return JSON.parse( JSON.stringify( value, ( key, v: unknown ) => {
         if ( SENSITIVE_KEYS.has( key ) ) return undefined;

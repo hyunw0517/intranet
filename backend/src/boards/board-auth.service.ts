@@ -29,7 +29,7 @@ export class BoardAuthService {
     //! 규칙 관리 (관리자)
     //! =====================================================================
 
-    //* 게시판 권한 규칙 목록 (게시판당 규칙 수가 적으므로 페이지네이션 없음)
+    //* 게시판 권한 규칙 목록 (규칙이 적어서 페이지 없음)
     async getBoardAuths( boardId: number ){
         await this.findBoardOrThrow( boardId );
 
@@ -88,7 +88,7 @@ export class BoardAuthService {
 
         const { jobTitleIds, ...rule } = target;
 
-        // INSERT (중첩 쓰기: 규칙 + 허용 직책이 하나의 쿼리 묶음으로 함께 저장된다) + 감사 로그
+        // INSERT (중첩 쓰기로 규칙과 허용 직책을 함께 저장) + 감사 로그
         return await this.prisma.$transaction( async (tx) => {
             const newAuth = await tx.boardAuth.create({
                 data: {
@@ -150,8 +150,8 @@ export class BoardAuthService {
 
         const { jobTitleIds, ...rule } = target;
 
-        // UPDATE (중첩 쓰기: 규칙 수정 + 직책 "전부 지우고 다시 넣기"가 하나의 트랜잭션으로 실행된다)
-        // 중간 테이블은 이력이 필요 없으므로 변경분 비교 대신 전체 교체한다. (감사 로그에는 직책 id 목록의 전후를 남김)
+        // UPDATE (규칙 수정 + 직책 전부 지우고 다시 넣기를 한 트랜잭션으로)
+        // 중간 테이블은 이력이 필요 없어서 통째로 바꾼다
         await this.prisma.$transaction( async (tx) => {
             await tx.boardAuth.update({
                 where: {
@@ -187,7 +187,7 @@ export class BoardAuthService {
         boardId: number,
         authId: number,
     ){
-        // 존재 확인 + 삭제 (where에 boardId를 함께 걸어 다른 게시판의 규칙을 지우지 못하게 한다)
+        // 존재 확인 + 삭제 (boardId를 같이 걸어 다른 게시판의 규칙은 못 지우게)
         await this.prisma.$transaction( async (tx) => {
             const { count } = await tx.boardAuth.updateMany({
                 where: {
@@ -213,9 +213,9 @@ export class BoardAuthService {
     }
 
     //* 규칙 정규화
-    // - 부서 조건이 없으면 하위 부서 포함은 의미가 없으므로 false
-    // - 쓰기·댓글·관리 권한은 읽기 권한이 있어야 의미가 있으므로 읽기를 함께 켠다.
-    // - 권한이 하나도 없는 규칙은 아무 효과가 없으므로 거부
+    // - 부서 조건이 없으면 하위 부서 포함은 false
+    // - 쓰기·댓글·관리 권한이 있으면 읽기도 켠다
+    // - 권한이 하나도 없는 규칙은 거부
     private normalizeRule<T extends {
         departmentId: number | null;
         includeSubDepartment: boolean;
@@ -282,14 +282,14 @@ export class BoardAuthService {
                 },
             });
 
-            // DTO의 ArrayUnique로 중복이 없으므로 개수만 비교하면 된다.
+            // DTO의 ArrayUnique로 중복이 없어서 개수만 비교한다
             if( jobTitleCount !== jobTitleIds.length ){
                 throw new BadRequestException('존재하지 않는 직책이 포함되어 있습니다.');
             }
         }
     }
 
-    //* 게시판 존재 확인 (카테고리는 하위 게시판 기준으로 표시되므로 규칙을 두지 않는다)
+    //* 게시판 존재 확인 (카테고리에는 규칙을 두지 않는다)
     private async findBoardOrThrow( boardId: number ){
         const board = await this.prisma.board.findFirst({
             select: { id: true, type: true },
@@ -316,7 +316,7 @@ export class BoardAuthService {
     //! =====================================================================
 
     //* 게시판 내비게이션 (읽기 권한이 있는 게시판만 트리 순서로 반환)
-    // 회원 정보와 전체 게시판·규칙을 한 번씩만 조회하고, 게시판별 판정은 메모리에서 한다.
+    // 회원·게시판·규칙을 한 번씩만 읽고 판정은 메모리에서 한다.
     async getUserBoardNavigate(
         user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
     ){
@@ -378,10 +378,9 @@ export class BoardAuthService {
         return toTreeList( visibleBoards, ( board ) => board.parentBoardId );
     }
 
-    //* 게시판 권한 검사 (게시글·댓글 서비스에서 요청마다 호출)
-    // - 읽기 권한이 없으면 게시판이 있다는 사실도 숨기기 위해 404, 요청한 동작의 권한이 없으면 403
-    // - 반환한 권한은 버튼 표시용 응답이나 삭제 조건(작성자 또는 관리 권한) 확인에 이어서 쓴다.
-    // - 게시판 정보(비밀글 허용·타입 등)도 함께 반환해 호출한 쪽이 다시 조회하지 않게 한다.
+    //* 게시판 권한 검사 (게시글·댓글 서비스가 요청마다 호출)
+    // 읽기 권한이 없으면 게시판이 있다는 것도 숨기려고 404, 동작 권한이 없으면 403
+    // 게시판 정보도 같이 돌려줘서 호출한 쪽이 다시 조회하지 않게 한다.
     async assertBoardPermission(
         boardId: number,
         user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
@@ -402,7 +401,7 @@ export class BoardAuthService {
 
         let perm: BoardPermission = { ...ALL_PERMISSION };
 
-        // 게시판 관리 기능을 가진 관리자가 아니면 규칙과 회원 정보를 비교한다. (서로 관계없는 조회라 동시에 실행)
+        // 게시판 관리 기능이 없으면 규칙과 회원 정보를 비교한다 (두 조회는 동시에)
         if( !hasAdminPermission( user, AdminPermission.BOARDS ) ){
             const [boardRules, userInfo] = await Promise.all([
                 this.prisma.boardAuth.findMany({
@@ -452,7 +451,7 @@ export class BoardAuthService {
                     deleted: false,
                 },
             }),
-            // 상위 부서를 찾기 위한 부서 트리 (부서 수가 많지 않아 전체를 한 번에 조회)
+            // 상위 부서를 찾기 위한 부서 트리 (부서 수가 적어 전체를 읽는다)
             this.prisma.department.findMany({
                 select: { id: true, parentDepartmentId: true },
                 where: { deleted: false },
@@ -469,7 +468,7 @@ export class BoardAuthService {
         return this.toUserAccessInfo( thisUser, parentOf );
     }
 
-    //* 조회한 회원(직급 + 소속) → 규칙과 비교할 형태 (한 명·여러 명 판정 공용)
+    //* 조회한 회원을 규칙 비교용 형태로 (한 명·여러 명 공용)
     private toUserAccessInfo(
         user: {
             position: { sortOrder: number } | null;
@@ -490,9 +489,7 @@ export class BoardAuthService {
     }
 
     //* 게시판을 읽을 수 있는 회원 id 목록 (공지 알림 대상)
-    // - 대상: 승인된(USER·ADMIN) 재직 중 회원. 시스템 관리자는 규칙과 무관하게 포함
-    // - 규칙·회원·부서 트리를 한 번씩만 조회하고, 회원별 판정은 메모리에서 evaluateBoardPermission으로 한다. (회원 수만큼 쿼리하지 않음)
-    // - 트랜잭션 안에서 부르면 같은 tx로 조회한다.
+    // 회원 수만큼 쿼리하지 않도록 한 번씩 읽고 회원별 판정은 메모리에서 한다.
     async findReadableUserIds(
         boardId: number,
         tx?: Prisma.TransactionClient,
@@ -548,7 +545,7 @@ export class BoardAuthService {
         const ids: number[] = [];
         let current: number | null | undefined = departmentId;
 
-        // 부서 수정 시 순환 참조를 막고 있지만, 혹시 생겨도 무한 반복하지 않도록 이미 방문한 부서에서 멈춘다.
+        // 부서 순환은 수정할 때 막지만, 혹시 생겨도 무한 반복하지 않게 방문한 부서에서 멈춘다
         while( current !== null && current !== undefined && !ids.includes( current ) ){
             ids.push( current );
             current = parentOf.get( current );

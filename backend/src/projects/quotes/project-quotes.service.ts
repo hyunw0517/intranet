@@ -18,13 +18,12 @@ const NOT_EDITABLE = '작성 중이거나 반려된 최신 버전만 고칠 수 
 const versionInclude = { items: { orderBy: { sortOrder: 'asc' } } } satisfies Prisma.ProjectQuoteVersionInclude;
 type VersionRow = Prisma.ProjectQuoteVersionGetPayload<{ include: typeof versionInclude }>;
 
-//! 견적서 (docs/design/projects.md 5-1장, 2026-11-17 사용자 결정)
-// - 참여자 누구나: 작성·수정·새 버전·결재 상신·직접 확정·확정 취소 (ProjectAccessService.check)
-// - 버전: 같은 견적번호 아래 v1, v2… 최신 버전만 고치고 확정한다. 확정된 견적은 새 버전 불가(변경은 새 견적).
-// - 상태: 저장은 DRAFT·CONFIRMED·CANCELLED, "결재 중·반려"는 연결된 결재 문서 상태로 계산(quoteDisplayStatus)
-// - 결재가 켜져 있으면 확정은 결재로만(ProjectsApprovalModule의 처리기), 꺼져 있으면 직접 확정
-// - 발주처·수신 담당자는 작성 중 버전을 저장할 때마다 그때의 정보로 스냅샷 (확정된 버전은 그대로 남는다)
-// - ⭐ 동시성: 상태를 바꾸는 작업은 견적 행을 FOR UPDATE로 잠근 뒤 최신 상태를 다시 읽는다. 견적번호는 연도별 채번 행을 잠근다.
+//! 견적서 (참여자 누구나)
+// - 같은 견적번호 아래 v1, v2… 최신 버전만 고치고 확정한다. 확정된 견적은 새 버전 불가.
+// - 저장 상태는 DRAFT·CONFIRMED·CANCELLED이고, "결재 중·반려"는 연결된 결재 문서로 계산한다.
+// - 결재가 켜져 있으면 확정은 결재로만, 꺼져 있으면 직접 확정.
+// - 발주처·수신 담당자는 작성 중 버전을 저장할 때마다 스냅샷을 찍는다.
+// - 상태를 바꾸는 작업은 견적 행을 FOR UPDATE로 잠근 뒤 다시 읽는다. 견적번호는 연도별 채번 행을 잠근다.
 @Injectable()
 export class ProjectQuotesService {
 
@@ -245,7 +244,7 @@ export class ProjectQuotesService {
     }
 
     //* 확정 취소 - "취소됨"으로 남긴다(작성 중으로 돌아가지 않음). 결재로 확정된 것도 가능.
-    // 매출(취소되지 않은 청구, 예정 포함)이 연결된 견적은 취소 불가 (5-2장) - 견적 행을 잠근 뒤 세므로 매출 등록과 직렬화된다
+    // 연결된 매출이 있으면 취소 불가. 견적 행을 잠근 뒤 세서 매출 등록과 직렬화된다
     async cancelConfirm( user: ProjectActor, projectId: number, quoteId: number, versionId: number ) {
         const access = await this.access.check( user, projectId );
         const quote = await this.findQuote( projectId, quoteId );
@@ -265,7 +264,7 @@ export class ProjectQuotesService {
         return true;
     }
 
-    //! 결재 연동 (ProjectsApprovalModule이 쓴다 - 결재가 켜져 있을 때만 등록됨)
+    //! 결재 연동 (ProjectsApprovalModule이 쓴다)
 
     //* 상신 준비: 최신 작성 중 버전을 잠그고 결재 문서 제목·본문(견적 스냅샷 HTML)을 만든다
     async prepareSubmission( tx: Tx, user: ProjectActor, projectId: number, quoteId: number, versionId: number ) {
@@ -297,8 +296,8 @@ export class ProjectQuotesService {
     }
 
     //* 결재 문서 연결 (결재 문서를 만드는 트랜잭션 안)
-    // 이전 연결(반려·회수된 문서)과 버전 수정 시각이 준비할 때 그대로일 때만 바꾼다
-    // → 동시에 두 번 상신하거나, 준비 후 누가 견적을 고쳐 본문 스냅샷과 내용이 달라지는 것을 막는다
+    // 이전 연결과 버전 수정 시각이 준비할 때 그대로일 때만 바꾼다
+    // (동시에 두 번 상신하거나, 준비 후 견적이 바뀌어 본문 스냅샷과 달라지는 것을 막는다)
     async linkApprovalDocument( tx: Tx, versionId: number, previousDocumentId: number | null, preparedUpdatedAt: Date, documentId: number ) {
         const { count } = await tx.projectQuoteVersion.updateMany({
             where: { id: versionId, status: ProjectQuoteStatus.DRAFT, approvalDocumentId: previousDocumentId, updatedAt: preparedUpdatedAt },
@@ -362,7 +361,7 @@ export class ProjectQuotesService {
         if ( version.items.length === 0 ) throw new BadRequestException( '품목을 1개 이상 입력해 주세요.' );
     }
 
-    // 결재 문서 상태 (projects는 결재 모듈을 import하지 않고 결재 문서 테이블만 읽는다 - 스키마는 하나, AGENTS.md 10.1)
+    // 결재 문서 상태 (결재 모듈은 import하지 않고 테이블만 읽는다)
     private async approvalStatuses( versions: { approvalDocumentId: number | null }[], db: Tx | PrismaService = this.prisma ) {
         const ids = versions.map( ( v ) => v.approvalDocumentId ).filter( ( id ): id is number => id !== null );
         if ( ids.length === 0 ) return new Map<number, ApprovalStatus>();

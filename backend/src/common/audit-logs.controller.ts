@@ -5,7 +5,7 @@ import { AuditLogsService } from "./audit-logs.service";
 import { AuditLogListDto } from "./dto/audit-log-list.dto";
 import { ApiBadRequestResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-//* 감사 로그 조회 - AUDIT 기능을 지정받은 관리자와 슈퍼관리자 (2026-11-18 사용자 결정)
+//* 감사 로그 조회 - AUDIT 기능을 지정받은 관리자와 슈퍼관리자
 @ApiTags('Audit Logs (감사 로그)')
 @Controller('common/audit-logs')
 export class AuditLogsController {

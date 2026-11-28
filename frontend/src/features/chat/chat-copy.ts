@@ -1,4 +1,4 @@
-// 대화 내용 복사 형식 (2026-11-19 사용자 결정)
+// 대화 내용 복사 형식
 // 2026년 11월 19일 목요일      ← 날짜 구분선
 // [홍길동] [오후 2:05]
 // 메시지 본문 (줄바꿈 유지)
@@ -6,14 +6,12 @@
 import type { ChatMessage } from "@/services/api/chats";
 import { copyDateLabel, messageDate, messageTime12h } from "./chat-display";
 
-// 화면의 표시 요소에 붙이는 표식 (chat-message-list.tsx)
+// 화면 요소에 붙이는 표식 (chat-message-list.tsx, 시스템 메시지는 표식이 없어 복사되지 않는다)
 // - data-copy-date: 날짜 구분선 / data-copy-message: 메시지 한 건 / data-copy-body: 그 안의 글자 말풍선
-// 시스템 메시지는 표식이 없어 복사되지 않는다.
 const COPY_ITEMS = "[data-copy-date], [data-copy-message]";
 
-// 선택 범위를 복사할 글자로 바꾼다. null이면 브라우저 기본 복사를 그대로 쓴다.
-// - 메시지 하나의 일부만 골랐으면 고른 글자만 복사한다(null).
-// - 그 밖에는 걸친 메시지의 본문 전체를 위 형식으로 만든다.
+// 선택 범위를 복사할 글자로 바꾼다 (null이면 브라우저 기본 복사).
+// 메시지 하나의 일부만 골랐으면 기본 복사, 그 밖에는 걸친 메시지 본문 전체를 위 형식으로 만든다.
 export function buildChatCopyText(container: HTMLElement, selection: Selection, messages: ChatMessage[]) {
   const range = selection.getRangeAt(0);
   const byId = new Map(messages.map((message) => [message.id, message]));

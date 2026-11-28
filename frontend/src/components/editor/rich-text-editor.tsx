@@ -56,7 +56,7 @@ interface RichTextEditorProps {
 const IMAGE_URL_PREFIX = "/api/common/files/images/";
 
 // 본문 이미지: 우리 서버에 올린 이미지만 받는다.
-// 외부 주소·data: 이미지를 붙여 넣으면 서버가 저장 시 제거하므로, 에디터에서도 처음부터 받지 않는다.
+// 외부 주소·data: 이미지는 서버가 저장 시 지우므로 에디터에서도 받지 않는다.
 const ServerImage = Image.extend({
   parseHTML() {
     return [
@@ -68,9 +68,8 @@ const ServerImage = Image.extend({
   },
 }).configure({ allowBase64: false });
 
-// 이미지·영상처럼 한 덩어리(atom) 노드를 넣을 때 쓰는 체인
-// 방금 넣은 노드는 "노드 선택" 상태로 남는데, 그대로 다음 노드를 넣으면 선택된 노드를 대체한다.
-// (여러 이미지를 연달아 올리거나 영상을 두 개 넣으면 앞의 것이 사라짐) → 노드 선택이면 그 뒤로 커서를 옮긴 뒤 넣는다.
+// 이미지·영상 같은 atom 노드를 넣을 때 쓰는 체인
+// 방금 넣은 노드가 선택된 채로 다음 노드를 넣으면 앞의 것을 대체해서, 선택 상태면 커서를 그 뒤로 옮긴다.
 function insertChain(editor: Editor) {
   const { selection } = editor.state;
   const chain = editor.chain().focus();
@@ -82,13 +81,11 @@ function imageFilesOf(list: FileList | null | undefined) {
   return Array.from(list ?? []).filter((f) => f.type.startsWith("image/"));
 }
 
-// 게시글 본문 에디터 (Tiptap, CLAUDE.md 5.3)
-// - 기능은 백엔드 sanitize-html 허용 목록 안에서만 둔다. (제목 h2·h3, 글자 서식, 목록, 인용, 코드, 링크, 구분선, 이미지, 외부 영상)
-//   목록에 없는 태그를 만들 수 있게 하면 저장할 때 서버에서 사라져 "썼는데 없어지는" 문제가 생긴다.
-// - immediatelyRender: false → 서버 렌더링 결과와 첫 렌더가 달라 생기는 hydration 오류 방지
-// - 이미지: 고르거나 붙여 넣거나 끌어다 놓으면 바로 업로드하고, 응답 url을 <img src>로 넣는다.
-//   글과의 연결은 저장할 때 서버가 본문 <img>를 보고 한다. (첨부와 달리 id를 따로 보내지 않음)
-// - 외부 영상: YouTube·Vimeo 주소를 받아 임베드 주소로 바꿔 넣는다. 파일은 올리지 않고 주소만 본문에 저장된다. (video-embed.ts)
+// 게시글 본문 에디터 (Tiptap)
+// - 기능은 서버 sanitize-html 허용 목록 안에서만 둔다. 밖의 태그는 저장할 때 사라진다.
+// - immediatelyRender: false로 hydration 오류를 막는다.
+// - 이미지는 넣는 즉시 업로드해 응답 url을 <img src>로 넣고, 글과의 연결은 저장할 때 서버가 한다.
+// - 외부 영상은 YouTube·Vimeo 주소를 임베드 주소로 바꿔 넣는다 (video-embed.ts).
 export function RichTextEditor({ id, initialContent, onChange, labelledBy, onUploadingChange, allowImages = true }: RichTextEditorProps) {
   const [uploading, setUploading] = useState(0);
   // editorProps의 붙여넣기 처리기는 에디터 생성 시점에 고정되므로, 최신 업로드 함수를 ref로 넘긴다.
@@ -199,7 +196,7 @@ function Toolbar({
 }) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
-  // 숨긴 파일 입력을 버튼으로 연다. (렌더 중 만드는 groups 배열에 ref 접근을 두면 React Compiler 린트가 막아 id로 찾는다)
+  // 숨긴 파일 입력을 id로 찾아 연다 (렌더 중 ref 접근은 React Compiler 린트가 막는다)
   const fileInputId = useId();
   const openImagePicker = () => document.getElementById(fileInputId)?.click();
 
@@ -278,8 +275,7 @@ function Toolbar({
                 aria-label={item.label}
                 aria-pressed={item.active ?? undefined}
                 disabled={item.disabled}
-                // 마우스로 눌러도 포커스·선택 영역을 에디터에 남긴다. (버튼이 포커스를 가져가면 바로 이어 친 Enter가 버튼을 다시 누름)
-                // 키보드(Tab → Space/Enter)로는 그대로 조작할 수 있다.
+                // 마우스로 눌러도 포커스를 에디터에 남긴다 (버튼이 포커스를 가져가면 이어 친 Enter가 버튼을 누른다).
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={item.run}
                 className={cn(item.active && "bg-accent text-foreground")}
@@ -393,8 +389,8 @@ function LinkForm({ editor, onDone }: { editor: Editor; onDone: () => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Dialog는 화면에서는 portal로 밖에 그려지지만 React 트리에서는 게시글 <form> 안이다.
-    // React 이벤트는 React 트리를 따라 전파되므로, 막지 않으면 게시글 폼의 onSubmit까지 실행되어 글이 등록된다.
+    // Dialog는 portal로 밖에 그려지지만 React 트리에서는 게시글 <form> 안이라,
+    // 이벤트를 막지 않으면 게시글 폼의 onSubmit까지 실행돼 글이 등록된다.
     e.stopPropagation();
     const value = href.trim();
     if (!value) {

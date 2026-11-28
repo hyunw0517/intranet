@@ -2,8 +2,7 @@ import { toKstParts } from "@/lib/format";
 import type { CalendarEventColor } from "@/types/calendar";
 
 // 캘린더 게시글 일정 입력값 ↔ API 값 변환
-// 입력(<input type="date|datetime-local">)은 시간대가 없는 값이므로 KST(+09:00)로 고정해 보낸다.
-// 브라우저 시간대와 관계없이 사내 기준 시각으로 저장·표시하기 위함이다. (서버의 종일 처리도 KST 기준)
+// 입력값은 시간대가 없어서 KST(+09:00)로 고정해 보낸다 (브라우저 시간대와 무관하게).
 
 const KST_OFFSET = "+09:00";
 

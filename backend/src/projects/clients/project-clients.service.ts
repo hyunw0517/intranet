@@ -17,11 +17,10 @@ const contactSelect = {
     id: true, name: true, department: true, jobTitle: true, hp: true, email: true, memo: true,
 } satisfies Prisma.ProjectClientContactSelect;
 
-//! 거래처 + 거래처 담당자 (docs/design/projects.md 4장, 2026-11-16·17 사용자 결정)
-// - USER 이상 누구나 등록·수정·삭제·복구한다. 등록자가 퇴사해도 인수인계자가 고칠 수 있게 등록자로 묶지 않는다.
-//   누가 무엇을 바꿨는지는 감사 로그(변경 전후 값)로 추적한다.
-// - 삭제는 soft delete: 새 프로젝트에서는 고를 수 없지만, 기존 프로젝트·견적에는 실제 이름이 그대로 보인다.
-// - 사업자등록번호는 입력했을 때만, 삭제되지 않은 거래처끼리 중복 금지 (서비스 검사 + DB 부분 unique 이중 방어)
+//! 거래처 + 거래처 담당자
+// - USER 이상 누구나 등록·수정·삭제·복구한다. 등록자가 퇴사해도 다른 사람이 고칠 수 있게 등록자로 묶지 않는다.
+// - 삭제해도 기존 프로젝트·견적에는 실제 이름이 그대로 보인다.
+// - 사업자등록번호는 삭제되지 않은 거래처끼리 중복 금지 (서비스 검사 + DB 부분 unique).
 @Injectable()
 export class ProjectClientsService {
 
@@ -42,7 +41,7 @@ export class ProjectClientsService {
         return PaginatePage( query,
             ( page ) => this.prisma.projectClient.findMany({
                 where,
-                // 발주 프로젝트 수(projects) / 협력 프로젝트 수(partners) - 역할은 회사가 아니라 연결에서 계산한다((a)안, 2026-11-17 사용자 결정)
+                // 발주 프로젝트 수(projects) / 협력 프로젝트 수(partners) - 역할은 회사가 아니라 연결에서 계산한다
                 include: {
                     _count: {
                         select: {
@@ -78,7 +77,7 @@ export class ProjectClientsService {
         };
     }
 
-    //* 상세 (삭제된 거래처도 볼 수 있다 - 기존 프로젝트에서 들어올 수 있으므로) + 담당자 목록
+    //* 상세 + 담당자 목록 (삭제된 거래처도 본다 - 기존 프로젝트에서 들어올 수 있어서)
     async findOne( id: number ) {
         const client = await this.prisma.projectClient.findUnique({
             where: { id },
@@ -141,7 +140,7 @@ export class ProjectClientsService {
         }) );
     }
 
-    //* 삭제 - 연결된 프로젝트가 있어도 삭제한다(연결은 유지, 2026-11-16 사용자 결정)
+    //* 삭제 - 연결된 프로젝트가 있어도 삭제한다(연결은 유지)
     async delete( user: Actor, id: number ) {
         const client = await this.findActive( id );
 
@@ -156,7 +155,7 @@ export class ProjectClientsService {
         return true;
     }
 
-    //* 복구 (2026-11-17 사용자 결정) - 같은 사업자번호의 거래처가 이미 다시 등록돼 있으면 400
+    //* 복구 - 같은 사업자번호의 거래처가 이미 다시 등록돼 있으면 400
     async restore( user: Actor, id: number ) {
         const client = await this.prisma.projectClient.findFirst({ where: { id, deleted: true } });
         if ( !client ) {
@@ -263,7 +262,7 @@ export class ProjectClientsService {
         }
     }
 
-    // 서비스 검사를 동시에 통과한 두 요청 중 하나는 DB 부분 unique에서 막힌다 → 500 대신 409
+    // 서비스 검사를 동시에 통과한 요청은 DB 부분 unique에서 막히므로 500 대신 409로
     private async withDuplicateGuard<T>( fn: () => Promise<T> ): Promise<T> {
         try {
             return await fn();

@@ -21,7 +21,7 @@ export class BoardsController {
   ) {}
 
   //* 관리자 전체 게시판 조회 (트리 순서, 페이지네이션 없음)
-  // 'admin'은 ':id'보다 먼저 선언해야 한다. (뒤에 두면 'admin'이 :id로 매칭되어 ParseIntPipe 400)
+  // 'admin'은 ':id'보다 먼저 선언한다 (뒤에 두면 :id로 잡혀 400)
   @Get('admin')
   @RequireAdmin(AdminPermission.BOARDS)
   @ApiOperation({ summary: '(관리자) 게시판 전체 목록', description: '트리 순서의 평평한 목록, 페이지 없음. 게시글 수·권한 규칙 수 포함(권한 규칙이 없는 게시판은 관리자만 본다).' })

@@ -40,7 +40,7 @@ export class CreateProjectTaskDto {
     dueDate?: string | null;
 }
 
-//* 과제 수정 (보낸 항목만) - 상태·순서는 이동 API로만 바꾼다(컬럼 재번호가 필요해서)
+//* 과제 수정 (보낸 항목만, 상태·순서는 이동 API로만)
 export class UpdateProjectTaskDto extends PartialType( OmitType( CreateProjectTaskDto, [ 'status' ] as const ) ) {}
 
 //* 칸반 이동 - 옮길 컬럼(상태)과 그 컬럼 안의 위치(0부터, 넘으면 맨 끝)

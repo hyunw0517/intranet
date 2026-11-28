@@ -17,12 +17,12 @@ const ZERO = () => new Prisma.Decimal( 0 );
 
 const AMOUNT_OVER = '금액이 너무 큽니다. (최대 999,999,999,999,999원)';
 
-//! 매출 (docs/design/projects.md 5-2장, 2026-11-17 사용자 결정)
-// - 프로젝트에 단다. 확정 견적 연결은 선택 - 연결하면 그 견적 청구 합계(취소 제외, 부가세 포함) ≤ 견적 합계
-// - 상태: 청구 예정(PLANNED) → 청구(BILLED, 청구일 = 매출 기준일) / 취소(CANCELLED). 수금 상태는 수금 합계로 계산
-// - 참여자 누구나. 청구 예정만 삭제, 청구한 건은 수금이 없을 때만 취소. 금액은 청구 예정일 때만 고친다.
-// - 세금계산서: 외부 발행 파일 첨부(Files, PROJECT_SALE) + 승인번호. 첨부·승인번호는 청구 뒤에도 고칠 수 있다(수정본 추가).
-// - ⭐ 동시성: 견적 한도 검사는 견적 행을, 수금 한도 검사는 청구 행을 FOR UPDATE로 잠근 뒤 센다.
+//! 매출 (참여자 누구나)
+// - 확정 견적 연결은 선택이고, 연결하면 그 견적 청구 합계 ≤ 견적 합계
+// - 청구 예정(PLANNED) → 청구(BILLED, 청구일 = 매출 기준일) / 취소(CANCELLED). 수금 상태는 계산한다.
+// - 청구 예정만 삭제, 청구한 건은 수금이 없을 때만 취소, 금액은 청구 예정일 때만 고친다.
+// - 세금계산서는 외부 발행 파일 첨부 + 승인번호이고, 청구 뒤에도 고칠 수 있다.
+// - 견적 한도는 견적 행을, 수금 한도는 청구 행을 FOR UPDATE로 잠근 뒤 센다.
 @Injectable()
 export class ProjectSalesService {
 
@@ -37,7 +37,7 @@ export class ProjectSalesService {
         this.audit = auditService.target( AuditTargetType.PROJECT_SALE );
     }
 
-    //* 목록 + 요약(청구·예정·수금·미수) + 확정 견적별 청구 잔액(청구 건을 만들 때 고르는 목록)
+    //* 목록 + 요약 + 확정 견적별 청구 잔액
     async findAll( user: ProjectActor, projectId: number ) {
         await this.access.check( user, projectId );
 
@@ -61,7 +61,7 @@ export class ProjectSalesService {
 
         return {
             summary: { billedTotal, plannedTotal, paidTotal, outstanding: billedTotal.sub( paidTotal ) },
-            // 월별 매출 그래프 (최근 12개월, 청구일 기준, "청구 매출" 카드와 같은 부가세 포함 합계)
+            // 월별 매출 그래프 (최근 12개월, 청구일 기준, 부가세 포함)
             monthlySales: fillMonths( recentMonths( kstDateString( new Date() ) ), sales
                 .filter( ( s ) => s.status === ProjectSaleStatus.BILLED && s.billedDate )
                 .map( ( s ) => ({ month: monthOf( s.billedDate! ), amount: s.totalAmount }) ) ),
@@ -250,7 +250,7 @@ export class ProjectSalesService {
     }
 
     //* 견적 확정 취소 전 검사 (견적 서비스가 견적 행을 잠근 트랜잭션 안에서 부른다)
-    // 취소되지 않은 청구(예정 포함)가 연결돼 있으면 확정을 취소할 수 없다 (5-1장 남은 규칙)
+    // 취소되지 않은 청구(예정 포함)가 연결돼 있으면 확정을 취소할 수 없다
     static async countLinkedSales( tx: Tx, quoteVersionId: number ) {
         return tx.projectSale.count({ where: { quoteVersionId, deleted: false, status: { not: ProjectSaleStatus.CANCELLED } } });
     }
@@ -270,7 +270,7 @@ export class ProjectSalesService {
         return sale;
     }
 
-    // ⭐ 분할 청구 한도: 견적 행을 잠근 뒤(견적 확정 취소와도 직렬화) 그 버전이 이 프로젝트의 확정 견적인지, 합계가 넘지 않는지
+    // 분할 청구 한도: 견적 행을 잠근 뒤 그 버전이 확정 견적인지, 합계가 넘지 않는지 본다
     private async assertQuoteLimit( tx: Tx, projectId: number, quoteVersionId: number, thisTotal: Prisma.Decimal, exceptSaleId: number | null ) {
         const version = await tx.projectQuoteVersion.findFirst({
             where: { id: quoteVersionId, quote: { projectId, deleted: false } },

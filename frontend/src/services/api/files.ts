@@ -1,6 +1,6 @@
 // 백엔드 files.controller 대응 (/common/files/*)
-// 업로드는 "먼저 업로드 → 글 저장 시 id(첨부) 또는 본문 <img>(이미지)로 연결" 방식이다.
-// 연결되지 않은 파일은 다른 사람이 쓸 수 없고, 글에 연결될 때까지 어디에도 표시되지 않는다.
+// 먼저 업로드하고 글 저장 시 id(첨부) 또는 본문 <img>(이미지)로 연결한다.
+// 연결 전 파일은 다른 사람이 쓸 수 없고 어디에도 표시되지 않는다.
 import { apiFetch } from "@/services/api-client";
 import type { FileInfo } from "@/types/file";
 

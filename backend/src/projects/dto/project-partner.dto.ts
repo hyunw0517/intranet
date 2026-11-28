@@ -6,12 +6,12 @@ import { StringToNumber } from 'src/common/decorator/string-to-number.decorator'
 import { ProjectQuoteTaxType } from 'src/generated/prisma/client';
 import { DATE_ONLY, DATE_ONLY_MESSAGE, VatRateField } from './project.dto';
 
-// 금액: 원화 정수, Decimal(15,0) → 최대 999,999,999,999,999원 (2026-11-17 사용자 결정, 견적·매출·예산 공통)
-// JS number로 정확히 표현되는 범위(2^53) 안이라 요청은 숫자로 받고, 응답은 Prisma Decimal이 문자열로 직렬화된다.
+// 금액은 원화 정수 Decimal(15,0) (견적·매출·예산 공통)
+// 2^53 안이라 요청은 숫자로 받고, 응답은 Prisma Decimal이 문자열로 직렬화된다.
 export const MAX_AMOUNT = 999_999_999_999_999;
 export const MAX_PARTNER_CONTACTS = 20;
 
-//* 협력사 담당자 한 명 (2026-11-17 사용자 결정: 직접 기재, 여러 명)
+//* 협력사 담당자 한 명 (직접 기재, 여러 명)
 export class PartnerContactDto {
 
     @IsString()
@@ -61,7 +61,7 @@ export class CreateProjectPartnerDto {
     @EmptyToNull()
     contractAmount?: number | null;
 
-    /** 과세 / 면세 (2026-11-17 사용자 결정: 외주 금액도 부가세 계산) */
+    /** 과세 / 면세 (외주 금액도 부가세 계산) */
     @ApiProperty({ enum: ProjectQuoteTaxType, enumName: 'ProjectQuoteTaxType', required: false })
     @IsEnum(ProjectQuoteTaxType)
     @IsOptional()
@@ -92,5 +92,5 @@ export class CreateProjectPartnerDto {
     contacts?: PartnerContactDto[];
 }
 
-//* 협력사 수정 (보낸 항목만) - 회사(clientId)는 바꾸지 않는다(다른 회사면 빼고 새로 추가)
+//* 협력사 수정 (보낸 항목만, 회사는 바꾸지 않는다)
 export class UpdateProjectPartnerDto extends PartialType( OmitType( CreateProjectPartnerDto, [ 'clientId' ] as const ) ) {}

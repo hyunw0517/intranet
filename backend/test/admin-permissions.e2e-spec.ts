@@ -1,4 +1,4 @@
-//! 관리자 기능 권한 e2e (features.md 5.1 "관리자 기능 권한")
+//! 관리자 기능 권한 e2e (features.md "관리자 기능 권한")
 // - SUPER_ADMIN: 모든 관리자 기능 + ADMIN 승격·기능 지정
 // - ADMIN: Users.adminPermissions에 있는 기능만 (@RequireAdmin(permission))
 // - 관리자 계정(ADMIN·SUPER_ADMIN)의 권한·상태·삭제·비밀번호 초기화는 슈퍼관리자만

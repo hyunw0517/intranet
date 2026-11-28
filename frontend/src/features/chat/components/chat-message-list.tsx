@@ -30,9 +30,9 @@ import { ChatUserProfileDialog } from "./chat-user-profile-dialog";
 // 맨 아래에서 이만큼 안쪽이면 "맨 아래를 보고 있다"로 본다 (새 메시지가 오면 따라 내려간다)
 const STICK_THRESHOLD = 80;
 
-// 대화 내용 (오래된 것 → 최신, 맨 아래가 최신)
-// - 보고 있는 동안 마지막 메시지까지 읽음 처리한다(값은 서버에서 앞으로만 움직인다).
-// - 맨 아래를 보고 있거나 내가 보낸 메시지면 새 메시지에 맞춰 내려간다. 위를 읽는 중이면 그대로 둔다.
+// 대화 내용 (맨 아래가 최신)
+// - 보고 있는 동안 마지막 메시지까지 읽음 처리한다.
+// - 맨 아래를 보고 있거나 내가 보낸 메시지면 따라 내려가고, 위를 읽는 중이면 그대로 둔다.
 // - [이전 메시지]로 위에 붙여도 보던 위치가 유지되게 스크롤을 보정한다.
 export function ChatMessageList({ room, userId }: { room: ChatRoomDetail; userId: number }) {
   const queryClient = useQueryClient();
@@ -355,7 +355,7 @@ function MessageEditForm({
   );
 }
 
-// 현재 시각 (수정·삭제 가능 시간 5분 표시용) - interval마다 다시 그린다. 렌더 중에 Date.now()를 부르지 않기 위해 state로 둔다.
+// 현재 시각 (수정·삭제 5분 표시용, 렌더 중 Date.now()를 부르지 않으려고 state로 둔다)
 function useNow(interval: number) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

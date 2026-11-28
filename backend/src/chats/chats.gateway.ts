@@ -16,11 +16,11 @@ interface ChatSocketData {
 
 type ChatSocket = Socket<Record<string, never>, Record<string, never>, Record<string, never>, ChatSocketData>;
 
-//! 채팅 소켓 연결 (features.md 8.2)
-// - 클라이언트 → 서버 이벤트는 받지 않는다(@SubscribeMessage 없음). 보내기·수정·삭제·읽음은 전부 REST.
-//   → HTTP 가드·ValidationPipe·예외 필터·트랜잭션·감사 로그를 소켓용으로 다시 만들 필요가 없다.
-// - 하는 일은 셋뿐: ① handshake 인증 ② user room에 넣기 ③ access token 만료 시각에 연결 끊기
-// - 같은 출처로 접속하므로(Next rewrite·Nginx의 /api/socket.io → /socket.io) CORS 설정이 필요 없다.
+//! 채팅 소켓 연결
+// - 클라이언트 → 서버 이벤트는 받지 않는다. 보내기·수정·삭제·읽음은 전부 REST라서
+//   가드·검증·트랜잭션·감사 로그를 소켓용으로 다시 만들 필요가 없다.
+// - 하는 일은 ① handshake 인증 ② user room에 넣기 ③ access token 만료 시각에 연결 끊기
+// - 같은 출처(/api/socket.io)로 접속해서 CORS 설정이 필요 없다.
 @WebSocketGateway({ namespace: 'chats' })
 export class ChatsGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
 
@@ -33,9 +33,9 @@ export class ChatsGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
     ){}
 
     //* ① handshake 인증 - 연결 전에 실행되는 socket.io 미들웨어
-    // HTTP 가드는 소켓에 적용되지 않으므로 여기서 직접 검사한다.
-    // HTTP의 access 검증(stateless)과 달리 DB를 한 번 본다: 연결은 오래 유지되므로 연결 시점에 tokenVersion·상태를 확인한다.
-    // 실패하면 next(error) → 클라이언트 connect_error에 메시지가 전달된다. (토큰 만료면 재발급 후 다시 연결)
+    // HTTP 가드는 소켓에 적용되지 않아서 여기서 직접 검사한다.
+    // 연결은 오래 유지되므로 REST와 달리 연결 시점에 DB로 tokenVersion·상태를 확인한다.
+    // 실패하면 클라이언트 connect_error로 메시지가 간다.
     afterInit( server: Namespace ){
         this.chatEvents.attach( server );
 
@@ -47,9 +47,9 @@ export class ChatsGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
     }
 
     //* ② user room에 넣기 + ③ 만료 타이머
-    // access token 만료 시각에 서버가 연결을 끊는다. → 권한 변경·퇴사·로그아웃이 REST와 같이 최대 10분 안에 반영된다.
-    // 핵심(auth·users)이 채팅 소켓을 끊으러 호출할 필요가 없다. (핵심 → 애드온 의존 금지, R-ARCH-01)
-    // 클라이언트는 disconnect 이유가 'io server disconnect'면 최신 토큰으로 다시 connect() 한다.
+    // 만료 시각에 끊어서 권한 변경·퇴사·로그아웃이 REST와 같이 최대 10분 안에 반영된다.
+    // 그래서 핵심 모듈이 채팅 소켓을 끊으러 부를 필요가 없다.
+    // 클라이언트는 이유가 io server disconnect면 최신 토큰으로 다시 연결한다.
     async handleConnection( socket: ChatSocket ){
         const { userId, expiresAt } = socket.data;
 

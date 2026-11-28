@@ -19,8 +19,8 @@ const VISIBLE_DESKTOP = 3;
 const VISIBLE_MOBILE = 2;
 
 // 월간 달력 (일~토, 앞뒤 달은 그 주만 흐리게)
-// 일정은 해당하는 날 칸에 박스로 넣는다. 여러 날 일정은 걸친 날마다 박스를 반복한다.
-// leavesByDate: 게시판 옵션 "휴가자 표시"가 켜져 있을 때 날짜별 휴가자 (칸마다 "휴가 N명" 항목 하나)
+// 여러 날 일정은 걸친 날마다 박스를 반복한다.
+// leavesByDate: "휴가자 표시"가 켜져 있을 때 날짜별 휴가자
 export function CalendarMonthGrid({
   boardId,
   weeks,

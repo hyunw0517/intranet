@@ -7,7 +7,7 @@ import { isAddonsEnabled, parseAddons } from './addons.config';
 
 //* 정상 입력
 describe('parseAddons - 켜진 애드온 목록', () => {
-    // 기본값 = 전부 꺼짐 (사용자 결정): 변수가 없거나(undefined) 비어 있으면 핵심만 동작한다.
+    // 기본값 = 전부 꺼짐: 변수가 없거나(undefined) 비어 있으면 핵심만 동작한다.
     it.each([
         [ '변수 없음', undefined ],
         [ '빈 값', '' ],
@@ -44,7 +44,7 @@ describe('parseAddons - 설정 오류', () => {
         expect( () => parseAddons( value ) ).toThrow( '알 수 없는 애드온' );
     });
 
-    // AGENTS.md 10.1: 결재를 끄고 휴가 옵션만 켜면 서버가 시작 단계에서 오류를 낸다.
+    // AGENTS.md: 결재를 끄고 휴가 옵션만 켜면 서버가 시작 단계에서 오류를 낸다.
     it('본체 없이 켠 옵션은 오류 (휴가만 켜고 결재는 끔)', () => {
         expect( () => parseAddons( 'reservations,leaves' ) ).toThrow( 'approvals이(가) 켜져 있어야 합니다' );
     });

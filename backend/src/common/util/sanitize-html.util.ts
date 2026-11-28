@@ -2,8 +2,7 @@ import sanitizeHtml from "sanitize-html";
 import { PUBLIC_IMAGE_URL_PREFIX, STORED_IMAGE_NAME_REGEX } from "../const/file.const";
 
 // 에디터(Tiptap) 본문 HTML 정제
-// 프론트 에디터를 거치지 않고 API를 직접 호출할 수 있으므로, 저장 전에 서버에서 허용 목록만 남긴다. (저장형 XSS 방지)
-// 허용 목록 방식: 아래에 없는 태그·속성·URL 스킴은 모두 제거한다. (script·style은 내용까지 제거)
+// API를 직접 호출할 수 있어서 저장 전에 서버에서 허용 목록만 남긴다 (저장형 XSS 방지).
 
 const ALLOWED_OPTIONS: sanitizeHtml.IOptions = {
     allowedTags: [
@@ -15,7 +14,7 @@ const ALLOWED_OPTIONS: sanitizeHtml.IOptions = {
         'a',                                        // 링크
         'img',                                      // 본문 이미지 (우리 서버 주소만, exclusiveFilter에서 검사)
         'div', 'iframe',                            // 외부 영상 (YouTube·Vimeo 임베드 주소만, exclusiveFilter에서 검사)
-        'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', // 표 (속성 없이 구조만) - 서버가 만드는 결재 본문(견적서 품목표)용, 2026-11-17
+        'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', // 표 (속성 없이 구조만, 견적서 품목표용)
     ],
     allowedAttributes: {
         a: [ 'href', 'target', 'rel' ],
@@ -53,9 +52,8 @@ const ALLOWED_OPTIONS: sanitizeHtml.IOptions = {
 };
 
 //* 허용하는 외부 영상 임베드 주소 (YouTube·Vimeo만)
-// - YouTube: 재생 전 추적 쿠키를 남기지 않는 youtube-nocookie.com 주소 + 11자리 영상 id
-// - Vimeo: player.vimeo.com/video/<숫자 id>, 일부 공개 영상은 ?h=<해시>가 있어야 재생된다.
-// 에디터(프론트 video-embed.ts)는 사용자가 넣은 일반 주소(watch?v=, youtu.be, vimeo.com/…)를 이 형식으로 바꿔 넣는다.
+// - YouTube: 재생 전 추적 쿠키를 남기지 않는 youtube-nocookie.com + 11자리 id
+// - Vimeo: player.vimeo.com/video/<숫자 id>, 일부 공개 영상은 ?h=<해시>가 있어야 재생된다
 export const VIDEO_EMBED_SRC_REGEX =
     /^https:\/\/(www\.youtube-nocookie\.com\/embed\/[A-Za-z0-9_-]{11}|player\.vimeo\.com\/video\/\d+(\?h=[0-9a-f]+)?)$/;
 
@@ -88,12 +86,10 @@ export function imageNameFromSrc( src: string | undefined ): string | null {
 
 export interface SanitizeEditorOptions {
     // 남길 이미지인지 (저장 파일명 기준). 없으면 우리 서버 주소의 이미지는 모두 남긴다.
-    // 게시글은 "내가 올린 미연결 이미지 + 이 글에 이미 연결된 이미지"만 남기도록 넘긴다.
     allowImage?: ( storedName: string ) => boolean;
 }
 
-//* 에디터 본문 정제 → 저장용 HTML + 검색용 텍스트
-// 게시글 외에 같은 에디터를 쓰는 본문(결재 문서 등)에서도 사용한다.
+//* 에디터 본문 정제 → 저장용 HTML + 검색용 텍스트 (게시글·결재 문서 등 공용)
 export function sanitizeEditorHtml(
     input: string | null | undefined,
     options: SanitizeEditorOptions = {},
@@ -104,9 +100,9 @@ export function sanitizeEditorHtml(
 
     const html = sanitizeHtml( input, {
         ...ALLOWED_OPTIONS,
-        // true를 반환한 태그는 제거된다. → 우리 서버 주소가 아니거나 허용하지 않은 이미지 제거
+        // true를 반환한 태그는 제거된다
         exclusiveFilter: ( frame ) => {
-            // 허용 형식이 아닌 영상 iframe 제거 (호스트 검사를 통과해도 경로·id 형식까지 맞아야 남긴다)
+            // 호스트가 맞아도 경로·id 형식까지 맞아야 iframe을 남긴다
             if ( frame.tag === 'iframe' ) {
                 return !VIDEO_EMBED_SRC_REGEX.test( frame.attribs.src ?? '' );
             }
@@ -120,7 +116,7 @@ export function sanitizeEditorHtml(
         sanitizeHtml( html.replace( BLOCK_END, '$& ' ), { allowedTags: [], allowedAttributes: {} } ),
     ).replace( /\s+/g, ' ' ).trim();
 
-    // <p></p>, 공백만 있는 본문, script만 있던 본문 등은 빈 본문으로 본다. (이미지·영상만 있는 본문은 빈 본문이 아니다)
+    // 공백·빈 문단만 남으면 빈 본문 (이미지·영상만 있는 본문은 빈 본문이 아니다)
     if ( text === '' && extractImageNames( html ).length === 0 && !/<iframe\s/.test( html ) ) {
         return { html: null, text: null };
     }

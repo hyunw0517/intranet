@@ -24,10 +24,9 @@ type LoginFailReason = 'NOT_FOUND' | 'WRONG_PASSWORD' | 'NOT_ACTIVE';
 
 /**
  * *[감사 로그]
- * - 로그인·로그아웃·비밀번호는 세션(AuthSessionsService)과 회원(UsersService) 쓰기가 나뉘어 있어 하나의 트랜잭션이 없다.
- *   그래서 마지막 쓰기가 성공한 뒤 기록한다. (회원 생성처럼 한 서비스 안에서 끝나는 쓰기는 그 서비스가 같은 트랜잭션에 기록)
- * - 로그인 전 요청(로그인·가입·로그아웃 쿠키)은 req.user가 없거나 다를 수 있으므로 작업자를 명시한다.
- * - 토큰 재발급(rotation)은 10분마다 일어나는 정상 동작이라 기록하지 않는다. (재사용 감지만 기록)
+ * - 세션과 회원 쓰기가 서비스별로 나뉘어 한 트랜잭션이 아니라서, 마지막 쓰기가 끝난 뒤 기록한다.
+ * - 로그인 전 요청은 req.user가 없어서 작업자를 직접 넣는다.
+ * - 토큰 재발급은 10분마다 일어나는 정상 동작이라 남기지 않는다. 재사용 감지만 남긴다.
  */
 @Injectable()
 export class AuthService {
@@ -103,9 +102,8 @@ export class AuthService {
         }
     }
 
-    //* 토큰 검증 (서명 + 만료만 확인)
-    //    - tokenVersion·회원 상태·세션은 가드와 AuthSessionsService가 따로 확인한다.
-    //    - algorithms를 지정해 서버가 허용할 알고리즘을 정한다. (헤더의 alg를 믿지 않음 → alg: none 등 차단)
+    //* 토큰 검증 (서명·만료만)
+    // algorithms를 고정해서 헤더의 alg를 믿지 않는다 (alg: none 차단).
     verifyToken( token: string ): JwtPayload {
       try{
         return this.jwtService.verify<JwtPayload>(token, {
@@ -117,16 +115,15 @@ export class AuthService {
       }
     }
 
-  //* Access Token 생성 - stateless (검증할 때 회원·세션 DB를 보지 않음)
-  //    - role·perms: RolesGuard가 이 값으로 권한을 판단한다. 권한이 바뀌면 다음 재발급(최대 10분)부터 반영된다.
-  //      (관리자 권한 회수·강등은 UsersService가 tokenVersion을 올려 재발급을 막는다 → 다시 로그인해야 함)
-  //    - sid는 "지금 기기" 표시(기기 목록)와 전체 로그아웃·비밀번호 변경 시 현재 기기 유지에 쓴다.
+  //* Access Token 생성 (stateless)
+  // role·perms는 RolesGuard가 쓴다. 권한이 바뀌면 다음 재발급부터 반영된다.
+  // sid는 기기 목록의 "지금 기기" 표시와 현재 기기 유지에 쓴다.
   private signAccessToken( user: TokenUser, sessionId: string ){
     return this.jwtService.sign({
         empNo: user.empNo,
         sub: user.id,
         type: 'access',
-        ver: user.tokenVersion, // 발급 당시 tokenVersion (access 검증에서는 비교하지 않음, 재발급 때 refresh로 비교)
+        ver: user.tokenVersion, // access 검증에서는 비교하지 않는다
         role: user.role,
         perms: user.adminPermissions, // ADMIN이 아니면 빈 배열
         sid: sessionId,
@@ -136,8 +133,8 @@ export class AuthService {
     });
   }
 
-  //* Refresh Token 생성 - sid + jti로 세션 테이블과 연결
-  //    - 유효시간은 1일(유휴 만료)이지만, 세션 절대 만료(7일)가 더 가까우면 그때까지만 준다.
+  //* Refresh Token 생성 (sid + jti로 세션과 연결)
+  // 유효시간은 1일이지만 세션 절대 만료(7일)가 더 가까우면 그때까지만 준다.
   private signRefreshToken( user: TokenUser, session: SessionForToken ){
     const secondsUntilSessionEnd = Math.floor((session.expiresAt.getTime() - Date.now()) / 1000);
     const expiresIn = Math.min(REFRESH_TOKEN_EXPIRES_IN, secondsUntilSessionEnd);
@@ -162,8 +159,7 @@ export class AuthService {
   }
 
   //* 세션 기준으로 access + refresh 발급
-  //    - refreshTokenMaxAge는 컨트롤러가 쿠키 maxAge로 쓴다. (토큰 만료와 쿠키 만료를 맞춤)
-  //    - 로그인 유지를 선택하지 않은 세션은 undefined → maxAge 없는 세션 쿠키가 되어 브라우저를 닫으면 사라진다.
+  // 로그인 유지를 안 고른 세션은 maxAge 없이 세션 쿠키로 내려간다.
   private issueTokens( user: TokenUser, session: SessionForToken ){
     const refresh = this.signRefreshToken(user, session);
 
@@ -174,12 +170,12 @@ export class AuthService {
     };
   }
 
-  //* 로그인(가입) - 세션을 새로 만들고 토큰 발급
-  //    - rememberMe: 로그인 유지 여부 (가입 직후 자동 로그인은 체크 항목이 없어 유지로 처리)
+  //* 로그인(가입) - 세션 생성 후 토큰 발급
+  // 가입 직후 자동 로그인은 체크 항목이 없어서 rememberMe를 true로 둔다.
   async loginUser( user: TokenUser, userAgent?: string, rememberMe: boolean = true ) {
     const session = await this.authSessionsService.createSession(user, userAgent, rememberMe);
 
-    // 로그인 성공 → 실패 횟수·잠금 단계 초기화 (가입 직후 로그인은 행이 없어 아무것도 하지 않음)
+    // 실패 횟수·잠금 단계 초기화
     await this.loginHistoryService.reset(user.empNo);
 
     await this.audit.log({
@@ -193,9 +189,8 @@ export class AuthService {
     return this.issueTokens(user, session);
   }
 
-  //* 토큰 재발급 - refresh token 교체(rotation) + 새 access token
-  //    - RefreshTokenGuard가 서명·만료·type·tokenVersion·회원 상태를 확인한 뒤 호출된다.
-  //    - 재발급할 때마다 refresh token도 새 것으로 바뀐다. 옛 refresh token을 다시 쓰면 재사용으로 감지된다.
+  //* 토큰 재발급 (refresh token rotation)
+  // RefreshTokenGuard가 토큰·회원 검사를 끝낸 뒤 호출된다.
   async reissueTokens( payload: JwtPayload, user: TokenUser ){
     if( payload.type !== 'refresh' ){
       throw new UnauthorizedException('잘못된 토큰 방식입니다.');
@@ -206,9 +201,8 @@ export class AuthService {
     return this.issueTokens(user, session);
   }
 
-  //* 로그아웃 - 이 기기의 세션만 폐기 (다른 기기는 그대로)
-  //    - 쿠키가 없거나 이미 무효인 토큰이어도 로그아웃(쿠키 삭제)은 진행되어야 하므로 예외를 던지지 않는다.
-  //    - 이 기기의 access token은 만료(최대 10분)까지 유효하지만, 프론트가 메모리에서 지운다.
+  //* 로그아웃 - 이 기기 세션만 폐기
+  // 쿠키가 없거나 무효여도 쿠키 삭제는 해야 해서 예외를 던지지 않는다.
   async logout( refreshToken?: string ){
     if( !refreshToken ){
       return;
@@ -234,14 +228,13 @@ export class AuthService {
         actionType: AuditActionType.LOGOUT,
         content: `로그아웃: ${payload.empNo}`,
         detail: { sessionId: payload.sid },
-        actorId: payload.sub, // 로그아웃은 access token 없이 refresh 쿠키로 오므로 req.user가 없다
+        actorId: payload.sub, // refresh 쿠키로만 오는 요청이라 req.user가 없다
       });
     }
   }
 
   //* 모든 기기에서 로그아웃 - 지금 기기만 유지
-  //    - tokenVersion을 올려 모든 access·refresh 토큰을 즉시 무효화한다. (가드가 요청마다 ver을 비교)
-  //    - 지금 기기의 세션은 새 tokenVersion으로 갱신하고 새 토큰을 발급한다. (비밀번호 변경과 같은 방식)
+  // tokenVersion을 올려 다른 기기의 재발급을 막고, 지금 세션은 새 버전으로 갱신해 새 토큰을 준다.
   async logoutAllDevices( user: Pick<Users, 'id'>, currentSessionId?: string, userAgent?: string ){
     const updatedUser = await this.usersService.increaseTokenVersion(user.id);
 
@@ -279,10 +272,7 @@ export class AuthService {
   }
 
   //* 로그인 시 사번/패스워드 검증
-  //  1. 잠긴 사번이면 비밀번호를 확인하지 않고 429
-  //  2. 회원 조회 + 비밀번호 확인 (없는 사번도 같은 시간이 걸리도록 가짜 해시와 비교)
-  //  3. 실패: 감사 로그 + 실패 횟수 (5회째면 잠금 → 429), 응답 메시지는 원인과 무관하게 같다 (등록된 사번 노출 방지)
-  //  4. 성공: 찾은 회원 반환 (실패 횟수 초기화는 로그인이 끝난 loginUser에서)
+  // 실패 메시지는 원인과 상관없이 같다 (등록된 사번 노출 방지).
   async authenticateWithEmpNoAndPassword(
     user: Pick<Users, 'empNo' | 'password'>
   ){
@@ -290,7 +280,7 @@ export class AuthService {
 
       const existingUser = await this.usersService.getUserWithPasswordByEmpNo(user.empNo);
 
-      // 없는 사번이면 bcrypt 비교를 건너뛰어 응답이 빨라지므로, 응답 시간으로 등록 여부를 알 수 없도록 가짜 해시와 비교한다.
+      // 없는 사번도 가짜 해시와 비교해서 응답 시간으로 등록 여부를 알 수 없게 한다
       const passwordOk = await bcrypt.compare( user.password, existingUser?.password ?? await this.getDummyHash() );
 
       if( !existingUser || !passwordOk ){
@@ -318,7 +308,7 @@ export class AuthService {
       return existingUser;
   }
 
-  //* 없는 사번 비교용 가짜 해시 (처음 한 번만 만든다. 실제 해시와 같은 cost라 비교 시간이 같다)
+  //* 없는 사번 비교용 가짜 해시 (처음 한 번만 만든다)
   private dummyHash?: Promise<string>;
   private getDummyHash(){
     this.dummyHash ??= this.hashPassword( randomUUID() );
@@ -345,8 +335,8 @@ export class AuthService {
     return { unlocked };
   }
 
-  //* 로그인 시 재직 상태 확인 (BasicTokenGuard) - 실패하면 감사 로그를 남기고 예외를 그대로 던진다.
-  //  - checkUserStatus는 재발급 가드에서도 쓰므로 로그인 전용으로 감싼다.
+  //* 로그인 시 재직 상태 확인 (실패하면 감사 로그)
+  // checkUserStatus는 재발급 가드도 써서 로그인용으로 따로 감쌌다.
   async checkLoginStatus(
     user: Pick<Users, 'id' | 'empNo' | 'status'>
   ){
@@ -359,8 +349,7 @@ export class AuthService {
   }
 
   //* 로그인 실패 감사 로그
-  //  - 시도한 사람은 알 수 없으므로 작업자는 NULL, 대상은 그 사번의 회원(없으면 NULL)
-  //  - 시도한 사번은 detail에 남긴다. (비밀번호는 남기지 않음)
+  // 시도한 사람은 알 수 없어서 작업자는 NULL로 둔다. 비밀번호는 남기지 않는다.
   private logLoginFailure( empNo: string, userId: number | null, reason: LoginFailReason, status?: UserStatus ){
     return this.audit.log({
       targetId: userId,
@@ -400,12 +389,12 @@ export class AuthService {
     );
   }
 
-  //* 동의 화면에 표시할 정보 - 개인정보처리자를 밝혀야 하므로 값이 없으면 오류로 처리한다.
+  //* 동의 화면 정보 (개인정보처리자를 밝혀야 해서 값이 없으면 오류)
   getConsentInfo(){
     return { companyName: this.configService.getOrThrow<string>(ENV_COMPANY_NAME_KEY) };
   }
 
-  //* 필수 동의 확인 - 모든 항목을 현재 시행 중인 버전으로 동의해야 가입할 수 있다.
+  //* 필수 동의 확인 (모든 항목을 현재 버전으로)
   private assertAgreedToCurrentConsents( consents: RegisterConsentDto[] ){
     const agreedAll = Object.entries(CURRENT_CONSENT_VERSIONS).every( ([type, version]) =>
       consents.some( (consent) => consent.type === type && consent.version === version )
@@ -441,10 +430,7 @@ export class AuthService {
   }
 
   //* 비밀번호 변경
-  //    - 본인 확인을 위해 현재 비밀번호를 먼저 검증한다.
-  //    - 새 비밀번호가 현재 비밀번호와 같으면 변경하지 않는다.
-  //    - tokenVersion이 올라가 기존 토큰(다른 기기 포함)은 모두 무효가 되므로,
-  //      지금 기기의 세션만 새 tokenVersion으로 갱신하고 새 토큰을 발급해 응답한다.
+  // tokenVersion이 올라가 다른 기기는 로그아웃되고, 지금 기기만 새 토큰을 받는다.
   async changePassword(
     user: Pick<Users, 'id'>,
     body: ChangePasswordDto,
@@ -474,9 +460,7 @@ export class AuthService {
   }
 
   //* (관리자) 비밀번호 초기화
-  //    - 서버가 임시 비밀번호를 생성해 저장하고, 평문은 응답으로 한 번만 돌려준다. (DB에는 해시만 저장)
-  //    - updatePassword가 tokenVersion을 올리므로 대상 회원의 기존 토큰은 모두 무효가 된다.
-  //    - 변경 대상이 관리자 본인이 아니므로 토큰을 발급하지 않는다.
+  // 임시 비밀번호는 응답으로 한 번만 주고 DB에는 해시만 남긴다.
   async resetPassword(
     user: Pick<Users, 'role'>,
     userId: number
@@ -492,7 +476,7 @@ export class AuthService {
 
     await this.usersService.updatePassword(userId, newHash);
 
-    // 비밀번호를 잊어 잠긴 회원이 임시 비밀번호로 바로 로그인할 수 있도록 잠금도 해제한다.
+    // 잠긴 회원이 임시 비밀번호로 바로 로그인할 수 있게 잠금도 푼다
     const unlocked = await this.loginHistoryService.reset(targetUser.empNo);
 
     // 임시 비밀번호는 남기지 않는다.
@@ -507,7 +491,7 @@ export class AuthService {
   }
 
   //* 임시 비밀번호 생성 (12자리)
-  //    - Math.random()은 예측 가능하므로 비교적 안전한 crypto.randomInt 사용.
+  // Math.random()은 예측할 수 있어서 crypto.randomInt를 쓴다.
   private generateTemporaryPassword(){
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890';
 

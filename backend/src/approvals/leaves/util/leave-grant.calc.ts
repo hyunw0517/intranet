@@ -1,7 +1,7 @@
-//! 연차 부여 계산 (docs/design/leave_calculate_manual.md 3장, 2026-11-10 · 11-12 사용자 결정)
+//! 연차 부여 계산 (docs/design/leave_calculate_manual.md)
 // 규칙을 바꾸면 매뉴얼 → 이 함수 → leave-grant.calc.spec.ts 예시표 순서로 함께 고친다.
-// - 날짜는 KST 날짜 문자열 "YYYY-MM-DD"로 받는다. (시간대 계산을 이 함수 밖에서 끝낸다)
-// - 결과는 0.25일 단위 정수(quarter, 1일 = 4)로 돌려준다. 부동소수점 오차 없이 계산하고 저장할 때만 Decimal로 바꾼다.
+// - 날짜는 KST 날짜 문자열 "YYYY-MM-DD"로 받는다.
+// - 결과는 0.25일 단위 정수(quarter, 1일 = 4)라 부동소수점 오차가 없다.
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -54,8 +54,7 @@ function monthlyCount( joinAt: string, asOf: string ): number {
 //* 회계연도 year의 baseDays (quarter 단위) - 행을 만들지 않는 경우 null
 // - year < 입사 연도, 입사일 > asOf(입사 예정)이면 null
 // - 입사한 해: 월 단위(월 1일, asOf까지 생긴 만큼)
-// - 다음 해부터: 연차 n = year − 입사 연도, 15 + floor((n−1)/2), 최대 25 (2026-11-12 사용자 결정: 다음 해 1/1에 15일 전부)
-//   asOf와 무관하므로 12월에 미리 만든 다음 해 행도 1/1에 다시 계산한 값과 같다.
+// - 다음 해부터: 연차 n = year − 입사 연도, 15 + floor((n−1)/2), 최대 25 (다음 해 1/1에 15일 전부)
 export function calcBaseQuarters( joinAt: string, year: number, asOf: string ): number | null {
     const joinYear = parse( joinAt ).y;
     if ( year < joinYear || joinAt > asOf ) return null;
@@ -67,7 +66,7 @@ export function calcBaseQuarters( joinAt: string, year: number, asOf: string ): 
     return Math.min( MAX_DAYS, BASE_DAYS + Math.floor( ( n - 1 ) / 2 ) ) * 4;
 }
 
-//* 재계산할 연도: 올해, 12월이면 다음 해도 (2026-11-12 사용자 결정 - 12월에 다음 해 연차를 미리 신청할 수 있게)
+//* 재계산할 연도: 올해, 12월이면 다음 해도 (12월에 다음 해 연차를 미리 신청할 수 있게)
 export function recalcYears( asOf: string ): number[] {
     const { y, m } = parse( asOf );
     return m === 12 ? [ y, y + 1 ] : [ y ];

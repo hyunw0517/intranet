@@ -1,4 +1,4 @@
-// 채팅 파일 규칙 (features.md 8.4) - 채팅 기능 안에서만 쓴다. 최종 판단은 서버, 여기는 보내기 전에 미리 막는 용도.
+// 채팅 파일 규칙 (보내기 전에 미리 막는 용도, 최종 판단은 서버)
 import {
   CHAT_FILE_EXTENSIONS,
   CHAT_FILE_MAX_SIZE,
@@ -41,7 +41,7 @@ export function validateChatFiles(files: File[]): string | null {
   return null;
 }
 
-// 요청 묶기: 이미지는 한 요청(묶음 메시지 1개), 동영상·그 밖의 파일은 하나씩 (2026-11-13 사용자 결정)
+// 요청 묶기: 이미지는 한 요청(묶음 메시지 1개), 동영상·그 밖의 파일은 하나씩
 // 보내는 순서는 고른 순서를 따르고, 이미지 묶음은 첫 이미지 자리에 둔다.
 export function groupForSend(files: File[]): File[][] {
   const groups: File[][] = [];
@@ -62,8 +62,7 @@ export function groupForSend(files: File[]): File[][] {
   return groups;
 }
 
-// 한 요청 안에서 보낸 바이트로 "업로드가 끝난 파일 수"를 센다.
-// 앞에서부터 파일 크기를 더한 경계를 넘으면 그 파일은 다 보낸 것. 마지막 파일은 서버 응답이 와야 끝난 것으로 본다.
+// 한 요청에서 보낸 바이트로 "끝난 파일 수"를 센다. 마지막 파일은 서버 응답이 와야 끝난 것으로 본다.
 export function filesSent(files: File[], loaded: number) {
   let sum = 0;
   let count = 0;

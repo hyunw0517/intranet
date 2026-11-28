@@ -1,5 +1,4 @@
 //! quote-rules.util.ts 단위 테스트 (견적 금액·부가세, 표시 상태, 견적번호, 결재 본문 HTML)
-// DB를 쓰지 않는다. 규칙은 docs/design/projects.md 5-1장.
 
 import { ApprovalStatus, ProjectQuoteStatus, ProjectQuoteTaxType } from 'src/generated/prisma/client';
 import { sanitizeEditorHtml } from 'src/common/util/sanitize-html.util';
@@ -21,7 +20,7 @@ describe('calcQuote - 금액·부가세', () => {
         expect( r.vatAmount.toString() ).toBe( '1' );
     });
 
-    // 2026-11-17 사용자 결정: 부가세율 직접 입력(기본 10%), 소수 둘째 자리까지
+    // 부가세율 직접 입력(기본 10%), 소수 둘째 자리까지
     it('부가세율을 직접 주면 그 비율로 버림 (5% · 3.3% · 0%)', () => {
         const five = calcQuote( [ { name: 'A', quantity: 1, unitPrice: 33_333 } ], ProjectQuoteTaxType.TAXABLE, 5 )!;
         expect( five.vatAmount.toString() ).toBe( '1666' ); // 1,666.65 → 1,666

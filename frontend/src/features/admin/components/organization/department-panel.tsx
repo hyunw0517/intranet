@@ -31,7 +31,7 @@ type DialogState =
   | null;
 
 // 자기 자신과 하위 부서 id
-// 서버 응답이 트리 순서(전위 순회)이므로, 자기 바로 뒤에서 depth가 더 깊은 항목이 이어지는 동안이 하위 부서다.
+// 서버 응답이 트리 순서라, 자기 뒤에서 depth가 더 깊은 항목이 이어지는 동안이 하위 부서다.
 function selfAndDescendantIds(list: Department[], target: Department) {
   const ids = new Set([target.id]);
   const start = list.findIndex((d) => d.id === target.id);
@@ -57,7 +57,7 @@ export function DepartmentPanel() {
     dialog?.mode === "edit" ? updateDepartment(dialog.department.id, input) : createDepartment(input),
   );
   const deleteMutation = useOrganizationMutation((id: number) => deleteDepartment(id));
-  // 바뀐 형제 그룹마다 순서 변경 요청 (그룹 하나가 요청 하나이며, 각 요청은 서버에서 트랜잭션으로 처리)
+  // 바뀐 형제 그룹마다 순서 변경 요청 (그룹 하나 = 요청 하나)
   const orderMutation = useOrganizationMutation(async (groups: { parentId: number | null; ids: number[] }[]) => {
     for (const group of groups) await reorderDepartments(group.parentId, group.ids);
   });
@@ -220,9 +220,8 @@ export function DepartmentPanel() {
   );
 }
 
-// 한 상위 부서 아래의 형제 부서 목록 (각 부서 안에 자기 하위 부서 목록을 다시 그린다)
-// 형제 그룹마다 별도의 정렬 목록이라 다른 상위 부서 아래로는 끌어다 놓을 수 없다. (상위 부서 이동은 [수정]에서)
-// 부서를 끌면 그 안에 그려진 하위 부서들도 함께 움직인다. (접혀 있어도 마찬가지)
+// 한 상위 부서 아래의 형제 부서 목록. 그룹마다 따로 정렬해서 다른 상위 아래로는 못 옮긴다.
+// 부서를 끌면 그 안의 하위 부서도 함께 움직인다.
 function DepartmentGroup({
   parentId,
   className,

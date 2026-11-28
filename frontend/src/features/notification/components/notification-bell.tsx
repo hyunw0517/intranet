@@ -20,10 +20,7 @@ import {
 } from "@/services/api/notifications";
 import { useNotificationList, useNotificationMutation, useUnreadNotificationCount } from "../hooks/use-notifications";
 
-// 헤더 알림 (테마 선택과 사용자 메뉴 사이)
-// - 안 읽은 알림이 있으면 아이콘에 빨간 점
-// - 누르면 받은 알림 목록, 아래에 [모두 읽음] [읽은 알림 삭제]
-// - 승인 전(GUEST)은 알림 API를 쓸 수 없어(403) 아이콘을 표시하지 않는다.
+// 헤더 알림 (안 읽은 알림이 있으면 빨간 점, GUEST는 API가 403이라 숨긴다)
 export function NotificationBell() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -69,9 +66,9 @@ function NotificationPanel({ unreadCount, onNavigate }: { unreadCount: number; o
   const readAll = useNotificationMutation(() => markAllNotificationsRead());
   const removeRead = useNotificationMutation(() => deleteReadNotifications());
 
-  // 알림을 누르면: 안 읽었으면 읽음 처리 → 창을 닫고 저장된 주소로 이동
-  // - 이미 그 화면에 있으면 router.push가 아무 일도 하지 않는다(같은 주소). 그러면 새 댓글 등이 보이지 않으므로
-  //   화면에 떠 있는 조회를 모두 다시 불러온다. (다른 기능의 queryKey를 import하지 않기 위해 특정 키 대신 활성 쿼리 전체)
+  // 알림을 누르면 읽음 처리 후 창을 닫고 저장된 주소로 이동한다.
+  // 이미 그 화면이면 router.push가 아무것도 하지 않아서 활성 쿼리를 모두 다시 불러온다.
+  // (다른 기능의 queryKey를 import하지 않으려고 특정 키 대신 전체)
   const handleOpen = (item: NotificationItem) => {
     if (!item.isRead) readOne.mutate(item.id);
     onNavigate();

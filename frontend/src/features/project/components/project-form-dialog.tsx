@@ -22,8 +22,8 @@ const NO_CLIENT = "none";
 export type ProjectFormState = { mode: "create" } | { mode: "edit"; project: ProjectDetail } | null;
 
 // 프로젝트 만들기·수정 창
-// - 만들면 만든 사람이 책임자로 등록되고 상세 화면으로 이동한다.
-// - 기간은 선택(둘 다 있으면 시작 <= 종료). 서버도 같은 규칙으로 400을 낸다.
+// - 만든 사람이 책임자가 되고 상세 화면으로 이동한다.
+// - 기간은 선택이고 둘 다 있으면 시작 <= 종료
 export function ProjectFormDialog({ state, onClose }: { state: ProjectFormState; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
@@ -55,7 +55,7 @@ function ProjectForm({
   const [errors, setErrors] = useState<{ name?: string; period?: string }>({});
   const [serverError, setServerError] = useState<string | null>(null);
 
-  // 거래처 선택지: 삭제되지 않은 거래처(회사명 순, 최대 100개). 이미 연결된 삭제된 거래처는 그대로 둘 수 있게 따로 넣는다.
+  // 거래처 선택지: 삭제되지 않은 거래처 (이미 연결된 삭제 거래처는 따로 넣어 둔다)
   const clients = useProjectClients({ take: 100 });
   const options = clients.data?.data ?? [];
   const linkedDeleted = editing?.client?.deleted ? editing.client : null;

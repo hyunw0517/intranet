@@ -104,8 +104,8 @@ export class PostsService {
             ),
         ]);
 
-        // 앨범 게시판: 대표 이미지(본문 첫 번째 이미지)의 썸네일 주소 + 본문 이미지 수 (카드의 "+추가 이미지 수" 표시용)
-        // 볼 수 없는 비밀글은 제목처럼 썸네일·이미지 수도 내려주지 않는다. (대표 이미지가 없으면 null → 화면에서 대체 이미지)
+        // 앨범 게시판: 대표 이미지(본문 첫 이미지) 썸네일과 이미지 수
+        // 볼 수 없는 비밀글은 제목처럼 이것도 내려주지 않는다.
         let thumbnails: Map<number, FileInfo> | null = null;
         let imageCounts: Map<number, number> | null = null;
         if ( board.type === BoardType.ALBUM ) {
@@ -125,7 +125,7 @@ export class PostsService {
             imageCount: imageCounts?.get( row.id ) ?? 0,    // 앨범이 아니거나 볼 수 없는 비밀글은 0
         });
 
-        // 게시판 정보·권한도 함께 내려준다. (게시판 이름, 글쓰기 버튼, 비밀글 체크박스 표시용)
+        // 게시판 정보·권한도 같이 준다 (게시판 이름, 글쓰기 버튼, 비밀글 체크박스)
         return {
             board,
             perm,
@@ -160,13 +160,10 @@ export class PostsService {
         });
     }
 
-    //* 캘린더 일정 조회 (통합 조회 / 게시판 하나)
-    // - 대상 게시판: { boardId } → 그 게시판(읽기 권한 없으면 404, 캘린더가 아니면 400)
-    //                { boardIds } → 볼 수 있는 캘린더 게시판과의 교집합 (null이면 볼 수 있는 캘린더 전체)
-    // - 기간: 겹치는 일정 모두 (eventStartAt < end && eventEndAt >= start) → 여러 날 일정이 기간 앞뒤로 걸쳐도 빠지지 않음
-    // - 비밀글 일정은 작성자 본인에게만 보인다. (게시판 관리자·시스템 관리자도 달력·일정 목록에서는 볼 수 없음, 사용자 결정)
-    //   게시글 상세는 기존 규칙(작성자 + 게시판 관리자)을 따른다.
-    // - 익명 캘린더 게시판은 본인 일정이 아니면 작성자를 가린다.
+    //* 캘린더 일정 조회 (통합 / 게시판 하나)
+    // - 기간과 겹치는 일정은 모두 가져온다 (eventStartAt < end && eventEndAt >= start)
+    // - 비밀글 일정은 작성자 본인만 본다. 관리자도 달력에서는 못 본다.
+    // - 익명 캘린더는 본인 일정이 아니면 작성자를 가린다.
     async findCalendarEvents(
         user: Pick<Users, 'id' | 'role' | 'adminPermissions'>,
         target: { boardId: number } | { boardIds: number[] | null },
@@ -211,7 +208,7 @@ export class PostsService {
 
         return {
             boards: boards.map( ( { id, name, showLeaves } ) => ({ id, name, showLeaves }) ),
-            // 휴가자 표시: 보고 있는 게시판 중 하나라도 켜져 있으면 true → 화면이 휴가 API를 한 번만 불러 "휴가 N명"을 그린다 (2026-11-12 사용자 결정)
+            // 보고 있는 게시판 중 하나라도 휴가자 표시가 켜져 있으면 true
             showLeaves: boards.some( ( b ) => b.showLeaves ),
             events: rows.map( ( row ) => ({
                 ...row,
@@ -258,7 +255,7 @@ export class PostsService {
             title: true, 
             authorDepartmentName: true,
             authorPositionName: true,
-            authorJobTitleName: true,   // 직책 (응답에는 포함, 목록 화면에서는 표시하지 않음)
+            authorJobTitleName: true,   // 목록 화면에는 안 보인다
             isPinned: true,
             viewCount: true,
             likeCount: true,
@@ -290,7 +287,7 @@ export class PostsService {
         } satisfies Prisma.PostSelect;
     }
 
-    //* 게시글 상세 select (화면에 필요한 값만, 검색용 텍스트·삭제 정보 등은 제외)
+    //* 게시글 상세 select (화면에 필요한 값만)
     private postDetailSelect() {
         return {
             id: true,
@@ -336,9 +333,8 @@ export class PostsService {
         }
     }
 
-    //* 비밀글 열람 권한 조회 -> 작성자 본인 or 게시판 관리자 or 시스템 관리자(Role.ADMIN)
-    // 목록 마스킹과 상세 조회가 같은 기준을 쓰도록 한 곳에 둔다.
-    // 목록(author.id)과 상세(authorId)의 조회 모양이 달라 값만 받는다.
+    //* 비밀글 열람 권한 조회 -> 작성자 본인 or 게시판 관리자 or 시스템 관리자
+    // 목록 가리기와 상세 조회가 같은 기준을 쓰도록 한 곳에 둔다.
     private canViewSecret(
         isSecret: boolean,
         authorId: number,
@@ -349,7 +345,7 @@ export class PostsService {
     }
 
     //* 작성자 정보 가리기 (작성자와 작성 당시 소속을 null로)
-    // Prisma select는 행마다 다르게 고를 수 없으므로 조회 후 가린다. (프론트에서 가리면 응답에 원본이 남음)
+    // select는 행마다 다르게 고를 수 없어서 조회 후 가린다 (프론트에서 가리면 응답에 원본이 남는다)
     private hideAuthor<T extends object>( post: T ): Omit<T, AuthorField> & Record<AuthorField, null> {
         return {
             ...post,
@@ -411,7 +407,7 @@ export class PostsService {
         // 본문 정제 + 본문 이미지 id
         const { imageIds, ...contentFields } = await this.toContentFields( body.content, user.id, null );
 
-        // 앨범 게시판은 작성할 때 이미지가 1개 이상 있어야 한다. (수정·타입 변경으로 이미지가 없어진 글은 대체 이미지로 표시)
+        // 앨범 게시판은 작성할 때 이미지가 1개 이상 있어야 한다
         if( board.type === BoardType.ALBUM && imageIds.length === 0 ){
             throw new BadRequestException('앨범 게시판은 본문에 이미지를 1개 이상 넣어야 합니다.');
         }
@@ -449,7 +445,7 @@ export class PostsService {
             return post;
         });
 
-        // 커밋 후: 공지 게시판 새 글 → 읽을 수 있는 회원에게 알림 (작성 시에만, 규칙은 BoardNotifier, 실패해도 글 작성은 성공)
+        // 커밋 후 공지 알림 (작성할 때만, 실패해도 글 작성은 성공)
         if( board.type === BoardType.NOTICE ){
             await this.boardNotifier.noticeCreated({ board, post, writerId: user.id });
         }
@@ -488,7 +484,7 @@ export class PostsService {
         // 첨부파일 목록 (본문 이미지는 본문 HTML에 들어 있으므로 제외)
         const files = await this.filesService.listByTarget( FileTargetType.POST, postId );
 
-        // 버튼 표시용 권한 (서버 판정 결과, 실제로 막는 것은 각 API의 검사)
+        // 버튼 표시용 권한 (실제 차단은 각 API가 한다)
         const isAuthor = post.author.id === user.id;
         const can = {
             edit: isAuthor && perm.write,       // 수정: 작성자 + 쓰기 권한 (관리자도 남의 글은 수정 불가)
@@ -505,7 +501,7 @@ export class PostsService {
         return {
             ...detail,
             liked: myLike !== null,     // 내가 좋아요를 눌렀는지
-            files,                      // 첨부파일 (다운로드: GET .../posts/:postId/files/:fileId)
+            files,                      // 첨부파일
             board,
             can,
         };
@@ -530,8 +526,8 @@ export class PostsService {
             // 감사 로그 비교 대상 (본문 HTML은 크므로 바뀌었는지만 남긴다)
             const changedFields = {
                 title: body.title,
-                // 고정 여부는 별도 API(pinPost)에서만 바꾼다. (작성자 수정으로 관리자가 고정한 글이 풀리지 않게)
-                // 비밀글을 허용하지 않는 게시판이면 기존 값 유지 (허용 → 비허용으로 바뀐 게시판의 기존 비밀글이 공개되지 않게)
+                // 고정 여부는 pinPost에서만 바꾼다 (작성자 수정으로 고정이 풀리지 않게)
+                // 비밀글 비허용 게시판이면 기존 값 유지 (허용에서 바뀐 게시판의 비밀글이 공개되지 않게)
                 isSecret: board.allowSecret ? ( body.isSecret ?? false ) : undefined,
                 ...this.resolveEventFields( board.type, body ),
             };
@@ -613,10 +609,9 @@ export class PostsService {
         return this.filesService.openTargetFile( fileId, FileTargetType.POST, postId );
     }
 
-    //* 본문 정제 (작성·수정 공용) → 저장용 HTML + 검색용 텍스트 + 본문 이미지 id
-    // 허용 목록 외의 태그·속성은 제거하고, 정제 후 내용이 없으면 null로 저장한다.
-    // 본문 이미지는 "내가 올린 미연결 이미지 + 이 글에 이미 연결된 이미지"만 남긴다.
-    // (다른 글의 이미지 주소를 붙여 넣으면 그 글이 삭제될 때 함께 깨지므로 본문에서 제거)
+    //* 본문 정제 (작성·수정 공용)
+    // 본문 이미지는 내가 올린 미연결 이미지와 이 글에 이미 연결된 이미지만 남긴다.
+    // 다른 글의 이미지 주소를 붙여 넣으면 그 글이 지워질 때 같이 깨지기 때문이다.
     private async toContentFields(
         content: string | null | undefined,
         userId: number,
@@ -667,9 +662,8 @@ export class PostsService {
     }
 
     //* 일정 필드 정리 (작성·수정 공용)
-    // - 캘린더가 아닌 게시판: 일정 값을 무시하고 null (화면에서도 일정 입력을 숨김)
-    // - 캘린더 게시판: 시작·종료 필수, 종일이면 KST 00:00:00 ~ 23:59:59로 맞춘 뒤 종료 ≥ 시작 확인
-    //   (종일 일정은 화면에서 시간 입력을 숨기므로 어떤 시간이 와도 그날 경계로 맞춘다)
+    // - 캘린더가 아닌 게시판은 일정 값을 null로
+    // - 캘린더 게시판은 시작·종료 필수, 종일이면 KST 00:00:00 ~ 23:59:59로 맞춘 뒤 비교
     private resolveEventFields(
         boardType: BoardType,
         body: Pick<CreatePostDto, 'eventStartAt' | 'eventEndAt' | 'isAllDay' | 'eventColor'>,
@@ -691,8 +685,8 @@ export class PostsService {
             throw new BadRequestException('종료일시는 시작일시보다 빠를 수 없습니다.');
         }
 
-        // 일정 색 (2026-11-12 사용자 결정): 정해진 색 중 작성자가 선택, null = 기본색.
-        // 생략(undefined)하면 작성은 기본색, 수정은 기존 색을 유지한다(Prisma가 undefined 필드를 건드리지 않음).
+        // 일정 색: 정해진 색 중 작성자가 선택, null = 기본색.
+        // 생략하면 작성은 기본색, 수정은 기존 색 유지 (Prisma가 undefined 필드를 건드리지 않음)
         return { eventStartAt, eventEndAt, isAllDay, eventColor: body.eventColor };
     }
 
@@ -830,7 +824,7 @@ export class PostsService {
     }        
 
     //* 게시글 존재 확인 + 권한 확인
-    // 게시글과 함께 게시판 정보·권한을 반환한다. (상세 응답의 버튼 표시, 고정 권한 확인 등에 이어서 사용)
+    // 게시판 정보·권한도 같이 돌려준다 (버튼 표시, 고정 권한 확인 등)
     async checkPost(
         boardId: number,
         postId: number,

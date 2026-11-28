@@ -25,9 +25,9 @@ import { ProjectQuotes } from "./project-quotes";
 import { ProjectSales } from "./project-sales";
 import { TaskFormDialog, type TaskFormState } from "./task-form-dialog";
 
-// 프로젝트 상세 - 탭: 칸반(기본) / 개요 / 참여자 / 협력사 / 견적 / 매출 / 예산
-// - 알림 주소 /projects/:id?task=:taskId 로 들어오면 그 과제 창을 연다(담당 지정·마감 임박 알림).
-// - 수정·삭제 버튼은 myAccess.canManage(책임자·관리자)일 때만. 서버도 같은 기준으로 403을 낸다.
+// 프로젝트 상세 - 탭: 칸반 / 개요 / 참여자 / 협력사 / 견적 / 매출 / 예산
+// - ?task=로 들어오면 그 과제 창을 연다.
+// - 수정·삭제 버튼은 myAccess.canManage일 때만 (서버도 같은 기준)
 export function ProjectDetailView({ id }: { id: number }) {
   const project = useProject(id);
   const tasks = useProjectTasks(id);
@@ -58,7 +58,7 @@ function ProjectDetailContent({
 
   const remove = useProjectMutation(deleteProject);
 
-  // 알림에서 들어온 과제 열기: 주소의 ?task를 상태로 옮기지 않고 그대로 계산한다(effect 없음).
+  // 알림에서 들어온 과제는 ?task를 상태로 옮기지 않고 그대로 계산한다 (effect 없음).
   // 창을 닫으면 주소에서 ?task를 지운다. 없는 과제(삭제됨)면 열지 않는다.
   const taskParam = Number(searchParams.get("task"));
   const urlTask = taskParam && tasks ? tasks.find((t) => t.id === taskParam) : undefined;

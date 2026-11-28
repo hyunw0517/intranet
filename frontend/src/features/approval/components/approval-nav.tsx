@@ -9,7 +9,7 @@ const LINKS = [
   { href: "/approvals/lines", label: "결재라인" },
 ];
 
-// 전자결재 화면 안의 이동 (결재함 / 결재라인) - 사이드바 메뉴는 "전자결재" 하나 (시설 예약과 같은 방식)
+// 전자결재 화면 안의 이동 (결재함 / 결재라인) - 사이드바 메뉴는 "전자결재" 하나
 export function ApprovalNav() {
   const pathname = usePathname();
 

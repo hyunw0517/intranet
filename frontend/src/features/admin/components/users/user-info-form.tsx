@@ -35,12 +35,11 @@ export function toFormValues(user: AdminUserDetail) {
 type Values = ReturnType<typeof toFormValues>;
 type Errors = Partial<Record<keyof Values, string>>;
 
-// 관리자 회원 정보 수정 (PATCH /users/:id)
-// 본인 수정과 달리 현재 비밀번호 확인이 없고, 사번·입사일도 수정한다. 비밀번호는 [비밀번호 초기화]로만 바꾼다.
+// 관리자 회원 정보 수정 (비밀번호 확인 없이 사번·입사일도 수정)
 // 선택 항목을 비우면 빈 문자열을 보내 서버에서 null로 저장된다.
-// 부모가 서버 값으로 key를 주므로, 저장이나 다른 화면(목록의 권한·상태 모달 등)으로 서버 값이 바뀌면 폼이 새 값으로 다시 채워진다.
-// (key가 없으면 이전 값을 들고 있다가 저장할 때 방금 바뀐 값을 덮어쓴다)
-// onJoinAtChanged: 승인된 회원의 입사일을 바꿔 저장했을 때 호출 (부모가 연차 재계산 안내를 띄운다. 폼은 저장 후 다시 마운트되므로 안내 상태는 부모가 가진다)
+// 부모가 서버 값으로 key를 줘서, 서버 값이 바뀌면 폼이 새 값으로 다시 채워진다.
+// (key가 없으면 이전 값을 들고 있다가 방금 바뀐 값을 덮어쓴다)
+// onJoinAtChanged: 승인된 회원의 입사일을 바꿨을 때 부모가 연차 재계산 안내를 띄운다.
 export function UserInfoForm({ user, onJoinAtChanged }: { user: AdminUserDetail; onJoinAtChanged?: () => void }) {
   const [values, setValues] = useState<Values>(() => toFormValues(user));
   const [errors, setErrors] = useState<Errors>({});

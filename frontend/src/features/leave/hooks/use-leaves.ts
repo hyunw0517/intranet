@@ -4,8 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { CalendarRange } from "@/services/api/calendar";
 import { fetchLeaveByDocument, fetchLeaveCalendar, fetchMyLeaves, fetchMyLeaveSummary } from "@/services/api/leaves";
 
-// 휴가 queryKey - 휴가 신청·결재 결과는 결재 화면에서 바뀌므로 결재 키와 나눠 두고,
-// 휴가내역 화면은 열 때마다 다시 조회한다(staleTime 기본 0).
+// 휴가 queryKey (결재 키와 나눠 두고, 휴가내역은 열 때마다 다시 조회한다)
 export const leaveKeys = {
   all: ["leaves"] as const,
   summary: (year: number) => [...leaveKeys.all, "me", year] as const,

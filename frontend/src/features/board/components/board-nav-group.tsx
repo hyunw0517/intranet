@@ -60,8 +60,8 @@ export function BoardNavGroup() {
   const activeCategoryId =
     nodes.find((node) => node.children.some((child) => isActivePath(pathname, boardHref(child.id))))?.board.id ?? null;
 
-  // 펼친 카테고리 id. 다른 화면에서 게시판으로 이동하면 그 게시판의 카테고리를 펼친다.
-  // (effect 대신 렌더링 중에 이전 값과 비교해 갱신 - React 권장 패턴)
+  // 펼친 카테고리 id. 다른 화면에서 게시판으로 오면 그 카테고리를 펼친다.
+  // (effect 대신 렌더링 중에 이전 값과 비교해 갱신)
   const [openIds, setOpenIds] = useState<Set<number>>(() => new Set());
   const [prevActiveId, setPrevActiveId] = useState<number | null>(null);
   if (activeCategoryId !== prevActiveId) {

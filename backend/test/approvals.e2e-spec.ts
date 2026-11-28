@@ -1,6 +1,6 @@
-//! 전자결재 e2e (애드온 approvals, docs/design/features.md 7.5)
+//! 전자결재 e2e (애드온 approvals, docs/design/features.md)
 // 실제 앱(AppModule) + 테스트 DB(intranet_test)로 API를 호출해 확인한다. .env.test의 ADDONS에 approvals를 켜 둔다.
-// ⭐ 핵심: 상태 전이(상신 → 순차 승인 / 중간 반려 시 중단), 내 차례만 처리, 동시 처리(같은 결재자 연타, 회수와 승인이 겹침)에도 한 번만 반영된다.
+// 핵심: 상태 전이(상신 → 순차 승인 / 중간 반려 시 중단), 내 차례만 처리, 동시 처리(같은 결재자 연타, 회수와 승인이 겹침)에도 한 번만 반영된다.
 
 // supertest의 res.body는 any 타입이다. 응답 형태는 각 expect에서 검사하므로 이 파일에서만 any 관련 규칙을 끈다.
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment */
@@ -81,7 +81,7 @@ describe('전자결재', () => {
         expect( res.body[0] ).toEqual({ type: 'GENERAL', directCreate: true }); // 등록 순서 = 결재 본체가 먼저
     });
 
-    // 결재자 선택 화면은 핵심의 공용 회원 검색(GET /users/search)을 쓴다 (2026-11-17, 결재 전용 /approvals/approvers는 없앰)
+    // 결재자 선택 화면은 핵심의 공용 회원 검색(GET /users/search)을 쓴다 (결재 전용 /approvals/approvers는 없앰)
     it('결재자 검색(공용 회원 검색): 지정할 수 있는 회원만, 부서명으로도 찾고 이메일은 내보내지 않는다', async () => {
         await http().get( '/approvals/approvers' ).set( auth( token.a ) ).expect( 404 ); // 없앤 API
 
@@ -347,8 +347,8 @@ describe('전자결재', () => {
             await http().patch( `/approvals/documents/${started}/cancel` ).set( auth( token.a ) ).expect( 409 );
         });
 
-        // ⭐ 같은 결재자가 동시에 여러 번 승인 (두 탭·연타) → 한 번만 반영
-        it('⭐ 동시 승인 5건 → 1건만 성공, 나머지 409, 단계가 한 번만 넘어간다', async () => {
+        // 같은 결재자가 동시에 여러 번 승인 (두 탭·연타) → 한 번만 반영
+        it('동시 승인 5건 → 1건만 성공, 나머지 409, 단계가 한 번만 넘어간다', async () => {
             const id = await submitNew([ ids.b, ids.c, ids.d ]);
 
             const results = await Promise.all( Array.from( { length: 5 }, () => approve( token.b, id ) ) );
@@ -362,8 +362,8 @@ describe('전자결재', () => {
             expect( await prisma.approvalDocumentHistory.count({ where: { approvalDocumentId: id } }) ).toBe( 3 ); // DRAFT, REQUESTED, IN_PROGRESS
         });
 
-        // ⭐ 기안자의 회수와 1단계 결재자의 승인이 동시에 → 한쪽만 성공, 상태가 섞이지 않는다 (교착 없음, 500 없음)
-        it('⭐ 회수와 승인이 동시에 → 한쪽만 성공', async () => {
+        // 기안자의 회수와 1단계 결재자의 승인이 동시에 → 한쪽만 성공, 상태가 섞이지 않는다 (교착 없음, 500 없음)
+        it('회수와 승인이 동시에 → 한쪽만 성공', async () => {
             for ( let i = 0; i < 5; i++ ) {
                 const id = await submitNew([ ids.b, ids.c ]);
                 const [ cancel, approved ] = await Promise.all([
@@ -444,8 +444,8 @@ describe('전자결재', () => {
             await approve( token.c, id ).expect( 409 );
         });
 
-        // ⭐ 같은 단계의 두 사람이 동시에 승인 → 둘 다 성공하고, 다음 단계는 정확히 한 번 열린다 (알림도 한 번)
-        it('⭐ 같은 단계 두 명 동시 승인 × 5회 → 둘 다 200, 2단계가 한 번만 열림', async () => {
+        // 같은 단계의 두 사람이 동시에 승인 → 둘 다 성공하고, 다음 단계는 정확히 한 번 열린다 (알림도 한 번)
+        it('같은 단계 두 명 동시 승인 × 5회 → 둘 다 200, 2단계가 한 번만 열림', async () => {
             for ( let i = 0; i < 5; i++ ) {
                 const id = await submitParallel();
                 const results = await Promise.all([ approve( token.b, id ), approve( token.c, id ) ]);

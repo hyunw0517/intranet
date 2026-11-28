@@ -1,7 +1,7 @@
 import { ApprovalLineManagerScope, ApprovalLineScope, ApprovalStatus } from "src/generated/prisma/client";
 import { MAX_APPROVAL_STEPS } from "../const/approval.const";
 
-//! 전자결재 순수 규칙 (DB 없이 단위 테스트, features.md 7.5)
+//! 전자결재 순수 규칙 (DB 없이 단위 테스트)
 
 //* 결재자 목록 구조 검사 → 오류 문구 (문제 없으면 null)
 // - minSteps: 상신·템플릿은 1, 임시저장은 0(결재라인 미확정 허용)
@@ -77,7 +77,7 @@ export function resolveManageScope(
     return { all: false, departmentIds: [ ...ids ].sort( ( a, b ) => a - b ) };
 }
 
-//* 관리 부서 → 하위 부서 전체(모든 단계) 포함 (2026-11-10 사용자 결정: 상위 부서 관리자는 하위 부서의 부서 결재라인도 관리)
+//* 관리 부서에 하위 부서 전체를 포함 (상위 부서 관리자는 하위 부서 결재라인도 관리)
 // departments: 삭제되지 않은 전체 부서 (id, 상위 id). 결과는 id 오름차순, 중복 없음.
 export function withDescendants( departmentIds: number[], departments: { id: number; parentDepartmentId: number | null }[] ): number[] {
     const children = new Map<number, number[]>();

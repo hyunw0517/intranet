@@ -23,8 +23,8 @@ interface ConfirmDialogProps {
 }
 
 // 삭제 등 되돌리기 어려운 작업 전 확인 모달
-// AlertDialogAction은 누르는 즉시 닫히므로, 요청이 끝날 때까지 열어 두기 위해 일반 Button을 쓴다.
-// (닫기는 호출한 쪽에서 성공 시 onOpenChange(false))
+// AlertDialogAction은 누르면 바로 닫혀서, 요청이 끝날 때까지 열어 두려고 일반 Button을 쓴다.
+// 닫기는 호출한 쪽이 성공 시 onOpenChange(false)로 한다.
 export function ConfirmDialog({
   open,
   onOpenChange,

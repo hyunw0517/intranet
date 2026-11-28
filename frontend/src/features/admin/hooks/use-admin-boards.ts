@@ -32,7 +32,7 @@ export function useAdminBoardMutation<TVariables = void, TData = unknown>(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    // 관리자 본인의 직원용 게시판 메뉴도 갱신한다. (다른 회원은 각자 브라우저에서 30초 뒤 다시 조회)
+    // 관리자 본인의 직원용 게시판 메뉴도 갱신한다
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: adminBoardKeys.all }),

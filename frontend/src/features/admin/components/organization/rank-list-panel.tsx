@@ -30,7 +30,7 @@ interface RankListPanelProps {
 type DialogState = { mode: "add" } | { mode: "edit"; item: RankItem } | null;
 
 // 직급·직책 관리 공용 패널 (둘 다 이름 + 정렬 순서만 있는 같은 구조)
-// 손잡이를 끌어 순서를 바꾸면 [순서 저장]이 나타나고, 저장할 때 화면 순서대로 id 전체를 보낸다.
+// 순서를 바꾸면 [순서 저장]이 나타나고, 저장할 때 화면 순서대로 id 전체를 보낸다.
 export function RankListPanel({ label, description, query, create, update, remove, reorder }: RankListPanelProps) {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [deleteTarget, setDeleteTarget] = useState<RankItem | null>(null);
@@ -40,7 +40,7 @@ export function RankListPanel({ label, description, query, create, update, remov
     dialog?.mode === "edit" ? update(dialog.item.id, name) : create(name),
   );
   const deleteMutation = useOrganizationMutation((id: number) => remove(id));
-  // 성공 시 공용 훅이 목록을 다시 받은 뒤에 아래 onSuccess가 실행되므로, 임시 순서를 지워도 화면이 되돌아가지 않는다.
+  // 공용 훅이 목록을 다시 받은 뒤 onSuccess가 돌아서, 임시 순서를 지워도 화면이 되돌아가지 않는다.
   const orderMutation = useOrganizationMutation((ids: number[]) => reorder(ids));
 
   const openDialog = (next: DialogState) => {
@@ -63,7 +63,7 @@ export function RankListPanel({ label, description, query, create, update, remov
         toast.success(`${deleteTarget.name}을(를) 삭제했습니다.`);
         setDeleteTarget(null);
       },
-      // 사용 중이면 서버가 400으로 거부한다. 다시 눌러도 같은 결과이므로 모달을 닫고 메시지만 보여 준다. (부서 패널과 동일)
+      // 사용 중이면 서버가 400으로 거부한다. 다시 눌러도 같아서 모달을 닫고 메시지만 보여 준다.
       onError: (error) => {
         toast.error(getErrorMessage(error));
         setDeleteTarget(null);

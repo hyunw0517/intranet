@@ -24,9 +24,8 @@ interface Props {
   onDone: () => void; // 성공 후 선택 해제
 }
 
-// 예약 목록 하단의 선택 예약 일괄 처리 [시간 변경] [예약 취소] [삭제] (회원 관리 일괄 처리와 같은 배치)
-// - 시간 변경·취소는 선택한 예약이 모두 "예약됨 + 시작 전"일 때만 누를 수 있다. 삭제는 관리자라 언제나.
-// - 한 건이라도 처리할 수 없으면 서버가 전체를 거부하고(트랜잭션) 그 메시지를 보여 준다.
+// 예약 목록 하단의 선택 예약 일괄 처리 [시간 변경] [예약 취소] [삭제]
+// 시간 변경·취소는 모두 "예약됨 + 시작 전"일 때만, 삭제는 언제나. 한 건이라도 안 되면 서버가 전체를 거부한다.
 export function AdminReservationBulkActions({ selected, categories, onDone }: Props) {
   const { user } = useAuth();
   const [dialog, setDialog] = useState<BulkDialog>(null);
@@ -115,7 +114,7 @@ function intersect(lists: number[][]) {
   return lists.length === 0 ? [] : lists[0].filter((m) => lists.every((l) => l.includes(m)));
 }
 
-// 날짜는 예약마다 그대로 두고 시작·종료 시각을 같은 시간대로 맞춘다. (2026-11-14 사용자 결정)
+// 날짜는 예약마다 그대로 두고 시작·종료 시각을 같은 시간대로 맞춘다.
 function BulkTimeDialog({
   open,
   onClose,

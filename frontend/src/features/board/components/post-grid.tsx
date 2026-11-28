@@ -14,11 +14,9 @@ interface PostGridProps {
   posts: PostListItem[];
 }
 
-// 앨범 게시판 목록: 대표 이미지(본문 첫 번째 이미지) 썸네일 그리드
-// - 서버가 내려준 thumbnailUrl(긴 변 480px webp)만 쓴다. 원본은 상세에서만 연다.
-// - 대표 이미지가 없는 글(일반 → 앨범으로 바뀐 게시판의 기존 글 등)과 볼 수 없는 비밀글은 대체 이미지로 표시한다.
-// - 이미지가 2장 이상이면 우측 하단에 "+나머지 수 (이미지 아이콘)"을 붙인다. (서버 imageCount 기준)
-// - 고정글은 앞에 두고 핀 표시만 붙인다.
+// 앨범 게시판 목록: 대표 이미지(본문 첫 이미지) 썸네일 그리드
+// - 대표 이미지가 없는 글과 볼 수 없는 비밀글은 대체 이미지로 표시한다.
+// - 이미지가 2장 이상이면 우측 하단에 "+나머지 수"를 붙인다.
 export function PostGrid({ boardId, board, perm, pinned, posts }: PostGridProps) {
   return (
     <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
@@ -47,14 +45,14 @@ function PostCard({
 }) {
   const canOpen = canOpenPost(post, perm);
   const comments = post._count.comments;
-  // 대표 이미지가 보일 때만 나머지 수를 표시한다. (대표 이미지가 없으면 썸네일 자리가 대체 이미지라 "+N"이 어색함)
+  // 대표 이미지가 있을 때만 나머지 수를 표시한다
   const extraImages = post.thumbnailUrl ? Math.max(post.imageCount - 1, 0) : 0;
 
   const body = (
     <>
       <div className="relative aspect-square overflow-hidden rounded-md border bg-muted">
         {post.thumbnailUrl ? (
-          // next/image 대신 <img>: 썸네일은 서버가 이미 줄여서 주고, /api 경로라 이미지 최적화 설정이 따로 필요해진다.
+          // next/image 대신 <img>: 썸네일은 이미 줄여서 오고, /api 경로라 최적화 설정이 따로 필요해진다
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={post.thumbnailUrl}

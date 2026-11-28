@@ -36,8 +36,7 @@ interface Props {
 }
 
 // 회원 목록 하단의 선택 회원 일괄 처리 [권한 변경] [상태 변경] [삭제]
-// 요청 하나가 동작 하나다. (권한과 상태를 한 요청에 섞지 않아 일부만 반영되는 경우가 없다)
-// 한 명이라도 처리할 수 없으면 서버가 전체를 거부하고(트랜잭션), 그 메시지를 모달에 보여 준다.
+// 요청 하나에 동작 하나라 일부만 반영되는 경우가 없다. 한 명이라도 안 되면 서버가 전체를 거부한다.
 export function UserBulkActions({ selectedUsers, onDone }: Props) {
   const { user: me } = useAuth();
   const isSuperAdmin = me?.role === "SUPER_ADMIN";

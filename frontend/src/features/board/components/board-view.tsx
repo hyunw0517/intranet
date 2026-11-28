@@ -48,8 +48,7 @@ function toQuery(f: Filters): PostListQuery {
   return query;
 }
 
-// 직원용 게시판 목록: 고정글 + 페이지 목록, 검색(제목·내용·작성자), 정렬, 글쓰기
-// 게시판 이름·권한은 목록 응답(board, perm)으로 받는다. 읽기 권한이 없으면 서버가 404.
+// 직원용 게시판 목록 (게시판 이름·권한은 목록 응답으로 받는다)
 export function BoardView({ boardId }: { boardId: number }) {
   const router = useRouter();
   const pathname = usePathname();

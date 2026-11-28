@@ -20,7 +20,7 @@ import { SaleFormDialog, type SaleFormState } from "./sale-form-dialog";
 
 type Pending = { kind: "cancel" | "delete"; sale: ProjectSale } | null;
 
-// 매출 탭 - 요약(청구 매출·예상·수금·미수), 확정 견적별 청구 잔액, 청구 건 목록 (docs/design/projects.md 5-2장)
+// 매출 탭 - 요약, 확정 견적별 청구 잔액, 청구 건 목록
 // 매출 기준일은 청구일. 청구 예정은 "예상 매출"로 따로 센다. 취소된 청구는 합계에서 빠진다.
 export function ProjectSales({ projectId }: { projectId: number }) {
   const { data, isPending, isError, error, refetch } = useSales(projectId);

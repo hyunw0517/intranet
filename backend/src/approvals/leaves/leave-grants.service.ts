@@ -13,10 +13,10 @@ type Tx = Prisma.TransactionClient;
 
 const IN_PROGRESS: ApprovalStatus[] = [ ApprovalStatus.REQUESTED, ApprovalStatus.IN_PROGRESS ];
 
-//! 연차 부여 (docs/design/leave_calculate_manual.md, 2026-11-10 · 11-12 사용자 결정)
-// - LeaveGrant(회원, 연도) = baseDays(규칙 계산, 배치만 씀) + adjustDays(관리자 ±). 둘을 나눠 재계산이 조정을 지우지 않는다.
-// - 사용·진행 중은 저장하지 않고 LeaveRequest(연차) 합계로 계산한다. 잔여 = 부여 − 사용 − 진행 중
-// - 배치·재계산·조정은 올해 행(12월에는 다음 해 행도)만 바꾼다. 지난 연도 행은 연차수당 근거로 그대로 남는다.
+//! 연차 부여 (docs/design/leave_calculate_manual.md)
+// - 부여 = baseDays(규칙 계산, 배치만 씀) + adjustDays(관리자). 나눠 둬서 재계산이 조정을 지우지 않는다.
+// - 사용·진행 중은 저장하지 않고 휴가 신청 합계로 계산한다.
+// - 지난 연도 행은 바꾸지 않는다 (연차수당 근거).
 @Injectable()
 export class LeaveGrantsService {
 
@@ -32,8 +32,8 @@ export class LeaveGrantsService {
 
     //! 부여 재계산
 
-    //* 매월 1일 00:00 (KST) - 1년 미만 월 단위 연차가 매달 늘고, 연도 중 입사자는 행이 없으므로 1/1 한 번으로는 부족하다.
-    // 실행이 한 번 빠져도 다음 실행에서 맞춰진다(멱등). 휴가 옵션이 꺼져 있으면 모듈이 없어 돌지 않는다.
+    //* 매월 1일 00:00 KST - 1년 미만 월 단위 연차가 매달 늘고 연도 중 입사자도 있어서 매월 돈다.
+    // 멱등이라 한 번 빠져도 다음 실행에서 맞춰진다.
     @Cron( '0 0 0 1 * *', { name: 'leave-grant-monthly', timeZone: 'Asia/Seoul' } )
     async monthlyRecalculate(){
         try {
@@ -44,9 +44,8 @@ export class LeaveGrantsService {
         }
     }
 
-    //* 올해(12월이면 다음 해도) baseDays 재계산 (배치·관리자 "지금 재계산" 공용) - adjustDays는 건드리지 않는다
-    // 대상: 삭제·퇴사가 아닌 USER/ADMIN 중 입사일이 있는 회원 (휴직 포함, 2026-11-12 사용자 결정)
-    // 12월에 만든 다음 해 행은 1/1 배치가 같은 행을 다시 계산한다(값이 같고, 그사이 넣은 조정값은 유지).
+    //* 올해(12월이면 다음 해도) baseDays 재계산 (배치·"지금 재계산" 공용, adjustDays는 그대로)
+    // 대상: 삭제·퇴사가 아닌 USER/ADMIN 중 입사일이 있는 회원 (휴직 포함)
     async recalculate( actorId: number | null, asOf = kstDateString( new Date() ) ){
         const years = recalcYears( asOf );
         const users = await this.prisma.users.findMany({
@@ -59,7 +58,7 @@ export class LeaveGrantsService {
             select: { id: true, joinAt: true, leaveSetting: { select: { permanentDays: true } } },
         });
 
-        // 계산값 + 그해에 적용할 영구 조정값(입사한 해는 0)을 함께 쓴다. 매년 조정값(adjustDays)은 건드리지 않는다.
+        // 계산값 + 그해에 적용할 영구 조정값(입사한 해는 0)
         const rows = years.flatMap( ( year ) => users.flatMap( ( u ) => {
             const joinAt = u.joinAt!.toISOString().slice( 0, 10 );
             const quarters = calcBaseQuarters( joinAt, year, asOf );
@@ -92,11 +91,10 @@ export class LeaveGrantsService {
 
     //! 관리자 조정
 
-    //* 조정 저장 (2026-11-12 사용자 결정) - 한 창에서 두 가지를 함께 저장한다
-    // - 매년 조정값(adjustDays): 그 연도 행에만 (올해, 또는 12월에 미리 만든 다음 해). 새해 행은 0으로 시작
-    // - 영구 조정값(permanentDays): 회원 설정에 저장하고 올해·(있으면) 내년 행에 바로 반영, 이후 재계산이 매년 복사
-    //   입사한 해 행에는 적용하지 않는다(월 단위 연차는 매년 조정값으로만). 지난 연도 행은 바꾸지 않는다.
-    // - 부여 합계(계산값 + 영구 + 매년) ≥ 0만 막는다(25일 한도 없음). 조정 후 잔여가 음수가 되는 것은 허용.
+    //* 조정 저장 (매년 조정값과 영구 조정값을 한 창에서 같이)
+    // - 매년 조정값은 그 연도 행에만, 영구 조정값은 회원 설정에 두고 이후 재계산이 매년 복사한다.
+    // - 영구 조정값은 입사한 해에는 적용하지 않는다 (월 단위 연차는 매년 조정값으로만).
+    // - 부여 합계 ≥ 0만 막는다. 조정 후 잔여가 음수가 되는 것은 허용.
     async adjust( userId: number, body: AdjustLeaveGrantDto ){
         const adjust = toQuarters( body.adjustDays, '매년 조정값' );
         const permanent = toQuarters( body.permanentDays, '영구 조정값' );
@@ -124,7 +122,7 @@ export class LeaveGrantsService {
         const joinAt = user.joinAt?.toISOString().slice( 0, 10 ) ?? null;
         const before = user.leaveSetting;
 
-        // 영구값을 반영할 행: 올해부터 (지난 연도 제외) - 편집 중인 연도 행 포함
+        // 영구값을 반영할 행: 올해부터
         const targets = await this.prisma.leaveGrant.findMany({ where: { userId, year: { gte: thisYear } } });
         for ( const row of targets ) {
             const rowPermanent = joinAt ? permanentFor( joinAt, row.year, permanent ) : 0;
@@ -214,7 +212,7 @@ export class LeaveGrantsService {
         return this.toSummary( year, grant, usage.get( userId ) );
     }
 
-    //* 부여 합계 (quarter, 행이 없으면 0) - 상신·승인 검사용 (결재 tx 안)
+    //* 부여 합계 (quarter, 상신·승인 검사용)
     async grantedQuarters( tx: Tx, userId: number, year: number ){
         const grant = await tx.leaveGrant.findUnique({ where: { userId_year: { userId, year } } });
         return grant ? daysToQuarters( grant.baseDays ) + daysToQuarters( grant.permanentDays ) + daysToQuarters( grant.adjustDays ) : 0;
@@ -253,7 +251,7 @@ export class LeaveGrantsService {
         const base = daysToQuarters( grant?.baseDays );
         const permanent = daysToQuarters( grant?.permanentDays );
         const adjust = daysToQuarters( grant?.adjustDays );
-        const granted = base + permanent + adjust; // 25일 한도 없음 (2026-11-12 사용자 결정)
+        const granted = base + permanent + adjust; // 25일 한도 없음
         return {
             year,
             hasGrant: grant !== null,
@@ -273,7 +271,7 @@ export class LeaveGrantsService {
     }
 }
 
-//* 그해 행에 적용할 영구 조정값 (quarter) - 입사한 해는 0 (월 단위 연차는 매년 조정값으로만, 2026-11-12 사용자 결정)
+//* 그해 행에 적용할 영구 조정값 (quarter) - 입사한 해는 0 (월 단위 연차는 매년 조정값으로만)
 function permanentFor( joinAt: string, year: number, permanent: number ){
     return year === Number( joinAt.slice( 0, 4 ) ) ? 0 : permanent;
 }

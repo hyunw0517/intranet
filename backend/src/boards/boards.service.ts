@@ -11,7 +11,7 @@ import { UpdateBoardOrderDto } from './dto/update-board-order.dto';
 
 //* 게시판 계층 규칙
 // - 상위 게시판은 CATEGORY만 지정 가능.
-// - CATEGORY는 최상위에만 둔다. (카테고리 안에 카테고리 불가 → 깊이는 최대 2단계)
+// - CATEGORY는 최상위에만 둔다 (깊이는 최대 2단계)
 @Injectable()
 export class BoardsService {
 
@@ -228,8 +228,7 @@ export class BoardsService {
     }
 
     //* 게시판 순서 변경 (드래그 정렬)
-    // - 같은 상위 게시판 아래의 형제 게시판끼리만 순서를 바꾼다. (상위 이동은 게시판 수정에서)
-    // - 받은 id 배열이 그 상위 게시판의 하위 게시판 전체와 정확히 일치해야 한다.
+    // 같은 상위 아래 형제끼리만 바꾸고, 받은 id 배열이 형제 전체와 정확히 같아야 한다.
     async updateBoardOrder(
         user: Pick<Users, 'id'>,
         body: UpdateBoardOrderDto,
@@ -293,9 +292,7 @@ export class BoardsService {
             throw new BadRequestException('하위 게시판이 있는 카테고리는 삭제할 수 없습니다.');
         }
 
-        // 게시글은 막지 않는다. (경고·확인은 관리자 화면에서)
-        // 게시글은 지우지 않고 그대로 둔다 → 게시판을 복구하면 다시 보인다.
-        // 게시글 접근은 모두 게시판 권한 검사를 거치므로 삭제된 게시판의 글은 볼 수 없다.
+        // 게시글은 지우지 않는다. 권한 검사에서 걸러져 안 보이고, 게시판을 복구하면 다시 보인다.
 
         // DELETE (트랜잭션: 삭제+권한 규칙 삭제+재정렬+감사 로그)
         await this.prisma.$transaction( async (tx) => {
@@ -313,7 +310,7 @@ export class BoardsService {
             });
 
             // 게시판의 권한 규칙도 함께 삭제
-            // (남겨 두면 그 규칙이 참조하는 부서·직급·직책을 영영 삭제할 수 없게 된다)
+            // (남겨 두면 규칙이 참조하는 부서·직급·직책을 지울 수 없다)
             const { count: deletedAuthCount } = await tx.boardAuth.updateMany({
                 where: {
                     boardId: thisBoard.id,
@@ -376,12 +373,10 @@ export class BoardsService {
     }
 
     //* 타입 변경 검증
-    // - CATEGORY ↔ 게시판: 카테고리는 글을, 게시판은 하위 게시판을 가질 수 없으므로 비어 있을 때만 가능
-    // - CALENDAR ↔ 그 외: 캘린더 글은 일정 필드(eventStartAt 등)를 쓰므로 글이 없을 때만 가능
-    // - NORMAL ↔ NOTICE: 글 구조가 같아 자유롭게 변경
-    //* 휴가자 표시 값 (2026-11-12 사용자 결정): 캘린더 게시판만 켤 수 있다
-    // - 캘린더가 아닌데 true를 보내면 400. 캘린더가 아닌 타입으로 바꾸면 자동으로 끈다.
-    // - 게시판은 값만 저장한다. 휴가 애드온이 켜져 있을 때 화면이 휴가 API를 함께 불러 표시한다. (핵심은 애드온을 모른다)
+    // - CATEGORY ↔ 게시판, CALENDAR ↔ 그 외: 비어 있을 때만 바꿀 수 있다
+    // - NORMAL ↔ NOTICE: 글 구조가 같아 자유롭게 바꾼다
+    //* 휴가자 표시는 캘린더 게시판만 켤 수 있다 (다른 타입으로 바꾸면 자동으로 끈다)
+    // 게시판은 값만 저장하고, 표시는 화면이 휴가 API를 불러서 한다.
     private resolveShowLeaves( type: BoardType, requested: boolean | undefined, current: boolean ): boolean {
         if( type !== BoardType.CALENDAR ){
             if( requested === true ){

@@ -8,13 +8,12 @@ export interface ApproverInfo {
     name: string;
     empNo: string;
     departmentName: string | null;  // 주 소속 부서
-    positionName: string | null;    // 직급
+    positionName: string | null;
     jobTitleName: string | null;    // 주 소속의 직책
-    usable: boolean;                // 결재자로 지정할 수 있는지 (재직 + USER/ADMIN + 삭제 안 됨)
+    usable: boolean;                // 재직 + USER/ADMIN + 삭제 안 됨
 }
 
 //* 결재자 조회·검사 (결재라인 템플릿·결재 문서 공용)
-// 핵심(users·organization) 데이터를 읽기만 한다. (애드온 → 핵심 읽기는 허용 방향)
 @Injectable()
 export class ApproversService {
 
@@ -53,8 +52,7 @@ export class ApproversService {
         }) );
     }
 
-    // 결재자 후보 검색은 핵심의 공용 회원 검색 GET /users/search(UserSearchService)를 쓴다. (2026-11-17 사용자 결정)
-    // 대상 조건(재직 + 승인 회원 + 삭제 안 됨)이 결재자 지정 조건(usable)과 같아서, 결재 애드온 안의 별도 검색 API를 없앴다.
+    // 결재자 후보 검색은 공용 회원 검색 GET /users/search를 쓴다 (대상 조건이 usable과 같다).
 
     //* 모두 결재자로 지정할 수 있는지 확인 → 결재자 정보 (지정 순서대로)
     async loadUsable( ids: number[], db: Prisma.TransactionClient | PrismaService = this.prisma ): Promise<ApproverInfo[]> {

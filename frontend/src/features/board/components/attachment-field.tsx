@@ -23,8 +23,8 @@ interface AttachmentFieldProps {
 }
 
 // 게시글 첨부파일 입력
-// 고르는 즉시 하나씩 업로드하고(POST /common/files/attachments), 응답 id 목록을 글 저장 시 attachmentIds로 보낸다.
-// 목록에서 빼면 저장할 때 서버가 연결을 끊고 삭제한다. (저장 전에는 서버에 아무 변화 없음)
+// 고르는 즉시 하나씩 업로드하고, 응답 id 목록을 글 저장 시 attachmentIds로 보낸다.
+// 목록에서 빼면 저장할 때 서버가 지운다 (저장 전에는 서버에 변화 없음).
 export function AttachmentField({ value, onChange, onUploadingChange }: AttachmentFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);

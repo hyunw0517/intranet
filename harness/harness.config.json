@@ -221,6 +221,18 @@
     "srcRoot": "backend/src",
     "fileSuffix": ".controller.ts"
   },
+  "commentStyle": {
+    "$comment": "[R-DOC-05] 코드 주석에 결정 이력·문서 장 번호를 쓰지 않는다 (harness/checks/comment-style.mjs). 예시 날짜는 정상이라 날짜 단독은 잡지 않는다",
+    "roots": ["backend/src", "backend/test", "backend/prisma", "frontend/src"],
+    "extensions": [".ts", ".tsx"],
+    "excludeDirs": ["backend/src/generated"],
+    "patterns": [
+      { "regex": "사용자\\s*(결정|요청)", "message": "결정·요청 기록", "hint": "누가 정했는지는 devlog·git에 남긴다" },
+      { "regex": "20\\d\\d-\\d\\d-\\d\\d[^)]{0,12}(결정|요청)", "message": "결정 날짜", "hint": "언제 정했는지는 devlog·git에 남긴다" },
+      { "regex": "\\.md\\s+\\d+([.~·-]\\d+)*장?(?![\\d/])", "message": "설계 문서 장 번호", "hint": "장 번호는 문서가 바뀌면 틀어진다. 파일 이름만 적는다" },
+      { "regex": "⭐", "message": "강조 표식(⭐)", "hint": "중요한 이유를 문장으로 쓴다" }
+    ]
+  },
   "guards": {
     "protectedFiles": [
       {

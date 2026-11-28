@@ -20,7 +20,7 @@ import { UserDangerZone } from "./user-danger-zone";
 import { toFormValues, UserInfoForm } from "./user-info-form";
 
 // 관리자 회원 상세: 권한·상태·소속 조회 / 기본 정보 수정 / 계정 관리(비밀번호 초기화, 삭제)
-// 권한·상태(가입 승인 포함)와 직급·소속 변경은 회원 목록의 ⋯ 메뉴 모달에서 한다. 상세에서는 조회만 한다.
+// 권한·상태와 직급·소속 변경은 회원 목록의 ⋯ 메뉴에서 하고, 상세에서는 조회만 한다.
 export function UserDetailView({ userId }: { userId: number }) {
   const { user: me } = useAuth();
   const { data: user, isPending, isError, error, refetch } = useAdminUser(userId);

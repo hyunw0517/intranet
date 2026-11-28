@@ -9,7 +9,7 @@ import { UpdateFacilityCategoryDto } from './dto/update-facility-category.dto';
 import { FacilityCategoriesService } from './facility-categories.service';
 import { ApiBadRequestResponse, ApiConflictResponse, ApiNotFoundResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-//* 시설 분류 - 목록은 모든 회원(예약 화면 탭·입력 제한), 관리는 관리자
+//* 시설 분류 - 목록은 모든 회원, 관리는 관리자
 @ApiTags('Reservations · Categories (시설 분류)')
 @Controller('reservations/categories')
 export class FacilityCategoriesController {

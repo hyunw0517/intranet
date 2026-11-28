@@ -32,10 +32,7 @@ export interface FileInfo {
 }
 
 //* 파일 저장·조회·연결 (공용)
-// - 업무 권한은 모른다. (common은 업무 모듈을 import하지 않는다)
-//   첨부 다운로드는 각 업무 모듈이 권한을 확인한 뒤 openTargetFile로 스트림을 받아 응답한다.
-// - 실제 저장 위치는 모른다. (FileStorage: 로컬 디스크 → 운영에서 S3로 교체, CommonModule provider)
-//   DB의 Files.path가 저장소 key다.
+// 업무 권한과 실제 저장 위치는 모른다. 권한은 업무 모듈이 확인하고, 저장은 FileStorage가 맡는다.
 @Injectable()
 export class FilesService {
 
@@ -50,11 +47,9 @@ export class FilesService {
     }
 
     //* 업로드 저장 + 기록
-    // 대상(targetType/targetId)은 비워 두고, 글 저장 시 syncTargetFiles로 연결한다.
-    // options.attachmentThumbnail: 첨부 중 이미지 확장자 파일의 썸네일을 만든다 (비공개 미리보기용. 예: 채팅)
-    //   - 시그니처가 확장자와 같은 실제 이미지일 때만 만든다. 아니면(가짜·깨진 파일) 썸네일 없이 일반 첨부로 저장한다.
-    //     (첨부는 원래 시그니처를 보지 않으므로 업로드를 거절하지 않는다. 미리보기를 쓰는 화면이 "썸네일 없음"을 표시한다)
-    //   - 이미지 MIME은 시그니처로 확인했을 때만 저장한다. 클라이언트가 보낸 image/* 값은 믿지 않는다.
+    // 대상은 비워 두고, 글 저장 시 syncTargetFiles로 연결한다.
+    // attachmentThumbnail이면 첨부 중 시그니처까지 맞는 실제 이미지에만 썸네일을 만든다 (예: 채팅).
+    // 이미지 MIME은 시그니처로 확인했을 때만 저장하고, 클라이언트가 보낸 image/* 값은 믿지 않는다.
     async saveUploaded(
         file: Express.Multer.File | undefined,
         kind: FileKind,
@@ -87,7 +82,7 @@ export class FilesService {
             }
             mimeType = detected;
 
-            // 썸네일 (게시판 타입과 무관하게 항상). 시그니처는 맞지만 내용이 깨진 이미지는 여기서 걸러진다.
+            // 썸네일 (시그니처는 맞지만 내용이 깨진 이미지는 여기서 걸러진다)
             try {
                 thumbnail = await createThumbnail( file.buffer );
             } catch {
@@ -96,14 +91,13 @@ export class FilesService {
         }
 
         // 저장 파일명은 서버가 만든다. (원본 파일명은 DB에만, .jpeg는 .jpg로 통일)
-        // 저장 위치: <종류>/<KST 연>/<월>/<uuid> - 오류 시 기간으로 대상 파일을 찾기 쉽고, 월별 용량 확인과 폴더당 파일 수 제한(로컬 디스크)을 위해.
-        // 연·월은 업로드 시점에 한 번 정해 path에 저장한다. (이후 createdAt으로 다시 계산하지 않는다)
+        // 저장 위치: <종류>/<KST 연>/<월>/<uuid> (기간별로 찾기 쉽고, 폴더당 파일 수를 줄인다)
         const storedName = `${randomUUID()}${ext === '.jpeg' ? '.jpg' : ext}`;
         const key = `${kind}/${kstYearMonthPath( new Date() )}/${storedName}`;
         const thumbKey = thumbnail ? thumbnailKey( key ) : null;
 
         // 저장소에 먼저 쓰고 DB에 기록한다. DB 기록이 실패하면 저장한 파일을 지운다.
-        // (반대 순서면 DB에는 있는데 파일이 없는 행이 생겨 다운로드가 404가 된다)
+        // 반대 순서면 파일 없는 DB 행이 생겨 다운로드가 404가 된다.
         await this.storage.save( key, file.buffer, mimeType );
         if ( thumbnail && thumbKey ) {
             try {
@@ -115,7 +109,7 @@ export class FilesService {
         }
 
         try {
-            // 파일 행 + 감사 로그를 한 트랜잭션으로 (연결·해제는 게시글 감사 로그의 imageIds·attachmentIds에 남는다)
+            // 파일 행 + 감사 로그를 한 트랜잭션으로
             const row = await this.prisma.$transaction( async ( tx ) => {
                 const created = await tx.files.create({
                     select: FILE_INFO_SELECT,
@@ -149,7 +143,7 @@ export class FilesService {
     }
 
     //* 본문 이미지 썸네일 공개 조회 (원본 저장 파일명으로 찾는다)
-    // 원본이 삭제되면 썸네일도 404. 썸네일이 없으면(썸네일 기능 이전 업로드 등) 원본을 대신 준다.
+    // 원본이 삭제되면 썸네일도 404, 썸네일이 없으면(예전 업로드) 원본을 준다.
     async openPublicThumbnail( storedName: string ) {
         const row = await this.findPublicImageRow( storedName );
 
@@ -184,9 +178,8 @@ export class FilesService {
         return row;
     }
 
-    //* 대상별 첫 번째 파일 (order = 0) → targetId별 FileInfo
-    // 게시글 목록의 대표 이미지(앨범 그리드)에 쓴다. 목록 한 페이지당 쿼리 1번.
-    // 대표 이미지 컬럼을 따로 두지 않고, 본문 순서대로 저장한 이미지 순서(order)를 그대로 쓴다.
+    //* 대상별 첫 번째 파일 (앨범 대표 이미지, 목록 한 페이지당 쿼리 1번)
+    // 대표 이미지 컬럼을 따로 두지 않고 본문 이미지 순서(order)를 그대로 쓴다.
     async findFirstByTargets(
         targetType: FileTargetType,
         targetIds: number[],
@@ -203,16 +196,15 @@ export class FilesService {
         return new Map( rows.map( row => [ row.targetId!, this.toFileInfo( row ) ] ) );
     }
 
-    //* 회원별 프로필 사진 주소 → userId별 썸네일 공개 주소 (사진이 없는 회원은 Map에 없음)
-    // 프로필 사진은 본문 이미지와 같은 images/ 공개 파일이고, 회원당 1개라 order = 0이다. 화면은 작은 원형이라 썸네일 주소를 준다.
+    //* 회원별 프로필 사진 썸네일 주소 (사진이 없는 회원은 Map에 없음)
+    // 프로필 사진은 본문 이미지와 같은 공개 파일이고, 화면이 작은 원형이라 썸네일을 준다.
     async findProfileImageUrls( userIds: number[] ): Promise<Map<number, string>> {
         const files = await this.findFirstByTargets( FileTargetType.USER_PROFILE, [ ...new Set( userIds ) ] );
 
         return new Map( [ ...files ].map( ( [ userId, file ] ) => [ userId, file.thumbnailUrl! ] ) );
     }
 
-    //* 대상별 파일 개수 → targetId별 개수 (파일이 없는 대상은 Map에 없음)
-    // 앨범 그리드의 "+추가 이미지 수" 표시에 쓴다. 목록 한 페이지당 쿼리 1번 (GROUP BY target_id).
+    //* 대상별 파일 개수 (앨범의 "+추가 이미지 수", GROUP BY 한 번)
     async countByTargets(
         targetType: FileTargetType,
         targetIds: number[],
@@ -255,7 +247,7 @@ export class FilesService {
     }
 
     //* 대상에 연결된 첨부의 썸네일 열기 (비공개 미리보기. 예: 채팅 이미지)
-    // 호출 전에 업무 모듈이 권한을 확인해야 한다. 썸네일이 없으면(이미지가 아님·가짜·깨진 파일) 404 → 화면이 "미리보기 없음"을 표시
+    // 호출 전에 업무 모듈이 권한을 확인해야 한다. 썸네일이 없으면 404
     async openTargetThumbnail(
         fileId: number,
         targetType: FileTargetType,
@@ -275,8 +267,7 @@ export class FilesService {
         return { stream, mimeType: 'image/webp' };
     }
 
-    //* 대상들에 연결된 파일 목록 → targetId별 파일 행 (정렬 순서대로, 쿼리 1번)
-    // 메시지 목록처럼 대상 여러 개의 파일을 한 번에 붙일 때 쓴다.
+    //* 여러 대상의 파일 목록을 한 번에 (메시지 목록 등, 쿼리 1번)
     async listByTargets(
         targetType: FileTargetType,
         targetIds: number[],
@@ -315,9 +306,8 @@ export class FilesService {
         return rows.map( row => this.toFileInfo( row ) );
     }
 
-    //* 본문 이미지 중 이 대상에 쓸 수 있는 것 → storedName별 id
-    // 쓸 수 있는 이미지: 내가 올리고 아직 연결되지 않은 이미지 + 이미 이 대상에 연결된 이미지(수정 시 유지)
-    // 다른 글의 이미지 주소를 붙여 넣은 경우 등은 포함되지 않는다. (호출한 쪽이 본문에서 제거)
+    //* 본문 이미지 중 이 대상에 쓸 수 있는 것 (storedName별 id)
+    // 내가 올린 미연결 이미지와 이미 이 대상에 연결된 이미지만 해당한다.
     async findUsableImages(
         storedNames: string[],
         userId: number,
@@ -344,11 +334,8 @@ export class FilesService {
         return new Map( rows.map( row => [ row.storedName, row.id ] ) );
     }
 
-    //* 대상의 파일 목록을 fileIds로 맞춘다. (작성·수정 공용, 호출한 쪽의 트랜잭션 안에서)
-    // fileIds = 최종 목록 (순서 = 표시 순서)
-    // - 이미 연결된 파일: 유지 (순서만 갱신)
-    // - 새 파일: 내가 올린 미연결 파일만 연결
-    // - 목록에서 빠진 기존 파일: soft delete
+    //* 대상의 파일 목록을 fileIds(최종 목록, 표시 순서)로 맞춘다 (작성·수정 공용, 호출한 쪽의 트랜잭션 안에서)
+    // 기존 파일은 순서만 갱신하고, 새 파일은 내가 올린 미연결 파일만 연결하고, 빠진 파일은 soft delete한다.
     async syncTargetFiles(
         tx: Prisma.TransactionClient,
         params: {
@@ -382,8 +369,7 @@ export class FilesService {
         }
 
         // 새 파일 연결
-        // 검증 조건(내가 올림, 미연결, 같은 종류)을 WHERE에 걸고, 바뀐 행 수가 다르면 전체 롤백한다.
-        // (다른 사람 파일 id·이미 다른 글에 연결된 파일·첨부를 이미지로 쓰는 요청 등을 막는다)
+        // 조건(내가 올림, 미연결, 같은 종류)을 WHERE에 걸고, 바뀐 행 수가 다르면 전체 롤백한다.
         const linkIds = fileIds.filter( id => !existingIds.has( id ) );
         if ( linkIds.length > 0 ) {
             const { count } = await tx.files.updateMany({
@@ -409,12 +395,9 @@ export class FilesService {
         }
     }
 
-    //* 대상의 첨부를 복사해 "내가 올린 미연결 첨부"로 만든다 → 새 파일 id 목록 (원래 순서)
-    // 결재 문서 "다시 기안"처럼 원래 대상을 그대로 두고 새 대상에 같은 첨부를 붙일 때 쓴다.
-    // - 저장 파일명이 unique라 행만 복사할 수 없다 → 저장소에서도 새 uuid 이름으로 복사한다.
-    // - 트랜잭션 밖에서 호출하고, 새 대상 저장 트랜잭션에서 syncTargetFiles로 연결한다.
-    //   (그 트랜잭션이 실패하면 업로드만 하고 글을 저장하지 않은 경우와 같은 미연결 파일로 남는다)
-    // - 첨부만 복사한다. (본문 이미지는 공개 주소라 결재 문서에서 쓰지 않음)
+    //* 대상의 첨부를 "내가 올린 미연결 첨부"로 복사 (결재 "다시 기안" 등)
+    // 저장 파일명이 unique라 저장소에서도 새 uuid 이름으로 복사한다.
+    // 트랜잭션 밖에서 부르고, 새 대상 저장 트랜잭션에서 syncTargetFiles로 연결한다.
     async duplicateAttachments(
         targetType: FileTargetType,
         targetId: number,

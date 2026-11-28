@@ -12,8 +12,8 @@ import { ApprovalStepInputDto } from "../../dto/approval-line.dto";
 const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-//* 휴가 신청 임시저장 (POST /approvals/leaves) - 상신은 결재 문서 API(PATCH /approvals/documents/:id/submit)
-// 제목은 서버가 유형·기간으로 만든다. 결재라인은 비워 둘 수 있다(상신할 때 검사).
+//* 휴가 신청 임시저장 (상신은 결재 문서 API)
+// 제목은 서버가 유형·기간으로 만든다.
 export class CreateLeaveDto {
 
     /** 휴가 유형 */
@@ -67,8 +67,8 @@ export class CreateLeaveDto {
     attachmentIds?: number[];
 }
 
-//* 휴가 신청 임시저장 수정 (PATCH /approvals/leaves/documents/:documentId) - 보낸 항목만 바꾼다
-// 휴가 항목(type·unit·startDate·endDate·startTime)은 보낸 값과 저장된 값을 합쳐 다시 검사한다.
+//* 휴가 신청 임시저장 수정 (보낸 항목만)
+// 휴가 항목은 보낸 값과 저장된 값을 합쳐 다시 검사한다.
 export class UpdateLeaveDto {
 
     /** 휴가 유형 */
@@ -134,8 +134,7 @@ export class LeaveYearQueryDto {
     year?: number;
 }
 
-//* 캘린더 휴가자 조회 기간 - 게시판 캘린더(CalendarEventsQueryDto)와 같은 형식 (start 이상 ~ end 미만, 시간대가 있는 ISO 문자열)
-// 화면이 달력 칸 범위를 게시판 일정 조회와 똑같이 보내면 된다. KST 날짜로 바꿔 쓴다.
+//* 캘린더 휴가자 조회 기간 (게시판 캘린더와 같은 형식, start 이상 ~ end 미만)
 export class LeaveCalendarQueryDto {
 
     /** 조회 시작 (포함, 시간대 있는 ISO 문자열, 게시판 캘린더와 같은 형식) */
@@ -166,7 +165,7 @@ export class LeaveGrantListQueryDto extends PagePaginationDto {
     search?: string;
 }
 
-//* 관리자 조정 (올해, 또는 12월에 미리 만든 다음 해) - 조정값은 누적이 아니라 그 연도의 조정 총합
+//* 관리자 조정 (올해, 또는 12월에 만든 다음 해) - 조정값은 누적이 아니라 그 연도의 총합
 export class AdjustLeaveGrantDto {
 
     /** 비우면 올해 */

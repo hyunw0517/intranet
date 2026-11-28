@@ -11,7 +11,7 @@ import { ProjectBudgetsService } from './project-budgets.service';
 import { ProjectStatsService } from './project-stats.service';
 import { ApiBadRequestResponse, ApiConflictResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 
-//* 비용 항목 - 조회는 USER, 관리는 과제 관리 관리자 ('projects/:id'보다 먼저 등록한다, projects.module.ts)
+//* 비용 항목 - 조회는 USER, 관리는 과제 관리 관리자 ('projects/:id'보다 먼저 등록)
 @ApiTags('Projects · Budget Categories (비용 항목)')
 @Controller('projects/budget-categories')
 export class ProjectBudgetCategoriesController {
@@ -56,7 +56,7 @@ export class ProjectBudgetCategoriesController {
     }
 }
 
-//* 전사 통계 (월별 매출·지출, 거래처별 매출 순위, 항목별 예산 대비 지출) - 과제 관리 관리자 ('projects/:id'보다 먼저 등록한다)
+//* 전사 통계 - 과제 관리 관리자 ('projects/:id'보다 먼저 등록)
 @ApiTags('Projects · Stats (전사 통계)')
 @Controller('projects/stats')
 export class ProjectStatsController {
@@ -65,7 +65,7 @@ export class ProjectStatsController {
         private readonly statsService: ProjectStatsService,
     ){}
 
-    //* 통계 (?year=2025&projectId=1&clientId=2, 모두 선택 - 없으면 최근 12개월·전체)
+    //* 통계 (?year=&projectId=&clientId=, 없으면 최근 12개월·전체)
     @Get()
     @RequireAdmin(AdminPermission.PROJECTS)
     @ApiOperation({ summary: '(관리자) 전사 통계', description: '월별 매출(청구 건 합계, 부가세 포함, 청구일 기준)·월별 지출(공급가액 기준)·거래처별 매출 순위·항목별 예산 대비 지출. year·projectId·clientId는 선택이고 없으면 최근 12개월·전체. 항목별 예산 대비 지출은 예산에 연도가 없어 기간과 관계없는 누적.' })
@@ -83,7 +83,7 @@ export class ProjectStatsController {
     }
 }
 
-//* 프로젝트 예산·지출 - 참여자 누구나 (서비스에서 프로젝트 권한 확인, docs/design/projects.md 5-3장)
+//* 프로젝트 예산·지출 - 참여자 누구나 (서비스에서 프로젝트 권한 확인)
 @ApiTags('Projects · Budgets (예산·지출)')
 @Controller('projects/:projectId/budgets')
 export class ProjectBudgetsController {
@@ -147,7 +147,7 @@ export class ProjectBudgetsController {
         return this.budgetsService.deleteExpense( user, projectId, expenseId );
     }
 
-    //* 증빙 파일 다운로드 - 매출 세금계산서와 같은 응답 형식
+    //* 증빙 파일 다운로드
     @Get('expenses/:expenseId/files/:fileId')
     @Roles(UserRole.USER)
     @ApiOperation({ summary: '지출 증빙 파일 다운로드', description: '프로젝트를 볼 수 있는 사람만. 매출 세금계산서와 같은 응답 형식.' })

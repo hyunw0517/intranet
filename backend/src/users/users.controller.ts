@@ -67,8 +67,7 @@ export class UsersController {
     return true;
   }
 
-  //* (개인) 프로필 사진 등록·변경 → 내 정보 (GET /users/me와 같은 형태)
-  //  - 업로드(POST /common/files/images)가 USER 이상이라 연결도 USER 이상 (승인 대기 회원은 사진을 등록할 수 없다)
+  //* (개인) 프로필 사진 등록·변경
   @Put('me/profile-image')
   @Roles(UserRole.USER)
   @ApiOperation({ summary: '프로필 사진 등록·변경', description: '이미지를 POST /common/files/images로 먼저 올리고 그 id를 보낸다. 회원당 1장이라 기존 사진은 서버가 지운다. 업로드가 USER 이상이라 연결도 USER 이상이다. 응답은 GET /users/me와 같은 형태다.' })
@@ -80,7 +79,7 @@ export class UsersController {
     return this.usersService.setMyProfileImage(user.id, body.fileId);
   }
 
-  //* (개인) 프로필 사진 삭제 → 내 정보
+  //* (개인) 프로필 사진 삭제
   @Delete('me/profile-image')
   @Roles(UserRole.USER)
   @ApiOperation({ summary: '프로필 사진 삭제', description: '사진이 없어도 성공한다. 응답은 GET /users/me와 같은 형태다.' })
@@ -91,7 +90,7 @@ export class UsersController {
   }
 
 
-  //* (공용) 회원 검색 - 회원을 고르는 화면용, 재직 중인 승인 회원만 (UserSearchService) - ':id'보다 먼저 선언
+  //* (공용) 회원 검색
   @Get('search')
   @Roles(UserRole.USER)
   @ApiOperation({ summary: '회원 검색 (회원 선택 화면용)', description: '재직 중인 승인 회원(GUEST 제외)만 이름·사번·부서명으로 찾는다. 이름순 최대 20명. 다른 회원에게 보여도 되는 정보만 응답한다(이메일·연락처·생일 없음). 과제 관리 참여자 추가, 결재자 선택에서 쓴다.' })
@@ -102,9 +101,9 @@ export class UsersController {
   }
 
   //! ========== 관리자 서비스 로직 ==========
-  // 'me', 'bulk'는 ':id' 라우트 아래에 둔다. (':id'가 먼저 선언되면 'me' 요청이 ':id'로 매칭됨)
+  // me·search·stats·bulk 같은 고정 경로는 ':id'보다 먼저 선언한다. 뒤에 두면 ':id'로 잡힌다.
 
-  //* (관리자) 회원 현황 건수 (대시보드) - ':id'보다 먼저 선언
+  //* (관리자) 회원 현황 건수 (대시보드)
   @Get('stats')
   @RequireAdmin(AdminPermission.USERS)
   @ApiOperation({ summary: '(관리자) 회원 현황 건수', description: '대시보드용. 가입 승인 대기, 재직, 비활성, 로그인 잠금 인원.' })

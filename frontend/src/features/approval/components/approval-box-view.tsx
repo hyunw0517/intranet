@@ -20,7 +20,7 @@ import { approvalHref } from "../approval-rules";
 import { useApprovalCounts, useApprovalList } from "../hooks/use-approvals";
 import { ApprovalStatusBadge, StepStatusText } from "./approval-badges";
 
-// 결재함 구분 (features.md 7.5 결재함 표) - 결재자 탭(대기·예정·완료) 다음 기안자 탭(기안함·임시저장) 순서 (2026-11-10 사용자 결정)
+// 결재함 탭 순서: 결재자 탭(대기·예정·완료) 다음 기안자 탭(기안함·임시저장)
 const BOXES: { box: ApprovalBox; label: string; empty: string; adminOnly?: boolean }[] = [
   { box: "pending", label: "결재 대기", empty: "지금 결재할 문서가 없습니다." },
   { box: "upcoming", label: "결재 예정", empty: "곧 차례가 올 문서가 없습니다." },
@@ -36,14 +36,13 @@ const FILTER_STATUSES: ApprovalStatus[] = ["REQUESTED", "IN_PROGRESS", "APPROVED
 const ALL = "all";
 const PAGE_SIZE = 20;
 
-// 건수를 표시하는 탭 (확인할 것만 센다 - 기안함은 결재요청·결재중만, 2026-11-10 사용자 결정)
-// 결재 완료·전체 문서는 계속 늘기만 하는 목록이라 표시하지 않는다.
+// 건수를 표시하는 탭 (확인할 것만, 기안함은 결재요청·결재중만)
 const COUNTED_BOXES = ["pending", "upcoming", "mine", "drafts"] as const;
 function isCountedBox(box: ApprovalBox): box is (typeof COUNTED_BOXES)[number] {
   return (COUNTED_BOXES as readonly string[]).includes(box);
 }
 
-// 결재함 - 결재함·상태·페이지는 URL(?box=&status=&page=)에 둔다. (상세에서 뒤로 가기·새로고침해도 유지)
+// 결재함 - 결재함·상태·페이지는 URL에 둔다 (뒤로 가기·새로고침해도 유지)
 export function ApprovalBoxView() {
   const { user } = useAuth();
   const params = useSearchParams();

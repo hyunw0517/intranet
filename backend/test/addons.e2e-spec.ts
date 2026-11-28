@@ -1,4 +1,4 @@
-//! 애드온 ON/OFF e2e (AGENTS.md 10.1)
+//! 애드온 ON/OFF e2e (AGENTS.md)
 // 실제 앱(AppModule)과 테스트 DB로 확인한다.
 // - GET /common/addons: 켜진 애드온 목록, 로그인 필요(USER 이상)
 // - addonModule(): ADDONS에 있으면 모듈이 등록되고(API 200), 없으면 등록되지 않는다(API 404)
@@ -78,12 +78,12 @@ describe('애드온 ON/OFF', () => {
             expect( res.body ).toEqual({ enabled: [ 'reservations', 'approvals' ] });
         });
 
-        // 메뉴는 로그인 후에만 보이므로 공개하지 않는다. (사용자 결정: 로그인 필요)
+        // 메뉴는 로그인 후에만 보이므로 공개하지 않는다. (로그인 필요)
         it('로그인하지 않으면 401', async () => {
             await request( app.getHttpServer() ).get( '/common/addons' ).expect( 401 );
         });
 
-        // 새 API는 @Roles(USER) 이상 규칙 (AGENTS.md 5.2): 승인 전 회원(GUEST)은 막힌다.
+        // 새 API는 @Roles(USER) 이상 규칙 (AGENTS.md): 승인 전 회원(GUEST)은 막힌다.
         it('승인 전(GUEST)은 403', async () => {
             await request( app.getHttpServer() )
                 .get( '/common/addons' )

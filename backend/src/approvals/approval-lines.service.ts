@@ -18,11 +18,10 @@ const lineSelect = {
 
 type LineRow = Prisma.ApprovalLineTemplateGetPayload<{ select: typeof lineSelect }>;
 
-//! 결재라인 템플릿 (features.md 7.5, 2026-11-10 사용자 결정)
-// - 상신 화면에서 결재자 목록을 채우는 "불러오기" 단축키. 불러온 뒤 문서에서 고칠 수 있고, 문서에는 사용한 템플릿 id만 남는다.
-// - 공용(ADMIN)·부서(DEPARTMENT)는 결재라인 관리자, 개인(PERSONAL)은 본인이 만든다.
-// - 불러오기: 공용은 전원, 부서는 그 부서 소속자(겸직 포함), 개인은 본인만. 남의 개인 결재라인은 관리자도 보지 않는다(404).
-// - 템플릿에 든 회원이 삭제·퇴사해도 템플릿은 그대로 두고, 응답에 usable=false로 표시해 화면에서 빼고 상신하게 한다.
+//! 결재라인 템플릿
+// - 결재자 목록을 채우는 "불러오기"용이다. 불러온 뒤 고칠 수 있고, 문서에는 템플릿 id만 남는다.
+// - 공용은 전원, 부서는 소속자(겸직 포함), 개인은 본인만 불러온다. 남의 개인 결재라인은 관리자도 못 본다(404).
+// - 퇴사한 회원이 든 템플릿은 그대로 두고 usable=false로 표시한다.
 @Injectable()
 export class ApprovalLinesService {
 
@@ -63,7 +62,7 @@ export class ApprovalLinesService {
     }
 
     //* 내가 관리할 수 있는 공용·부서 템플릿 (결재라인 관리자, 권한이 없으면 403)
-    // 삭제된 부서의 템플릿도 보여 준다(department.deleted) - 관리자가 직접 지울 수 있도록
+    // 삭제된 부서의 템플릿도 보여 준다 (관리자가 지울 수 있게)
     async findManageable( user: Actor, query: ManageApprovalLineQueryDto ){
         const scope = await this.lineManagers.manageScope( user );
         if ( !scope.all && scope.departmentIds.length === 0 ) {
@@ -112,7 +111,7 @@ export class ApprovalLinesService {
         const target = {
             scope,
             departmentId: scope === ApprovalLineScope.DEPARTMENT ? body.departmentId! : null,
-            ownerUserId: scope === ApprovalLineScope.PERSONAL ? user.id : null, // 개인 결재라인의 소유자는 항상 로그인 회원
+            ownerUserId: scope === ApprovalLineScope.PERSONAL ? user.id : null,
         };
         if ( scope !== ApprovalLineScope.PERSONAL ) {
             await this.assertManageable( user, target );
@@ -193,7 +192,7 @@ export class ApprovalLinesService {
 
     //! 내부
 
-    //* 수정·삭제할 수 있는 템플릿 (개인 = 본인만, 남의 개인은 404 / 공용·부서 = 관리 범위, 아니면 403)
+    //* 수정·삭제할 수 있는 템플릿 (개인은 본인만, 공용·부서는 관리 범위)
     private async findEditable( user: Actor, id: number ): Promise<LineRow> {
         const line = await this.prisma.approvalLineTemplate.findFirst({ where: { id, deleted: false }, select: lineSelect });
 
@@ -225,7 +224,7 @@ export class ApprovalLinesService {
         return flattenSteps( steps ).map( ( r ) => ({ approverId: r.approverId, stepOrder: r.stepOrder, name: r.step.name ?? null }) );
     }
 
-    //* 단계마다 결재자의 현재 정보 + usable (삭제·퇴사한 결재자는 화면에서 빼고 상신)
+    //* 단계마다 결재자의 현재 정보 + usable
     private async withApprovers( rows: LineRow[] ){
         const approvers = await this.approvers.load( rows.flatMap( ( l ) => l.steps.map( ( s ) => s.approverId ) ) );
 

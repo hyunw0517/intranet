@@ -12,10 +12,9 @@ import { cn } from "@/lib/utils";
 import { fetchChatFile, fetchChatThumbnail, type ChatFile, type ChatMessage } from "@/services/api/chats";
 import { isArchive, saveBlob } from "../chat-files";
 
-// 파일 메시지 내용 (features.md 8.4)
-// - 이미지: 썸네일 격자 (1장은 크게, 2장은 2열, 3장 이상은 3열). 누르면 원본 보기
-// - 동영상·그 밖의 파일: 아이콘 + 이름 + 크기, 누르면 내려받기
-// 썸네일·원본은 Bearer 헤더가 필요해 Blob으로 받아 임시 blob: 주소로 그린다.
+// 파일 메시지 내용
+// 이미지는 썸네일 격자, 그 밖의 파일은 아이콘 + 이름 + 크기 (누르면 내려받기)
+// 썸네일·원본은 Bearer 헤더가 필요해 Blob으로 받아 blob: 주소로 그린다.
 export function ChatFileContent({ message, mine }: { message: ChatMessage; mine: boolean }) {
   const [viewing, setViewing] = useState<ChatFile | null>(null);
   const images = message.files.filter((f) => f.kind === "image");
@@ -46,7 +45,7 @@ export function ChatFileContent({ message, mine }: { message: ChatMessage; mine:
   );
 }
 
-// 미리보기를 만들 수 없는 파일(가짜·깨진 이미지)이나 불러오지 못한 경우: 밝은 회색 바탕 + 가운데 어두운 회색 X (2026-11-13 사용자 결정)
+// 미리보기가 없거나 못 불러오면 회색 X
 export function BrokenImage({ className }: { className?: string }) {
   return (
     <span className={cn("flex size-full items-center justify-center bg-muted", className)} role="img" aria-label="미리보기 없음">
@@ -128,8 +127,7 @@ export function ChatImageViewer({ roomId, file, onClose }: { roomId: number; fil
   );
 }
 
-// 이미지가 아닌 파일의 아이콘: 동영상 · 압축 파일(지퍼 달린 폴더) · 그 밖의 파일 (2026-11-13 사용자 결정)
-// (React Compiler 규칙상 렌더 중에 컴포넌트를 골라 담지 않고, 조건부로 바로 그린다)
+// 이미지가 아닌 파일의 아이콘 (React Compiler 규칙상 렌더 중에 컴포넌트를 골라 담지 않는다)
 export function FileKindIcon({ file, className, strokeWidth }: { file: ChatFile; className?: string; strokeWidth?: number }) {
   const props = { className, strokeWidth, "aria-hidden": true } as const;
   if (file.kind === "video") return <Video {...props} />;
@@ -137,9 +135,9 @@ export function FileKindIcon({ file, className, strokeWidth }: { file: ChatFile;
   return <FileText {...props} />;
 }
 
-// 파일 내려받기 (줄·칸·원본 보기의 [내려받기] 공용) - 받기 전에 항상 한 번 묻는다 (2026-11-14 사용자 요청, 보안 차원)
-// 이미지도 묻는다: 확장자만 이미지인 가짜 파일도 "이미지"로 분류되므로, 이미지만 빼면 그 파일은 묻지 않고 받아진다.
-// 확인 창(confirmDialog)은 공용 FileDownloadConfirmDialog(게시판과 같은 문구·경고)이고, 누르는 버튼 "바깥"에 그려야 한다.
+// 파일 내려받기 - 받기 전에 항상 한 번 묻는다
+// 확장자만 이미지인 가짜 파일도 있어서 이미지도 묻는다.
+// 확인 창은 누르는 버튼 바깥에 그려야 한다 (안에 두면 클릭이 버튼까지 올라가 창이 다시 열린다).
 export function useChatFileDownload(roomId: number, file: ChatFile) {
   const [pending, setPending] = useState(false);
   const [asking, setAsking] = useState(false);
@@ -166,9 +164,8 @@ export function useChatFileDownload(roomId: number, file: ChatFile) {
   return { download, pending, confirmDialog };
 }
 
-// 동영상·파일 한 줄 - 줄 전체(아이콘·이름·크기·다운로드 아이콘)가 하나의 내려받기 버튼 (2026-11-14 사용자 요청)
-// 글자는 드래그로 선택되지 않게 한다(select-none). 버튼 안에 버튼을 둘 수 없어 다운로드 아이콘은 표시만 한다.
-// 누르면 한 번 묻고 받는다 (확인 창은 버튼 바깥, 위 useChatFileDownload 주석)
+// 동영상·파일 한 줄 (줄 전체가 하나의 내려받기 버튼)
+// 버튼 안에 버튼을 둘 수 없어 다운로드 아이콘은 표시만 한다.
 function ChatFileRow({ roomId, file }: { roomId: number; file: ChatFile }) {
   const { download, pending, confirmDialog } = useChatFileDownload(roomId, file);
   return (

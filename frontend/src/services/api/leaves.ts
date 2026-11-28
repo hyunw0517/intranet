@@ -1,5 +1,5 @@
 // 백엔드 approvals/leaves/leaves.controller 대응 (/approvals/leaves)
-// 휴가 옵션(leaves)이 꺼져 있으면 API가 없다(404). 화면은 useEnabledAddons로 먼저 확인한다.
+// 휴가 옵션이 꺼져 있으면 API가 없어서(404) 화면이 useEnabledAddons로 먼저 확인한다.
 // 상신·회수·승인·반려·삭제·다시 기안은 결재 문서 API(approval-documents.ts)를 그대로 쓴다.
 import { apiFetch } from "@/services/api-client";
 import type { CalendarRange } from "@/services/api/calendar";

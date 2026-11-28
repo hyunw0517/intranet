@@ -1,4 +1,4 @@
-//! 캘린더 일정 색 e2e (features.md 5.3, 2026-11-12 사용자 결정: 정해진 색 중 일정마다 작성자가 선택, null = 기본색)
+//! 캘린더 일정 색 e2e (features.md, 정해진 색 중 일정마다 작성자가 선택, null = 기본색)
 // 확인: 캘린더 게시판 글에 색 저장·일정 조회 응답에 포함, 수정에서 생략하면 유지·null이면 기본색, 정해진 색 외 400, 일반 게시판은 무시(null)
 
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */

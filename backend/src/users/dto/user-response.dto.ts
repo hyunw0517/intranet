@@ -2,9 +2,8 @@ import { ApiProperty } from '@nestjs/swagger';
 import { PageMetaResponse } from 'src/common/dto/page-meta-response.dto';
 import { AdminPermission, UserRole, UserStatus } from 'src/generated/prisma/client';
 
-//* users 응답 (문서용 클래스, docs/api.md 3.4)
-// - 서비스는 Prisma 결과를 그대로 반환하고, 컨트롤러 반환 타입을 이 클래스로 적어 필드가 맞는지 typecheck가 검사한다.
-// - 비밀번호 해시는 Prisma 전역 omit으로 응답에 없다.
+//* users 응답 (Swagger 문서용 클래스)
+// 서비스는 Prisma 결과를 그대로 돌려주고, 컨트롤러 반환 타입에 이 클래스를 적어 typecheck로 필드를 맞춘다.
 
 /** id + 이름 (직급·부서·직책) */
 export class NamedRefResponse {

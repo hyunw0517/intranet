@@ -53,9 +53,9 @@ function toLeaveInput(values: ApprovalFormValues): LeaveInput {
   };
 }
 
-// 저장(생성·수정) → 상신이면 이어서 상신 → 상세로 이동
-// 상신만 실패하면(예: 그사이 결재자가 퇴사, 연차 부족) 문서는 임시저장으로 남으므로 수정 화면에서 고치게 한다.
-// save는 결재 문서 id를 돌려준다 (휴가 신청은 휴가 API 응답의 documentId)
+// 저장 → (상신이면) 상신 → 상세로 이동
+// 상신만 실패하면 문서는 임시저장으로 남아서 수정 화면에서 고치게 한다.
+// save는 결재 문서 id를 돌려준다 (휴가 신청은 휴가 API의 documentId)
 function useSaveAndSubmit() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -92,8 +92,7 @@ function useSaveAndSubmit() {
   return { pending, serverError, run };
 }
 
-// 새 문서 - 문서 유형: 일반 / 휴가 신청(휴가 옵션이 켜져 있을 때만, ?type=leave)
-// 유형은 URL에 두어 [휴가내역]의 "휴가 신청" 링크로 바로 들어올 수 있게 한다.
+// 새 문서 - 유형(일반 / 휴가 신청)은 URL에 둬서 [휴가내역]에서 바로 들어올 수 있게 한다.
 export function ApprovalWriteView() {
   const { user } = useAuth();
   const router = useRouter();

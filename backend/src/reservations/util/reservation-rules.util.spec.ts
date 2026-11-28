@@ -1,7 +1,6 @@
 //! reservation-rules.util.ts 단위 테스트
-// 시설 예약 시간이 분류 규칙(예약 단위·운영 시간·운영 요일·예약 가능 기간)에 맞는지 판단하는 함수들을 확인한다.
-// 모든 시각은 한국 시간(+09:00)으로 적는다. 서버가 UTC로 돌아도 KST 기준으로 판단하는지가 핵심이다.
-// DB를 쓰지 않는다. 규칙 객체와 시각을 넣고 결과(위반 코드)를 비교한다.
+// 예약 시간이 분류 규칙에 맞는지 판단하는 함수들
+// 서버가 UTC로 돌아도 KST 기준으로 판단하는지가 핵심이라 모든 시각을 +09:00으로 적는다.
 
 import {
     checkCategorySettings, checkReservationTime, formatHm, lastBookableDate, listRecurringDates, parseHm, ReservationRules,
@@ -42,7 +41,7 @@ describe('checkCategorySettings', () => {
         expect( checkCategorySettings({ slotMinutes: 30, openMinute: 600, closeMinute: 600 }) ).toContain( '뒤여야' );
     });
 
-    // 09:00~18:00을 40분 단위로 나누면 마지막 칸(17:40~18:20)이 운영 시간을 넘어 잘린다 → 설정 단계에서 막는다.
+    // 40분 단위면 마지막 칸이 18:00을 넘어 잘리므로 설정 단계에서 막는다
     it('운영 시간이 예약 단위로 나누어떨어지지 않으면 오류', () => {
         expect( checkCategorySettings({ slotMinutes: 40, openMinute: 540, closeMinute: 1080 }) ).toContain( '나누어떨어져야' );
     });
@@ -54,7 +53,7 @@ describe('checkReservationTime', () => {
         expect( check( '2026-11-10T10:00:00', '2026-11-10T11:00:00' ) ).toBeNull();
     });
 
-    // [시작, 종료) 범위라 운영 종료 18:00에 "끝나는" 예약은 가능하다. 운영 시작 09:00에 시작하는 것도 가능.
+    // [시작, 종료)라 18:00에 끝나는 예약과 09:00에 시작하는 예약은 가능
     it('운영 시작에 시작하고 운영 종료에 끝나는 예약은 가능하다 (경계 포함)', () => {
         expect( check( '2026-11-10T09:00:00', '2026-11-10T09:30:00' ) ).toBeNull();
         expect( check( '2026-11-10T17:30:00', '2026-11-10T18:00:00' ) ).toBeNull();
@@ -83,7 +82,7 @@ describe('checkReservationTime', () => {
         expect( check( '2027-02-08T10:00:00', '2027-02-08T11:00:00' ) ).toBeNull();
     });
 
-    // ⭐ 시간대 함정: KST 11/11(수) 00:30은 UTC로는 11/10(화) 15:30이다. 요일·날짜를 KST로 판단해야 한다.
+    // KST 11/11(수) 00:30은 UTC로 11/10(화) 15:30이라 요일·날짜를 KST로 판단해야 한다
     // 24시간 운영(00:00~24:00), 수요일만 운영하는 분류로 확인
     it('요일은 UTC가 아니라 KST 날짜로 판단한다', () => {
         const wednesdayOnly: ReservationRules = { ...rules, openMinute: 0, closeMinute: 1440, operatingDays: [ 3 ] };
@@ -107,7 +106,7 @@ describe('listRecurringDates', () => {
         expect( listRecurringDates( '2026-11-09', '2026-11-22', [ 1, 3 ] ) ).toEqual([ '2026-11-09', '2026-11-11', '2026-11-16', '2026-11-18' ]);
     });
 
-    // 모든 요일 = 매일. 운영하지 않는 요일(주말)도 목록에는 넣는다 → 서비스가 "건너뜀(NOT_OPERATING_DAY)"으로 응답
+    // 운영하지 않는 요일도 목록에는 넣는다 (서비스가 건너뜀으로 응답)
     it('모든 요일을 고르면 매일, 주말도 포함한다', () => {
         expect( listRecurringDates( '2026-11-13', '2026-11-16', [ 1, 2, 3, 4, 5, 6, 7 ] ) ).toEqual([ '2026-11-13', '2026-11-14', '2026-11-15', '2026-11-16' ]);
     });

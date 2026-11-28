@@ -10,13 +10,12 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import type { ProjectActor } from '../project-access.service';
 import { ProjectQuotesService } from './project-quotes.service';
 
-//! 견적서 ↔ 전자결재 연결 - ProjectsApprovalModule에만 등록된다(과제 관리 + 결재가 둘 다 켜졌을 때만, docs/design/projects.md 5-1장)
-// ProjectsModule은 결재를 import하지 않는다. 결재 본체도 견적을 import하지 않는다(처리기 등록 지점만 안다).
+//! 견적서 ↔ 전자결재 연결 (ProjectsApprovalModule에만 등록)
 
-//* 견적서 문서(QUOTE) 처리기 - 휴가(LeaveDocumentHandler)와 같은 방식
-// - directCreate: false → 결재 작성 화면에서 직접 만들 수 없고, 견적 화면의 [결재 요청]으로만 만든다
-// - onCopy 없음 → 결재함의 "다시 기안" 불가. 반려되면 견적을 고쳐 견적 화면에서 다시 올린다
-// - onFinalApproved: 그 버전을 같은 트랜잭션에서 확정 (예외를 던지면 승인 전체가 롤백된다)
+//* 견적서 문서(QUOTE) 처리기
+// - directCreate: false라 견적 화면의 [결재 요청]으로만 만든다
+// - onCopy가 없어서 "다시 기안"은 안 된다. 반려되면 견적을 고쳐 다시 올린다
+// - onFinalApproved: 같은 트랜잭션에서 확정 (예외를 던지면 승인 전체가 롤백)
 @Injectable()
 export class QuoteDocumentHandler implements OnModuleInit, ApprovalDocumentHandler {
 
@@ -59,8 +58,8 @@ export class SubmitQuoteDto {
 
 //* 견적서 결재 상신
 // 1) 견적 버전을 잠가 확인하고 제목·본문(견적 스냅샷 HTML)을 만든다
-// 2) 결재 문서를 임시저장으로 만들면서 같은 트랜잭션에서 버전에 연결한다(이전 연결·수정 시각이 그대로일 때만)
-// 3) 상신한다. 실패하면 방금 만든 임시저장 문서를 지운다(버전은 다시 "작성 중"으로 보인다)
+// 2) 결재 문서를 임시저장으로 만들면서 같은 트랜잭션에서 버전에 연결한다
+// 3) 상신한다. 실패하면 방금 만든 임시저장 문서를 지운다
 @Injectable()
 export class QuoteApprovalService {
 

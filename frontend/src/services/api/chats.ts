@@ -1,6 +1,5 @@
-// 백엔드 chats/chat-rooms.controller · chat-messages.controller 대응 (/chats/*)
-// - 모두 USER 이상(GUEST 403), 내가 참여한 방만 다룬다(아니면 404). 채팅 애드온이 꺼져 있으면 API 자체가 없다(404).
-// - 보내기·수정·삭제·방 관리는 이 REST로만 한다. 실시간 받기는 소켓(services/chat-socket.ts)이 서버 푸시만 받는다.
+// 백엔드 chat-rooms.controller · chat-messages.controller 대응 (/chats/*)
+// 모두 USER 이상, 내가 참여한 방만 다룬다. 보내기·수정·삭제는 REST, 실시간 받기는 소켓이다.
 import { apiFetch, apiFetchBlob, apiUpload } from "@/services/api-client";
 import { MAX_ATTACHMENT_SIZE, MAX_IMAGE_SIZE } from "@/services/api/files";
 import type { CursorResult } from "@/types/pagination";
@@ -19,8 +18,7 @@ export interface ChatUser {
   profileImageUrl: string | null; // 프로필 사진 썸네일 공개 주소 (없으면 null)
 }
 
-// 파일 메시지의 파일 (백엔드 ChatFileView, 종류는 확장자 기준)
-// 이미지는 썸네일 API로 미리보기를 받아 보고, 없으면(가짜·깨진 파일) 엑스박스를 그린다.
+// 파일 메시지의 파일 (종류는 확장자 기준, 미리보기가 없으면 엑스박스)
 export type ChatFileKind = "image" | "video" | "file";
 
 export interface ChatFile {
@@ -100,8 +98,7 @@ export function openDirectChat(userId: number) {
   return apiFetch<ChatRoomDetail>("/chats/direct", { method: "POST", body: { userId } });
 }
 
-// 그룹 생성 (본인 포함 3명 이상) → 방 상세
-// name을 생략하면 서버가 참여자 이름으로 만든다: 영문 → 한글 가나다순, 3명까지 쉼표, 넘으면 "외 N명" (2026-11-13 사용자 결정)
+// 그룹 생성 (본인 포함 3명 이상, name을 생략하면 서버가 참여자 이름으로 만든다)
 export function createGroupChat(input: { name?: string; userIds: number[] }) {
   return apiFetch<ChatRoomDetail>("/chats/group", { method: "POST", body: input });
 }
@@ -158,10 +155,10 @@ export function deleteChatMessage(roomId: number, messageId: number) {
 
 // ── 파일 (백엔드 chat-files.controller) ─────────────────────────
 
-// 보내기: 요청 1개 = 메시지 1개. 서버는 용량 한도를 경로별로 건다.
+// 보내기: 요청 1개 = 메시지 1개 (서버가 용량 한도를 경로별로 건다)
 // - 이미지(1~10장, 장당 20MB) → POST /chats/:roomId/images (묶음 메시지)
 // - 동영상·그 밖의 파일(1개, 200MB) → POST /chats/:roomId/files
-// onProgress: 이 요청에서 지금까지 보낸 바이트 수 (화면이 "3/7" 계산에 쓴다)
+// onProgress: 이 요청에서 보낸 바이트 수
 export function sendChatImages(roomId: number, images: File[], onProgress?: (loaded: number) => void) {
   return upload(`/chats/${roomId}/images`, images, onProgress);
 }

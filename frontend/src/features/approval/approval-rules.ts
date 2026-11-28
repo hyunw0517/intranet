@@ -1,4 +1,4 @@
-// 전자결재 화면 규칙 (서버 규칙과 같게 - 최종 판단은 서버, features.md 7.5)
+// 전자결재 화면 규칙 (서버 규칙과 같게, 최종 판단은 서버)
 
 export const MAX_APPROVAL_STEPS = 10; // 백엔드 MAX_APPROVAL_STEPS
 export const TITLE_MAX = 200; // CreateApprovalDocumentDto @MaxLength(200)

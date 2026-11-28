@@ -1,6 +1,6 @@
 // 백엔드 common/notifications.controller 대응 (/common/notifications/*)
-// 모두 본인 알림만 다룬다(다른 사람 알림 id는 404). 승인 전(GUEST)은 호출할 수 없다(@Roles(USER) → 403).
-// 알림 생성 API는 없다. 업무 서비스(가입·댓글·공지 등)가 서버에서 만든다.
+// 모두 본인 알림만 다루고(남의 id는 404), GUEST는 403이다.
+// 알림 생성 API는 없고 업무 서비스가 서버에서 만든다.
 import { apiFetch } from "@/services/api-client";
 import type { CursorResult } from "@/types/pagination";
 

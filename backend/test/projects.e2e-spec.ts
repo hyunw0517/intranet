@@ -1,6 +1,6 @@
 //! 과제 관리 e2e (애드온 projects, docs/design/projects.md)
 // 실제 앱(AppModule) + 테스트 DB(intranet_test). .env.test의 ADDONS에 projects를 켜 둔다.
-// ⭐ 핵심: 마지막 책임자 보호(동시에 서로 강등), 칸반 동시 이동 후에도 컬럼 번호가 0..n-1로 유지, 담당자 부재 규칙.
+// 핵심: 마지막 책임자 보호(동시에 서로 강등), 칸반 동시 이동 후에도 컬럼 번호가 0..n-1로 유지, 담당자 부재 규칙.
 
 // supertest의 res.body는 any 타입이다. 응답 형태는 각 expect에서 검사하므로 이 파일에서만 any 관련 규칙을 끈다.
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return */
@@ -208,7 +208,7 @@ describe('과제 관리', () => {
             expect( res.body.myAccess ).toMatchObject({ memberRole: null, isAdmin: true, canManage: true });
         });
 
-        // 2026-11-17 사용자 결정: 전체 목록은 누구나(목록만 공개), 상세는 여전히 참여자·관리자만
+        // 전체 목록은 누구나(목록만 공개), 상세는 여전히 참여자·관리자만
         it('전체 목록(scope=all)은 누구나 보되 설명은 빠지고, 참여하지 않은 프로젝트의 상세는 403', async () => {
             const project = await createProject( ownerToken, { name: '목록 확인용', description: '<p>내부 설명</p>' } );
 
@@ -248,7 +248,7 @@ describe('과제 관리', () => {
         });
     });
 
-    //* 견적서 (docs/design/projects.md 5-1장) - .env.test는 결재가 켜져 있어 확정은 결재로 한다
+    //* 견적서 (docs/design/projects.md) - .env.test는 결재가 켜져 있어 확정은 결재로 한다
     describe('견적서', () => {
         let approverToken: string;
         let approverId: number;
@@ -323,7 +323,7 @@ describe('과제 관리', () => {
             await http().post( `/projects/${project.id}/quotes` ).set( auth( memberToken ) ).send({ title: 'x', contactId: otherContact.id }).expect( 400 );
         });
 
-        it('⭐ 동시에 여러 견적을 만들어도 견적번호가 겹치지 않는다 (채번 행 잠금)', async () => {
+        it('동시에 여러 견적을 만들어도 견적번호가 겹치지 않는다 (채번 행 잠금)', async () => {
             const project = await quoteProject();
             const results = await Promise.all( Array.from({ length: 5 }, () =>
                 http().post( `/projects/${project.id}/quotes` ).set( auth( memberToken ) ).send({ title: '동시', items }) ) );
@@ -343,7 +343,7 @@ describe('과제 관리', () => {
             expect( ( await detail( project.id, empty.id ) ).versions[0].displayStatus ).toBe( 'DRAFT' ); // 실패해도 작성 중
         });
 
-        it('⭐ 결재 상신 → 결재 중(수정·새 버전 불가) → 최종 승인 시 확정, 결재 본문에 견적 스냅샷, 계약 금액 = 확정 합계', async () => {
+        it('결재 상신 → 결재 중(수정·새 버전 불가) → 최종 승인 시 확정, 결재 본문에 견적 스냅샷, 계약 금액 = 확정 합계', async () => {
             const project = await quoteProject();
             const quote = await newQuote( project.id );
             const v1 = ( await detail( project.id, quote.id ) ).versions[0];
@@ -427,7 +427,7 @@ describe('과제 관리', () => {
         });
     });
 
-    //* 매출 (docs/design/projects.md 5-2장)
+    //* 매출 (docs/design/projects.md)
     describe('매출', () => {
         let approverToken: string;
         let approverId: number;
@@ -477,7 +477,7 @@ describe('과제 관리', () => {
             expect( body.summary ).toMatchObject({ billedTotal: '1000', plannedTotal: '36666', paidTotal: '0', outstanding: '1000' });
         });
 
-        it('⭐ 분할 청구: 견적에 연결한 청구 합계는 견적 금액 이하 (같으면 허용, 넘으면 400, 취소된 청구는 빠진다)', async () => {
+        it('분할 청구: 견적에 연결한 청구 합계는 견적 금액 이하 (같으면 허용, 넘으면 400, 취소된 청구는 빠진다)', async () => {
             const { project, versionId } = await projectWithConfirmedQuote();
             await createSale( project.id, { title: '계약금', quoteVersionId: versionId, supplyAmount: 300_000 } );   // 330,000
             await http().post( salesUrl( project.id ) ).set( auth( memberToken ) )
@@ -492,7 +492,7 @@ describe('과제 관리', () => {
             expect( body.confirmedQuotes[0].remaining ).toBe( '770000' );
         });
 
-        it('⭐ 동시에 같은 견적으로 청구해도 합계가 넘지 않는다 (견적 행 잠금)', async () => {
+        it('동시에 같은 견적으로 청구해도 합계가 넘지 않는다 (견적 행 잠금)', async () => {
             const { project, versionId } = await projectWithConfirmedQuote();
             const results = await Promise.all( Array.from({ length: 3 }, () =>
                 http().post( salesUrl( project.id ) ).set( auth( memberToken ) ).send({ title: '동시', quoteVersionId: versionId, supplyAmount: 500_000 }) ) );
@@ -552,7 +552,7 @@ describe('과제 관리', () => {
         });
     });
 
-    //* 예산 (docs/design/projects.md 5-3장)
+    //* 예산 (docs/design/projects.md)
     describe('예산', () => {
         const categoriesUrl = '/projects/budget-categories';
         const budgetsUrl = ( projectId: number ) => `/projects/${projectId}/budgets`;
@@ -883,7 +883,7 @@ describe('과제 관리', () => {
             await http().delete( `/projects/${project.id}/members/${owner.id}` ).set( auth( ownerToken ) ).expect( 400 );
         });
 
-        it('⭐ 두 책임자가 동시에 서로를 참여자로 바꾸면 하나만 성공한다 (책임자 행 잠금)', async () => {
+        it('두 책임자가 동시에 서로를 참여자로 바꾸면 하나만 성공한다 (책임자 행 잠금)', async () => {
             const project = await createProject( ownerToken );
             const second = await addMember( project.id, memberId, { role: 'MANAGER' } );
             const detail = await http().get( `/projects/${project.id}` ).set( auth( ownerToken ) ).expect( 200 );
@@ -932,7 +932,7 @@ describe('과제 관리', () => {
             expect( ( await columnOrder( project.id, ProjectTaskStatus.TODO ) ).map( ( r ) => r.id ) ).toEqual([ t[2].id, t[1].id ]);
         });
 
-        it('⭐ 같은 컬럼에서 동시에 여러 카드를 옮겨도 번호가 겹치거나 빠지지 않는다 (프로젝트 행 잠금)', async () => {
+        it('같은 컬럼에서 동시에 여러 카드를 옮겨도 번호가 겹치거나 빠지지 않는다 (프로젝트 행 잠금)', async () => {
             const project = await createProject( ownerToken );
             const t = [];
             for ( let i = 0; i < 6; i++ ) t.push( await createTask( project.id, ownerToken ) );

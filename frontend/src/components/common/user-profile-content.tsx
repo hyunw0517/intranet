@@ -6,9 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { DirectoryUser } from "@/services/api/org-chart";
 
-// 사원 기본 정보 (Dialog 안에 넣는 본문) - 조직도·사원 검색의 상세 창과 채팅의 보낸 사람 창이 같이 쓴다
-// 공개 범위: 사진·사번·소속 전체·직급·직책·이메일·회사 전화 (휴대폰·생일은 서버가 내보내지 않는다)
-// actions: 아래쪽 버튼 자리 (예: 채팅하기) - 버튼은 각 기능이 넣는다
+// 사원 기본 정보 (Dialog 본문, 조직도·채팅 공용)
+// 휴대폰·생일은 서버가 내보내지 않는다. actions에는 각 기능이 버튼을 넣는다.
 export function UserProfileContent({ user, actions }: { user: DirectoryUser; actions?: React.ReactNode }) {
   return (
     <>

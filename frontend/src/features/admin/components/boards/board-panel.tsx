@@ -19,8 +19,7 @@ import { BoardFormDialog, type BoardDialogState } from "./board-form-dialog";
 
 type BoardSortDrafts = ReturnType<typeof useGroupedSortDrafts<AdminBoard>>;
 
-// 게시판 관리: 카테고리 → 하위 게시판 트리 + 추가·수정·삭제 + 같은 상위 안에서 드래그 정렬
-// 게시판은 수십 개 수준이라 페이지네이션 없이 전체를 그린다.
+// 게시판 관리: 카테고리·하위 게시판 트리 + 추가·수정·삭제 + 같은 상위 안 드래그 정렬
 export function BoardPanel() {
   const queryClient = useQueryClient();
   const { data: boards, isPending, isError, error, refetch } = useAdminBoards();
@@ -54,8 +53,7 @@ export function BoardPanel() {
       },
     });
 
-  // 하위 게시판이 있는 카테고리는 서버가 거부하고 그 메시지를 보여 준다.
-  // 게시글이 있는 게시판은 확인 창에서 경고만 하고 삭제한다. (게시글은 서버에 남는다)
+  // 하위 게시판이 있는 카테고리는 서버가 거부한다. 게시글이 있는 게시판은 경고만 하고 지운다(글은 남는다).
   const handleDelete = () => {
     if (!deleteTarget) return;
     deleteMutation.mutate(deleteTarget.id, {
@@ -182,8 +180,7 @@ export function BoardPanel() {
   );
 }
 
-// 한 상위 아래의 형제 게시판 목록 (카테고리 안에 자기 하위 게시판 목록을 다시 그린다)
-// 형제 그룹마다 별도의 정렬 목록이라 다른 카테고리로는 끌어다 놓을 수 없다. (카테고리 이동은 [수정]에서)
+// 한 상위 아래의 형제 게시판 목록. 형제 그룹마다 따로 정렬해서 다른 카테고리로는 못 옮긴다.
 function BoardGroup({
   parentId,
   className,
@@ -249,8 +246,7 @@ function BoardGroup({
   );
 }
 
-// 게시판 타입·게시글 수·권한 상태
-// 권한 규칙이 없으면 관리자만 볼 수 있으므로(기본 거부) 관리자가 놓치지 않게 따로 표시한다.
+// 게시판 타입·게시글 수·권한 상태 (규칙이 없으면 관리자만 보므로 따로 표시한다)
 function BoardMeta({ board }: { board: AdminBoard }) {
   return (
     <>

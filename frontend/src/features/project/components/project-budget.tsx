@@ -22,8 +22,8 @@ import { ExpenseFormDialog, type ExpenseFormState } from "./expense-form-dialog"
 // 음수(초과)도 자릿수를 끊어 보여 준다
 const signedAmount = (value: string) => (value.startsWith("-") ? `-${formatAmount(value.slice(1))}` : formatAmount(value));
 
-// 예산 탭 - 요약, 항목별 예산 대비 지출, 월별 지출, 협력사별 지급, 지출 목록 (docs/design/projects.md 5-3장)
-// 예산과 지출은 공급가액으로 비교한다. 예산을 넘은 항목은 빨간색으로 표시할 뿐 저장을 막지 않는다.
+// 예산 탭 - 요약, 항목별 예산 대비 지출, 월별 지출, 협력사별 지급, 지출 목록
+// 예산을 넘은 항목은 빨간색으로 표시할 뿐 저장을 막지 않는다.
 export function ProjectBudget({ projectId }: { projectId: number }) {
   const { data, isPending, isError, error, refetch } = useProjectBudget(projectId);
   const [editingBudget, setEditingBudget] = useState(false);

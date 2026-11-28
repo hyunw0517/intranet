@@ -13,12 +13,10 @@ import { isAssigneeAbsent, reorderColumn, TASK_STATUS_ORDER } from "../util/proj
 
 const assigneeSelect = { id: true, name: true, status: true, deleted: true } satisfies Prisma.UsersSelect;
 
-//! 과제 (칸반 카드, docs/design/projects.md 5장)
-// - 참여자 누구나 생성·수정·이동·삭제 (2026-11-17 사용자 결정). 삭제는 soft delete.
-// - 담당자는 현재 참여자만 지정할 수 있다. 참여자가 빠져도 담당자 값은 그대로 두고 "담당자 부재"로 표시한다.
-//   부재 담당 과제의 담당자 교체는 책임자·관리자만 한다.
-// - ⭐ 순서: 컬럼(상태) 안의 정수 sortOrder. 생성·이동은 프로젝트 행을 FOR UPDATE로 잠그고 컬럼을 다시 번호 매긴다.
-//   (같은 프로젝트에서 동시에 옮겨도 번호가 겹치거나 빠지지 않게)
+//! 과제 (칸반 카드)
+// - 참여자 누구나 생성·수정·이동·삭제(soft delete).
+// - 담당자는 현재 참여자만. 참여자가 빠지면 값은 두고 "담당자 부재"로 표시하고, 교체는 책임자·관리자만 한다.
+// - 순서는 컬럼 안의 정수 sortOrder. 생성·이동은 프로젝트 행을 FOR UPDATE로 잠그고 컬럼을 다시 번호 매긴다.
 @Injectable()
 export class ProjectTasksService {
 
@@ -106,7 +104,7 @@ export class ProjectTasksService {
         return task;
     }
 
-    //* 수정 - 담당자 변경 규칙: 새 담당자는 현재 참여자, 지금 담당자가 부재면 책임자·관리자만 바꾼다
+    //* 수정 (새 담당자는 현재 참여자, 지금 담당자가 부재면 책임자·관리자만 바꾼다)
     async update( user: ProjectActor, projectId: number, taskId: number, body: UpdateProjectTaskDto ) {
         const access = await this.access.check( user, projectId );
         const before = await this.findTask( projectId, taskId );
@@ -141,7 +139,7 @@ export class ProjectTasksService {
         return task;
     }
 
-    //* ⭐ 칸반 이동 - 옮길 컬럼을 다시 번호 매기고, 다른 컬럼에서 왔으면 원래 컬럼도 다시 매긴다
+    //* 칸반 이동 - 옮길 컬럼을 다시 번호 매기고, 다른 컬럼에서 왔으면 원래 컬럼도 다시 매긴다
     async move( user: ProjectActor, projectId: number, taskId: number, body: MoveProjectTaskDto ) {
         const access = await this.access.check( user, projectId );
 
@@ -179,7 +177,7 @@ export class ProjectTasksService {
         });
     }
 
-    //* 삭제 (참여자 누구나, soft delete) - 남은 카드의 번호는 그대로 둔다(순서는 유지되고 다음 이동 때 다시 매긴다)
+    //* 삭제 (soft delete, 남은 번호는 그대로 두고 다음 이동 때 다시 매긴다)
     async delete( user: ProjectActor, projectId: number, taskId: number ) {
         const access = await this.access.check( user, projectId );
         const task = await this.findTask( projectId, taskId );
@@ -265,7 +263,7 @@ export class ProjectTasksService {
         }
     }
 
-    // 지금 담당자가 부재면 책임자·관리자만 바꾼다 (2026-11-16 사용자 결정)
+    // 지금 담당자가 부재면 책임자·관리자만 바꾼다
     private async assertCanChangeAssignee( access: ProjectAccess, task: { assignee: { id: number; status: UserStatus; deleted: boolean } | null; projectId: number } ) {
         if ( access.canManage ) return;
         const absent = isAssigneeAbsent( task.assignee, await this.activeMemberIds( task.projectId ) );

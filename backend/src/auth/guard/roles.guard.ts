@@ -8,9 +8,9 @@ import { hasAdminPermission } from "../util/admin-permission.util";
 import { TokenUserPayload } from "../types/jwt-payload.type";
 
 //* 로그인한 사용자의 role(권한)이 특정 라우트에 접근할 수 있는지 확인하는 Guard
-//  1) 등급: @Roles(role) 이상인지 (ROLE_LEVEL)
-//  2) 관리자 기능: @RequireAdmin(permission)이면 그 기능을 가졌는지 (SUPER_ADMIN은 전부)
-//  - 둘 다 access token payload(req.user)만 본다. (DB 조회 없음, 권한 변경은 다음 재발급부터 반영)
+//  1) @Roles(role) 이상인지
+//  2) @RequireAdmin(permission)이면 그 기능을 가졌는지
+// access token payload만 보므로 권한 변경은 다음 재발급부터 반영된다.
 @Injectable()
 export class RolesGuard implements CanActivate {
 

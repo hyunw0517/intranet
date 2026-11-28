@@ -15,11 +15,11 @@ const SCOPE_LABEL: Record<ApprovalLineManagerScope, string> = {
     MY_DEPARTMENT: '본인 부서',
 };
 
-//! 결재라인 관리자 (Role.ADMIN과 별개 위임 권한, features.md 7.5, 2026-11-10 사용자 결정)
-// - ADMIN이 규칙을 등록·해제한다. ADMIN은 규칙 없이도 항상 전체를 관리한다.
+//! 결재라인 관리자 (Role.ADMIN과 별개인 위임 권한)
+// - ADMIN이 규칙을 등록·해제하고, ADMIN 자신은 규칙 없이도 전체를 관리한다.
 // - 한 행 = 대상 1개(회원 / 직책) + 범위(ALL / DEPARTMENT / MY_DEPARTMENT)
-// - 토큰에 넣지 않고 요청마다 DB로 판정한다 → 지정·해제가 즉시 반영된다. (게시판 권한과 같은 방식)
-// - 삭제된 부서·직책을 쓰는 규칙은 판정에서 무시하고, 목록에는 표시만 해서 관리자가 지우게 한다. (핵심 삭제를 막지 않음)
+// - 토큰에 넣지 않고 요청마다 DB로 판정해서 지정·해제가 바로 반영된다.
+// - 삭제된 부서·직책을 쓰는 규칙은 판정에서 무시하고 목록에만 보여 관리자가 지우게 한다.
 @Injectable()
 export class LineManagersService {
 
@@ -65,12 +65,12 @@ export class LineManagersService {
         const scope = resolveManageScope( rules, byJobTitle );
         if ( scope.all || scope.departmentIds.length === 0 ) return scope;
 
-        // 맡은 부서의 하위 부서 전체도 관리한다 (기술본부 관리자 → 개발1팀·인프라팀 …, 2026-11-10 사용자 결정)
+        // 맡은 부서의 하위 부서 전체도 관리한다 (기술본부 관리자 → 개발1팀·인프라팀 …)
         const departments = await this.prisma.department.findMany({ where: { deleted: false }, select: { id: true, parentDepartmentId: true } });
         return { all: false, departmentIds: withDescendants( scope.departmentIds, departments ) };
     }
 
-    //* 내 관리 범위 + 관리할 수 있는 부서 (화면 선택지, 트리 순서 + 최상위부터의 경로) - 전체 관리자는 삭제 안 된 모든 부서
+    //* 내 관리 범위 + 관리할 수 있는 부서 (화면 선택지, 트리 순서)
     async myScope( user: Actor ){
         const scope = await this.manageScope( user );
         if ( !scope.all && scope.departmentIds.length === 0 ) {
@@ -88,7 +88,7 @@ export class LineManagersService {
         return { ...scope, departments };
     }
 
-    //* 규칙 목록 (ADMIN) - 삭제된 대상·부서는 화면에서 "(삭제됨)"으로 표시하도록 상태를 함께 준다
+    //* 규칙 목록 (ADMIN) - 삭제된 대상·부서는 "(삭제됨)"으로 표시하도록 상태도 준다
     async findAll(){
         const rows = await this.prisma.approvalLineManager.findMany({
             where: { deleted: false },

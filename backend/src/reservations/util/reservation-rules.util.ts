@@ -1,8 +1,7 @@
 import { addKstDays, kstDateAt, kstDateString, kstDayStart, kstIsoWeekday, kstMinuteOfDay } from "src/common/util/date.util";
 
-// 시설 예약 시간 규칙 (DB 조회 없음, docs/design/features.md 6장)
-// 서비스가 분류(FacilityCategory)를 조회한 뒤 이 함수들로 판단한다. 조회와 판단을 나눠 판단만 단위 테스트한다.
-// 시각은 모두 한국 시간(KST) 기준이다. (서버는 UTC로 동작할 수 있으므로 date.util의 KST 함수만 쓴다)
+// 시설 예약 시간 규칙 (DB 조회 없음)
+// 조회와 판단을 나눠 판단만 단위 테스트한다. 시각은 모두 KST 기준(date.util의 KST 함수만 쓴다).
 
 //* 분류가 정한 예약 규칙
 export interface ReservationRules {
@@ -49,7 +48,7 @@ export function parseHm( value: string ): number | null {
 }
 
 //* 분류 설정 자체의 검사 (분류 생성·수정 시) - 문제가 있으면 메시지, 없으면 null
-// DB CHECK 제약과 같은 내용 + "운영 시간이 예약 단위로 나누어떨어지는지"(마지막 칸이 잘리지 않게)
+// DB CHECK 제약과 같은 내용 + 운영 시간이 예약 단위로 나누어떨어지는지
 export function checkCategorySettings( rules: Pick<ReservationRules, 'slotMinutes' | 'openMinute' | 'closeMinute'> ): string | null {
     if ( rules.openMinute >= rules.closeMinute ) {
         return '운영 종료 시각은 시작 시각보다 뒤여야 합니다.';
@@ -61,9 +60,8 @@ export function checkCategorySettings( rules: Pick<ReservationRules, 'slotMinute
 }
 
 //* 예약 시간이 분류 규칙에 맞는지 - 위반이면 { code, message }, 맞으면 null
-// 검사 순서가 곧 메시지 우선순위다. (범위 → 과거 → 하루 → 요일 → 운영 시간 → 단위 → 예약 가능 기간)
-// - 범위는 [start, end): end 시각은 예약에 포함되지 않는다. 운영 종료 18:00이면 17:00~18:00까지 가능
-// - "지난 예약"과 같은 기준으로, 시작 시각이 now 이하면 PAST
+// 검사 순서가 메시지 우선순위다 (범위, 과거, 하루, 요일, 운영 시간, 단위, 예약 가능 기간).
+// 범위는 [start, end)라 운영 종료 18:00이면 17:00~18:00까지 가능하다.
 export function checkReservationTime(
     start: Date,
     end: Date,
@@ -121,7 +119,7 @@ export function formatReservationTime( start: Date, end: Date ): string {
 }
 
 //* 반복 예약 날짜 목록: startDate ~ endDate(포함) 중 고른 요일인 날짜 ("YYYY-MM-DD", 오름차순)
-// 운영 요일·과거 여부는 여기서 거르지 않는다. (건너뛴 이유를 응답에 담기 위해 checkReservationTime에서 판단)
+// 운영 요일·과거는 여기서 거르지 않는다 (건너뛴 이유를 응답에 담으려고)
 export function listRecurringDates( startDate: string, endDate: string, weekdays: number[] ): string[] {
     const dates: string[] = [];
 

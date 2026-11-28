@@ -14,8 +14,8 @@ import { useChatRooms } from "../hooks/use-chats";
 import { ChatPanelHeader } from "./chat-window";
 import { useChat } from "./chat-provider";
 
-// 내 채팅방 목록 (최근 메시지 순) - 소켓 푸시마다 서버 값으로 다시 받는다(use-chat-socket)
-// 방 열기는 더블 클릭 (2026-11-13 사용자 결정) - 한 번 누르면 선택 표시만, 키보드는 Enter로 연다.
+// 내 채팅방 목록 (최근 메시지 순, 소켓 푸시마다 서버 값으로 다시 받는다)
+// 방 열기는 더블 클릭, 키보드는 Enter
 export function ChatRoomList() {
   const { showNew, openRoom } = useChat();
   const { data, isPending, isError, error, refetch } = useChatRooms(true);
@@ -63,9 +63,9 @@ export function ChatRoomList() {
   );
 }
 
-// 한 줄: [첫 글자] 방 이름 (그룹 인원) · 시각 / 마지막 메시지 · [안 읽은 수]
-// - 버튼은 Enter·Space를 누르면 click이 나므로, Enter는 keydown에서 먼저 받아 열고 click(선택)은 막는다.
-// - touch-manipulation: 모바일에서 두 번 탭이 화면 확대가 아니라 더블 클릭으로 처리되게 한다.
+// 한 줄: 방 이름 (그룹 인원) · 시각 / 마지막 메시지 · 안 읽은 수
+// - Enter는 keydown에서 먼저 받아 열고 click(선택)은 막는다.
+// - touch-manipulation: 모바일의 두 번 탭을 확대가 아니라 더블 클릭으로 처리한다.
 function ChatRoomRow({
   room,
   selected,

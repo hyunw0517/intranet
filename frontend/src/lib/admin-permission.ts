@@ -1,6 +1,5 @@
-// 관리자 기능 권한 판단 (여러 기능이 같이 쓴다: 관리자 레이아웃·메뉴, 예약·결재 화면의 관리자 동작)
-// 백엔드 src/auth/util/admin-permission.util.ts와 같은 규칙이다.
-// 화면 노출만 정하며, 최종 권한 검증은 백엔드 RolesGuard(@RequireAdmin)와 서비스가 한다.
+// 관리자 기능 권한 판단 (백엔드 admin-permission.util.ts와 같은 규칙)
+// 화면 노출만 정하고 최종 검증은 서버가 한다.
 import type { AdminPermission, UserRole } from "@/types/user";
 
 export interface AdminPermissionUser {

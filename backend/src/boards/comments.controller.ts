@@ -16,7 +16,7 @@ export class CommentsController {
         private readonly commentsService: CommentsService,
     ) {}
 
-    //* 댓글 조회 (전체 트리) - 페이지 없이 전부 준다. 화면이 스레드(최상위 댓글 + 답글) 단위로 나눠 페이지를 만든다.
+    //* 댓글 조회 (전체 트리, 페이지는 화면이 스레드 단위로 나눈다)
     @Get()
     @Roles(UserRole.USER)
     @ApiOperation({ summary: '댓글 목록 (트리)', description: '페이지 없이 전체를 트리 순서의 평평한 목록으로 준다(depth로 들여쓰기). 대댓글 깊이 제한 없음. 삭제된 댓글은 답글이 남아 있을 때만 자리(comment·작성자 null)로 남는다. 댓글 권한이 없어도 읽기 권한이 있으면 조회할 수 있다.' })

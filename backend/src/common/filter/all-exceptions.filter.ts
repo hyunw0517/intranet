@@ -4,12 +4,9 @@ import type { Request } from "express";
 import { RequestContext } from "../context/request-context";
 
 //! 전역 예외 필터 (AppModule의 APP_FILTER로 등록)
-// - 목적: 5xx가 났을 때 "어떤 요청에서" 났는지(메서드·경로·작업자)를 스택과 함께 남긴다.
-//   Nest 기본 처리도 500 스택은 남기지만 요청 정보가 없다.
-// - 4xx(검증 실패·권한 없음·없는 리소스)는 정상적인 응답이라 남기지 않는다.
-// - 응답 형식은 Nest 기본과 같다. (프론트 영향 없음)
-//   BaseExceptionFilter를 상속하지 않는 이유: 처리되지 않은 예외는 기본 필터도 로그를 남겨서 같은 에러가 두 번 찍힌다.
-// - 요청 본문은 남기지 않는다. (비밀번호 등 민감 정보)
+// 5xx가 나면 메서드·경로·작업자를 스택과 함께 남긴다. Nest 기본 처리는 요청 정보를 남기지 않는다.
+// 4xx는 정상 응답이라 남기지 않고, 요청 본문도 민감 정보가 있어 남기지 않는다.
+// BaseExceptionFilter를 상속하면 같은 에러가 두 번 찍혀서 응답 형식만 똑같이 맞췄다.
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
 
@@ -20,7 +17,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     ){}
 
     catch( exception: unknown, host: ArgumentsHost ) {
-        // HTTP 요청만 처리한다. (채팅 Socket.IO Gateway는 구현 시 WsExceptionFilter를 따로 둔다)
+        // HTTP 요청만 처리한다
         if ( host.getType() !== 'http' ) {
             this.logger.error( `${host.getType()} 예외`, exception instanceof Error ? exception.stack : String( exception ) );
             return;
@@ -43,7 +40,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
             );
         }
 
-        // 파일 스트리밍 등으로 응답이 이미 시작됐으면 본문을 보낼 수 없으므로 연결만 끝낸다.
+        // 파일 스트리밍 등으로 응답이 이미 시작됐으면 연결만 끝낸다
         if ( httpAdapter.isHeadersSent( res ) ) {
             httpAdapter.end( res );
             return;

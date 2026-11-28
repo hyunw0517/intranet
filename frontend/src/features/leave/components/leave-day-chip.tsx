@@ -7,10 +7,9 @@ import type { LeaveCalendarDay, LeaveCalendarPerson } from "@/types/leave";
 
 const CLOSE_DELAY_MS = 120; // 항목 → 명단으로 마우스를 옮기는 사이 닫히지 않게
 
-// 캘린더 날짜 칸의 "휴가 N명" 항목 (캘린더 게시판의 "휴가자 표시" 옵션, 2026-11-12 사용자 결정)
-// - 휴가자가 많아도 칸이 넘치지 않게 하루에 항목 하나만 그리고, 마우스를 올리면 명단을 보여 준다.
-// - 터치 화면에는 마우스 올리기가 없으므로 누르면 열고 닫는다.
-// - 명단: 이름(직급/소속): 휴가(종일) 또는 시각 (2026-11-12 사용자 결정, 순서 변경 11-12). 휴가 유형(병가 등)은 서버가 보내지 않는다.
+// 캘린더 날짜 칸의 "휴가 N명" 항목
+// 칸이 넘치지 않게 하루에 항목 하나만 그리고, 마우스를 올리면(터치는 누르면) 명단을 보여 준다.
+// 휴가 유형(병가 등)은 서버가 보내지 않는다.
 export function LeaveDayChip({ day, className }: { day: LeaveCalendarDay; className?: string }) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -39,7 +38,7 @@ export function LeaveDayChip({ day, className }: { day: LeaveCalendarDay; classN
           type="button"
           onPointerEnter={onPointerEnter}
           onPointerLeave={onPointerLeave}
-          // 마우스로 이미 열린 상태에서 누르면 Radix 기본 토글이 닫아 버리므로 막는다 (FE-12 결재선 접기와 같은 처리)
+          // 마우스로 열린 상태에서 누르면 Radix 기본 토글이 닫아 버려서 막는다
           onPointerDown={(e) => {
             lastPointer.current = e.pointerType;
           }}
@@ -48,7 +47,7 @@ export function LeaveDayChip({ day, className }: { day: LeaveCalendarDay; classN
           }}
           aria-label={`${day.date} 휴가 ${day.count}명, 명단 보기`}
           className={cn(
-            // 초록색 (2026-11-12 사용자 요청 - 점선·회색은 잘 안 보임). 일정 박스(포인트색)와 구분된다.
+            // 초록색 (점선·회색은 잘 안 보임). 일정 박스(포인트색)와 구분된다.
             "flex min-w-0 items-center rounded border border-emerald-600/30 bg-emerald-600/15 px-1 py-0.5 text-left text-[11px] leading-4 text-emerald-800 hover:bg-emerald-600/25 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none sm:px-1.5 sm:text-xs dark:border-emerald-400/30 dark:bg-emerald-400/15 dark:text-emerald-300 dark:hover:bg-emerald-400/25",
             className,
           )}

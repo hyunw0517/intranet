@@ -17,11 +17,10 @@ const ZERO = () => new Prisma.Decimal( 0 );
 
 const categorySelect = { id: true, name: true, deleted: true } satisfies Prisma.ProjectBudgetCategorySelect;
 
-//! 예산·지출 (docs/design/projects.md 5-3장, 2026-11-18 사용자 결정)
-// - 참여자 누구나 예산을 정하고 지출을 기록한다(변경은 감사 로그).
-// - 지출: 공급가액 입력 + 부가세 자동. 예산과는 공급가액으로 비교하고, 넘어도 저장한다(응답의 budgetWarning으로 경고만).
-// - 협력사는 선택. 협력사별 계약 금액·지급액을 함께 보여 줄 뿐, 예산 금액을 자동으로 바꾸지 않는다.
-// - 숨긴 항목·빠진 협력사는 새로 고를 수 없지만, 이미 그 값을 쓰는 행은 그대로 둔다.
+//! 예산·지출 (참여자 누구나, 변경은 감사 로그)
+// - 지출은 공급가액 입력 + 부가세 자동. 예산과는 공급가액으로 비교하고, 넘어도 저장한다(경고만).
+// - 협력사는 선택이고, 예산 금액을 자동으로 바꾸지 않는다.
+// - 숨긴 항목·빠진 협력사는 새로 못 고르지만 이미 쓴 행은 그대로 둔다.
 @Injectable()
 export class ProjectBudgetsService {
 
@@ -86,14 +85,14 @@ export class ProjectBudgetsService {
         };
     }
 
-    //* 항목별 예산 저장 (목록 전체 교체) - 목록에서 빠진 항목의 예산은 지운다. 지출은 항목에 직접 연결돼 있어 그대로 남는다.
+    //* 항목별 예산 저장 (목록 전체 교체, 빠진 항목의 지출은 그대로 남는다)
     async saveBudgets( user: ProjectActor, projectId: number, body: SaveProjectBudgetsDto ) {
         const access = await this.access.check( user, projectId );
         const ids = body.items.map( ( i ) => i.categoryId );
         if ( new Set( ids ).size !== ids.length ) throw new BadRequestException( '같은 비용 항목이 두 번 들어 있습니다.' );
 
         await this.prisma.$transaction( async ( tx ) => {
-            // 동시에 저장해도 한 번에 하나씩 (FK 참조 INSERT의 KEY SHARE와는 충돌하지 않는 잠금)
+            // 동시에 저장해도 한 번에 하나씩 (FK 참조 INSERT와는 충돌하지 않는 잠금)
             await tx.$queryRaw`SELECT id FROM project_model WHERE id = ${projectId} FOR NO KEY UPDATE`;
             const before = await tx.projectBudget.findMany({ where: { projectId }, include: { category: { select: { id: true, name: true } } } });
             const beforeIds = new Set( before.map( ( b ) => b.categoryId ) );

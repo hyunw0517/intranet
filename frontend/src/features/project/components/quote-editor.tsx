@@ -36,8 +36,8 @@ const digits = (value: string, max: number) => value.replace(/[^0-9]/g, "").repl
 const kstToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 
 // 견적 작성(v1)·작성 중 버전 수정 화면
-// - 금액은 미리보기만 하고 저장 값은 서버가 다시 계산한다(수량 × 단가, 과세는 합계 × 부가세율(기본 10%) 버림)
-// - 수신 담당자는 발주처(프로젝트 거래처)의 담당자 중에서 고른다. 저장할 때마다 발주처·담당자 정보가 그 시점으로 스냅샷된다.
+// - 금액은 미리보기이고 저장 값은 서버가 다시 계산한다.
+// - 수신 담당자는 발주처 담당자 중에서 고르고, 저장할 때마다 스냅샷이 찍힌다.
 export function QuoteEditor({
   projectId,
   clientId,

@@ -52,7 +52,7 @@ export class QuoteContentDto {
     @IsOptional()
     taxType?: ProjectQuoteTaxType;
 
-    /** 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 (2026-11-17 사용자 결정) */
+    /** 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 */
     @VatRateField()
     vatRate?: number;
 

@@ -4,8 +4,7 @@ import { UserAccessInfo } from "../interface/user-access-info.interface";
 import { NO_PERMISSION } from "../const/board-permission.const";
 
 // 게시판 권한 판정 (DB 조회 없음)
-// BoardAuthService가 규칙(BoardAuth)과 회원 정보(직급·소속)를 조회한 뒤 이 함수로 계산한다.
-// 조회와 판정을 나눠 두어 판정 규칙만 단위 테스트할 수 있다. (board-permission.util.spec.ts)
+// 조회와 판정을 나눠서 판정 규칙만 단위 테스트할 수 있다.
 
 //* 규칙과 회원 정보를 비교해 권한 계산
 // - 규칙 안의 조건은 AND, 해당하는 규칙이 여러 개면 권한별 OR(합집합)
@@ -33,7 +32,7 @@ function matchesRule(
     rule: BoardRule,
     userInfo: UserAccessInfo,
 ){
-    // 1. 최소 직급: 직급 순서는 위쪽(sortOrder가 작을수록)이 높으므로, 회원 sortOrder가 기준 이하면 통과
+    // 1. 최소 직급: sortOrder가 작을수록 높은 직급이라, 회원 값이 기준 이하면 통과
     if( rule.position !== null ){
         if( userInfo.positionSortOrder === null || userInfo.positionSortOrder > rule.position.sortOrder ){
             return false;

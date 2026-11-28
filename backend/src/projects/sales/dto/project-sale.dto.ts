@@ -7,7 +7,7 @@ import { ProjectQuoteTaxType } from 'src/generated/prisma/client';
 import { MAX_AMOUNT } from '../../dto/project-partner.dto';
 import { DATE_ONLY, DATE_ONLY_MESSAGE, VatRateField } from '../../dto/project.dto';
 
-// 세금계산서 승인번호: 국세청 24자리(하이픈 포함 26자). 표기가 다양해 숫자·하이픈만 허용하고 길이로만 막는다
+// 세금계산서 승인번호: 표기가 다양해서 숫자·하이픈만 허용하고 길이로만 막는다
 const INVOICE_NO = /^[0-9-]{1,30}$/;
 
 //* 청구 건 만들기 (참여자 누구나) - 청구일을 함께 보내면 바로 "청구" 상태로 만든다
@@ -30,7 +30,7 @@ export class CreateProjectSaleDto {
     @IsOptional()
     taxType?: ProjectQuoteTaxType;
 
-    /** 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 (2026-11-17 사용자 결정) */
+    /** 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 */
     @VatRateField()
     vatRate?: number;
 
@@ -73,7 +73,7 @@ export class CreateProjectSaleDto {
     attachmentIds?: number[];
 }
 
-//* 청구 건 수정 (보낸 항목만) - 청구 예정이면 전부, 청구한 뒤에는 청구명·승인번호·메모·첨부만
+//* 청구 건 수정 (보낸 항목만, 청구한 뒤에는 청구명·승인번호·메모·첨부만)
 export class UpdateProjectSaleDto {
 
     @IsString()
@@ -93,7 +93,7 @@ export class UpdateProjectSaleDto {
     @IsOptional()
     taxType?: ProjectQuoteTaxType;
 
-    /** 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 (2026-11-17 사용자 결정) */
+    /** 부가세율(%) - 직접 입력, 기본 10, 면세면 무시 */
     @VatRateField()
     vatRate?: number;
 

@@ -4,7 +4,7 @@ import { StringToNumber } from 'src/common/decorator/string-to-number.decorator'
 // "HH:mm" (00:00 ~ 24:00) - 범위는 서비스의 parseHm에서 다시 확인한다.
 export const HM_REGEX = /^\d{2}:\d{2}$/;
 
-//* 시설 분류 생성 (관리자) - 분류가 그 시설들의 예약 규칙을 정한다. (features.md 6장)
+//* 시설 분류 생성 (관리자) - 분류가 그 시설들의 예약 규칙을 정한다
 export class CreateFacilityCategoryDto {
 
     /** 분류명 (1~50자, 중복 불가) */

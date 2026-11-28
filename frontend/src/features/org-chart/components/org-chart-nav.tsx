@@ -9,7 +9,7 @@ const LINKS = [
   { href: "/organization/directory", label: "사원 검색" },
 ];
 
-// 조직도 화면 안의 이동 (조직도 / 사원 검색) - 사이드바 메뉴는 "조직도" 하나 (2026-11-19 사용자 결정)
+// 조직도 화면 안의 이동 (조직도 / 사원 검색) - 사이드바 메뉴는 "조직도" 하나
 export function OrgChartNav() {
   const pathname = usePathname();
 

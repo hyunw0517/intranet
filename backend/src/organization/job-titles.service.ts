@@ -137,8 +137,8 @@ export class JobTitlesService {
     }
 
     //* 직책 순서 변경 (드래그 정렬)
-    // - 화면의 최종 순서대로 받은 id 배열의 위치를 sortOrder로 저장한다.
-    // - 현재 직책 전체와 정확히 일치해야 한다. (다른 관리자가 추가·삭제했다면 순서가 어긋나므로 거부)
+    // 받은 id 배열의 위치를 sortOrder로 저장한다.
+    // 다른 관리자가 추가·삭제했으면 어긋나므로 전체와 정확히 같아야 한다.
     async updateJobTitleOrder(
         user: Pick<Users, 'id'>,
         body: UpdateSortOrderDto,
@@ -235,7 +235,7 @@ export class JobTitlesService {
                 },
             });
 
-            // 삭제된 직책을 제외한 직급을 재정렬
+            // 삭제된 직책을 제외하고 재정렬
             await tx.jobTitle.updateMany({
                 where: {
                     sortOrder: { gt: thisJobTitle.sortOrder }, // 기준 sortOrder를 초과한 정렬 데이터만

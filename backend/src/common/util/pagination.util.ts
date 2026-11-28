@@ -9,9 +9,7 @@ import { PagePaginationResult, CursorPaginationResult } from "../interface/pagin
 //! Page 기반 Pagination
 
 //* 페이지 목록 조회: 목록 + 전체 개수를 병렬 조회해 페이지 응답으로 반환
-// - Service에서는 이 함수만 사용한다. (PageArgs, PageResult는 내부용)
-// - Prisma delegate(this.prisma.users)를 받으면 select에 따른 반환 타입 추론이 깨지므로 조회는 콜백으로 받는다.
-// - findPage는 받은 skip, take를 findMany에 펼쳐 넣는다. 메모리 정렬처럼 DB 페이징이 아닌 경우 slice에 사용한다.
+// - Prisma delegate를 받으면 select에 따른 반환 타입 추론이 깨져서 조회는 콜백으로 받는다.
 // ex) return PaginatePage( query,
 //       (page) => this.prisma.users.findMany({ select, where, orderBy, ...page }),
 //       () => this.prisma.users.count({ where }),

@@ -7,9 +7,9 @@ import { SaveBudgetCategoryDto } from "./dto/project-budget.dto";
 
 const DUPLICATE = '이미 있는 항목 이름입니다.';
 
-//! 비용 항목 (전사 공통, docs/design/projects.md 5-3장, 2026-11-18 사용자 결정)
-// - 조회는 USER 누구나(예산·지출 입력에서 고른다), 관리는 과제 관리 관리자
-// - 삭제는 숨기기(soft): 새 예산·지출에서 고를 수 없고, 이미 쓴 기록에는 이름이 남는다. 숨긴 뒤 같은 이름을 다시 만들 수 있다(부분 unique).
+//! 비용 항목 (전사 공통)
+// - 조회는 USER 누구나, 관리는 과제 관리 관리자
+// - 삭제는 숨기기라 이미 쓴 기록에는 이름이 남고, 같은 이름을 다시 만들 수 있다(부분 unique).
 @Injectable()
 export class ProjectBudgetCategoriesService {
 

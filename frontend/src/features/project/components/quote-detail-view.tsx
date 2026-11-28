@@ -27,10 +27,10 @@ import { QuoteSubmitDialog } from "./quote-submit-dialog";
 
 type Pending = "newVersion" | "deleteVersion" | "deleteQuote" | "confirm" | "cancel" | null;
 
-// 견적 상세 - 버전 선택, 견적서 양식(인쇄 영역), 상태별 버튼 (docs/design/projects.md 5-1장)
-// - 고치기·결재 요청·확정·버전 삭제: 최신 버전이 작성 중이거나 반려일 때만
-// - 새 버전: 최신이 확정·결재 중이 아닐 때 / 확정 취소: 확정된 버전
-// - 결재가 켜져 있으면 [결재 요청], 꺼져 있으면 [확정] (approvalEnabled)
+// 견적 상세 - 버전 선택, 견적서 양식(인쇄 영역), 상태별 버튼
+// - 고치기·결재 요청·확정·버전 삭제는 최신 버전이 작성 중이거나 반려일 때만
+// - 새 버전은 최신이 확정·결재 중이 아닐 때, 확정 취소는 확정된 버전
+// - 결재가 켜져 있으면 [결재 요청], 꺼져 있으면 [확정]
 export function QuoteDetailView({ projectId, quoteId }: { projectId: number; quoteId: number }) {
   const quote = useQuote(projectId, quoteId);
   const project = useProject(projectId);

@@ -9,8 +9,8 @@ import { formatAmount, type ProjectDetail } from "@/types/project";
 import { useQuotes } from "../hooks/use-projects";
 import { QuoteStatusBadge } from "./quote-status-badge";
 
-// 견적 탭 - 계약 금액(확정 견적 합계) + 견적 목록 (docs/design/projects.md 5-1장)
-// 견적은 발주처(프로젝트의 거래처)에게 내는 문서라 발주처가 없으면 만들 수 없다(서버도 400).
+// 견적 탭 - 계약 금액(확정 견적 합계) + 견적 목록
+// 견적은 발주처에게 내는 문서라 발주처가 없으면 만들 수 없다 (서버도 400).
 export function ProjectQuotes({ project }: { project: ProjectDetail }) {
   const { data, isPending, isError, error, refetch } = useQuotes(project.id);
   const hasClient = !!project.client;

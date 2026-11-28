@@ -13,10 +13,8 @@ import { LEAVE_UNIT_LABEL, type LeaveSummary } from "@/types/leave";
 import { useMyLeaves, useMyLeaveSummary } from "../hooks/use-leaves";
 import { formatDays, formatLeavePeriod, thisYearKst } from "../leave-rules";
 
-// [휴가내역] (마이페이지 아래, 2026-11-12 사용자 결정)
-// - 위: 그 연도 전체 휴가(= 연차 부여: 계산값 + 조정값) · 사용 · 결재 중 · 남은 연차
-// - 아래: 그 연도 신청 이력 - 병가·공가 포함(유형 표시), 임시저장·반려·회수도 상태 배지로. 누르면 결재 문서로
-// - 신청은 전자결재 작성 화면(문서 유형 "휴가 신청")에서 한다.
+// [휴가내역] - 위는 그 연도 연차 현황, 아래는 신청 이력 (누르면 결재 문서로)
+// 신청은 전자결재 작성 화면에서 한다.
 export function LeaveHistoryView() {
   const [year, setYear] = useState(thisYearKst);
   const summary = useMyLeaveSummary(year);

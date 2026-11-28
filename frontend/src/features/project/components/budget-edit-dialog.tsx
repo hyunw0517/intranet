@@ -15,9 +15,9 @@ import { useBudgetCategories, useProjectMutation } from "../hooks/use-projects";
 
 const digits = (value: string) => value.replace(/[^0-9]/g, "").replace(/^0+(?=\d)/, "").slice(0, 15);
 
-// 항목별 예산 입력 (참여자 누구나, docs/design/projects.md 5-3장)
-// - 비워 둔 항목은 예산이 없는 것으로 저장한다(목록 전체 교체). 지출 기록은 지워지지 않는다.
-// - 관리자가 숨긴 항목도 이미 예산이 있으면 금액을 고칠 수 있게 함께 보여 준다.
+// 항목별 예산 입력 (참여자 누구나)
+// - 비워 둔 항목은 예산이 없는 것으로 저장한다 (지출 기록은 지워지지 않는다).
+// - 숨긴 항목도 이미 예산이 있으면 고칠 수 있게 보여 준다.
 export function BudgetEditDialog({
   projectId,
   current,

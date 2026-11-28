@@ -11,9 +11,8 @@ import type { DirectoryUser, OrgChartDepartment } from "@/services/api/org-chart
 import { useDepartmentMembers, useOrgChart } from "../hooks/use-org-chart";
 import { DirectoryUserDialog } from "./directory-user-dialog";
 
-// 조직도 - 왼쪽 부서 트리(접고 펼치기), 오른쪽 선택한 부서의 구성원
-// - 구성원은 그 부서에 직접 소속된 사람만(하위 부서 제외), 겸직자 포함 (2026-11-19 사용자 결정)
-// - 모바일·태블릿(lg 미만)은 트리를 [부서 선택] 버튼으로 접어 두고, 부서를 고르면 다시 접는다
+// 조직도 - 왼쪽 부서 트리, 오른쪽 선택한 부서의 구성원 (하위 부서 제외, 겸직 포함)
+// 좁은 화면(lg 미만)은 트리를 [부서 선택] 버튼으로 접어 둔다.
 export function OrgChartView() {
   const chart = useOrgChart();
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -61,8 +60,7 @@ export function OrgChartView() {
   );
 }
 
-// 트리: 서버가 트리 순서(상위 → 하위)의 평평한 목록 + depth를 주므로 들여쓰기로 그린다.
-// 다음 항목의 depth가 더 크면 하위 부서가 있는 것이다. 접은 부서의 하위 항목은 건너뛴다.
+// 서버가 트리 순서 목록 + depth를 줘서 들여쓰기로 그린다. 다음 항목의 depth가 크면 하위가 있는 것이다.
 function DepartmentTree({
   departments,
   selectedId,

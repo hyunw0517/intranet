@@ -4,7 +4,7 @@ import { EmptyToNull } from 'src/common/decorator/empty-to-null.decorator';
 import { CreateUserDto } from './create-user.dto';
 
 //* (관리자) 회원 정보 수정 DTO
-// 가입 정보에서 비밀번호를 제외하고 입사일을 추가 (비밀번호는 초기화 API로만 변경)
+// 가입 정보에서 비밀번호를 빼고 입사일을 더한다 (비밀번호는 초기화 API로만 바꾼다)
 export class AdminUpdateUserDto extends OmitType(CreateUserDto, ['password'] as const) {
 
     /** 입사일 (연차 계산에 사용) */

@@ -24,9 +24,9 @@ const digits = (value: string) => value.replace(/[^0-9]/g, "").replace(/^0+(?=\d
 
 export type ExpenseFormState = { mode: "create" } | { mode: "edit"; expense: ProjectExpense } | null;
 
-// 지출 기록·수정 (참여자 누구나, docs/design/projects.md 5-3장)
-// - 공급가액을 입력하면 부가세·합계는 미리보기(서버가 다시 계산). 예산과는 공급가액으로 비교한다.
-// - 예산을 넘어도 저장할 수 있다. 입력 중에 경고를 보여 주고, 저장 뒤에도 알려 준다.
+// 지출 기록·수정 (참여자 누구나)
+// - 부가세·합계는 미리보기이고 서버가 다시 계산한다. 예산과는 공급가액으로 비교한다.
+// - 예산을 넘어도 저장할 수 있고, 입력 중과 저장 뒤에 알려 준다.
 export function ExpenseFormDialog({
   projectId,
   categories,

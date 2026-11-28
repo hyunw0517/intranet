@@ -11,8 +11,8 @@ export const notificationKeys = {
 };
 
 // 안 읽은 알림 수 (헤더의 빨간 점)
-// - 60초마다 + 창으로 돌아올 때 다시 조회한다. (실시간 Socket.IO는 1월 이후 선택 확장)
-// - 승인 직후에는 access token이 아직 GUEST라 최대 10분 403이 날 수 있어 재시도하지 않고 조용히 둔다.
+// - 60초마다 + 창으로 돌아올 때 다시 조회한다.
+// - 승인 직후에는 access token이 아직 GUEST라 최대 10분 403이 날 수 있어 재시도하지 않는다.
 export function useUnreadNotificationCount(enabled: boolean) {
   return useQuery({
     queryKey: notificationKeys.unreadCount(),

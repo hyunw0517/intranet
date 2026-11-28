@@ -1,5 +1,5 @@
-// 과제 관리 (애드온 projects) 응답 타입 - 백엔드 projects/* 서비스 응답 기준 (docs/design/projects.md 5장)
-// 날짜만 있는 값(startDate·endDate·dueDate)은 @db.Date라 "2026-11-17T00:00:00.000Z" 형태로 온다 → 앞 10자리 사용(lib/format formatDate)
+// 과제 관리 응답 타입 (백엔드 projects/* 서비스 응답 기준)
+// @db.Date 값은 "2026-11-17T00:00:00.000Z" 형태로 와서 앞 10자리만 쓴다 (formatDate)
 
 export type ProjectStatus = "PLANNED" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "CLOSED" | "CANCELLED";
 export type ProjectMemberRole = "MANAGER" | "MEMBER";
@@ -67,7 +67,6 @@ export interface ProjectMember {
 }
 
 // 화면이 버튼을 보이고 숨기는 데 쓴다 (서버도 같은 기준으로 다시 확인한다)
-// 금액은 프로젝트를 볼 수 있는 사람 모두가 본다 (금액 열람 규칙 없음, 2026-11-17 사용자 결정)
 export interface ProjectAccess {
   memberRole: ProjectMemberRole | null; // 참여자가 아니면 null (관리자로 들어온 경우)
   isAdmin: boolean;
@@ -181,7 +180,7 @@ export function formatBusinessNo(value: string | null | undefined) {
   return value.length === 10 ? `${value.slice(0, 3)}-${value.slice(3, 5)}-${value.slice(5)}` : value;
 }
 
-// ── 견적서 (docs/design/projects.md 5-1장) ───────────────────────────
+// ── 견적서 ──────────────────────────────────────────
 // 금액은 Decimal(15,0)이라 문자열로 온다. 표시 상태는 서버가 결재 문서 상태로 계산한다.
 export type QuoteTaxType = "TAXABLE" | "EXEMPT";
 export type QuoteDisplayStatus = "DRAFT" | "IN_APPROVAL" | "REJECTED" | "CONFIRMED" | "CANCELLED";
@@ -270,7 +269,7 @@ export interface QuoteDetail {
   createdAt: string;
 }
 
-// ── 매출 (docs/design/projects.md 5-2장) ───────────────────────────
+// ── 매출 ────────────────────────────────────────────
 // 청구 상태는 저장값, 수금 상태는 서버가 수금 합계로 계산한다. 금액은 문자열(Decimal).
 export type SaleStatus = "PLANNED" | "BILLED" | "CANCELLED";
 export type SalePaymentStatus = "UNPAID" | "PARTIAL" | "PAID";
@@ -328,7 +327,7 @@ export interface SaleListResult {
   sales: ProjectSale[];
 }
 
-// ── 예산 (docs/design/projects.md 5-3장) ───────────────────────────
+// ── 예산 ────────────────────────────────────────────
 // 예산과 지출은 공급가액으로 비교한다. 예산을 넘어도 저장되고 화면에 경고만 한다. 금액은 문자열(Decimal).
 export interface MonthlyAmount {
   month: string; // "2026-11"

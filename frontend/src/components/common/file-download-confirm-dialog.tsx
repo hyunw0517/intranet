@@ -3,11 +3,10 @@
 import { AlertTriangle } from "lucide-react";
 import { ConfirmDialog } from "./confirm-dialog";
 
-// 파일 내려받기 전 확인 + 보안 경고 (채팅·게시판 공용, 2026-11-14 사용자 요청 - 보안 차원)
-// - 문구·모양을 한곳에서 관리한다. 경고 박스는 시설 사용 불가 기간 창의 경고와 같은 주의 색(amber) + 경고 아이콘
-// - 누르는 버튼 "안"에 두지 않는다. portal로 그려져도 React 이벤트가 React 트리를 따라 바깥 버튼의 onClick까지
-//   올라가서, [다운로드]를 누를 때 창이 다시 열린다. (부르는 쪽에서 버튼 옆·목록 밖에 둔다)
-// - 닫기는 부르는 쪽이 받기가 끝난 뒤 onOpenChange(false)로 한다. 받는 동안(pending)은 닫히지 않는다.
+// 파일 내려받기 전 확인 + 보안 경고 (채팅·게시판 공용)
+// 누르는 버튼 안에 두면 portal이어도 React 이벤트가 바깥 버튼 onClick까지 올라가 창이 다시 열린다.
+// 그래서 부르는 쪽에서 버튼 옆이나 목록 밖에 둔다.
+// 닫기는 받기가 끝난 뒤 부르는 쪽이 한다 (받는 동안은 닫히지 않는다).
 export function FileDownloadConfirmDialog({
   fileName,
   open,

@@ -3,7 +3,7 @@ import { NotificationActionType } from "src/generated/prisma/client";
 import { NotificationsService } from "src/common/notifications.service";
 import { bestEffort } from "src/common/util/best-effort.util";
 
-//! 인증 알림 규칙 (보안 안내) - 실패해도 업무를 막지 않는다(bestEffort)
+//! 인증 알림 (실패해도 업무는 그대로, bestEffort)
 @Injectable()
 export class AuthNotifier {
 
@@ -13,8 +13,8 @@ export class AuthNotifier {
         private readonly notificationsService: NotificationsService,
     ){}
 
-    //* refresh token 재사용 감지로 세션을 폐기했을 때 → 세션 주인 (다른 기기에서 로그인 중이면 알림으로 확인할 수 있다)
-    // 정상 사용자가 낸 옛 토큰일 수도 있으므로 단정하지 않고, 본인이 아니면 비밀번호 변경을 안내한다.
+    //* refresh token 재사용으로 세션을 끊었을 때 세션 주인에게
+    // 정상 사용자의 옛 토큰일 수도 있어서 단정하지 않고 비밀번호 변경만 안내한다.
     sessionRevoked( userId: number ){
         return bestEffort( this.logger, `세션 폐기 알림(user ${userId})`, async () => {
             await this.notificationsService.send({

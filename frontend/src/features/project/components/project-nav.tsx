@@ -11,7 +11,7 @@ const LINKS = [
   { href: "/projects/clients", label: "거래처", match: (p: string) => p === "/projects/clients" },
 ];
 
-// 과제 관리 화면 안의 이동 (프로젝트 / 내 할 일 / 거래처) - 사이드바 메뉴는 "과제 관리" 하나 (2026-11-17 사용자 결정)
+// 과제 관리 화면 안의 이동 (프로젝트 / 내 할 일 / 거래처) - 사이드바 메뉴는 "과제 관리" 하나
 export function ProjectNav() {
   const pathname = usePathname();
 

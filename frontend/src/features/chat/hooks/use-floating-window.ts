@@ -14,10 +14,10 @@ const DEFAULT_FRAME: Frame = { offset: { x: 0, y: 0 }, size: null };
 const FLOATING_QUERY = "(min-width: 640px)";
 // 옮기기를 시작하지 않는 요소 (위쪽 줄의 뒤로·메뉴·닫기 버튼 등)
 const INTERACTIVE = "button, a, input, textarea, select, [role='menuitem']";
-// 브라우저 저장소 키 (2026-11-14 사용자 결정: 위치·크기를 이 브라우저에 기억)
+// 브라우저 저장소 키 (위치·크기를 이 브라우저에 기억)
 const STORAGE_KEY = "intranet.chat-window";
 
-// 크기 최소·최대 (2026-11-14 사용자 요청: 자유롭게 조절하되 최소·최대는 정한다)
+// 크기 최소·최대 (자유롭게 조절하되 최소·최대는 정한다)
 // - 최소: 입력창·메뉴·파일 줄(w-60)이 깨지지 않는 크기
 // - 최대: 너비 720px, 높이는 화면 높이까지 (둘 다 화면 가장자리 16px씩 남김)
 export const CHAT_WINDOW_MIN = { width: 320, height: 420 } as const;
@@ -28,14 +28,13 @@ const DEFAULT_WIDTH = 380;
 const defaultHeight = () => Math.min(640, window.innerHeight - 80);
 
 // 떠 있는 채팅 창의 위치·크기
-// - 위치는 기본 자리(오른쪽 아래)에서 얼마나 옮겼는지(offset)만 두고 transform으로 그린다.
-// - 크기는 처음엔 CSS 기본값이고, 가장자리·모서리를 끌면 px 값(size)으로 바뀐다.
-// - 위치·크기는 localStorage에 남겨 새로고침·다시 로그인해도 그대로 연다(이 브라우저에서만).
-//   위쪽 줄을 두 번 누르면 원래 자리·크기로 돌아가고 저장값도 지운다.
-// - 창 전체가 화면 안에 있도록 제한한다. 열 때(저장값이 다른 화면 크기에서 만든 값일 수 있음)와 브라우저 크기가 바뀔 때 다시 맞춘다.
-// - 화면 전체 모드(모바일 폭)에서는 위치·크기를 적용하지 않는다. 저장값은 지우지 않아 다시 넓어지면 그대로 쓴다.
-// - 끄는 동안 포인터를 창에 묶어(setPointerCapture) 커서가 빨리 움직여도 끊기지 않고, 글자 선택도 막는다.
-// (이 훅은 창이 열릴 때만 그려진다 - ChatProvider의 open이 false로 시작해 서버 렌더링 때는 window를 읽지 않는다)
+// - 위치는 기본 자리에서 옮긴 만큼(offset)만 두고 transform으로 그린다.
+// - 크기는 처음엔 CSS 기본값이고, 끌면 px 값으로 바뀐다.
+// - 위치·크기는 localStorage에 남긴다 (위쪽 줄을 두 번 누르면 지운다).
+// - 열 때와 브라우저 크기가 바뀔 때 창 전체가 화면 안에 들어오게 다시 맞춘다.
+// - 모바일 폭에서는 적용하지 않지만 저장값은 둔다.
+// - 끄는 동안 setPointerCapture로 포인터를 묶어 끊기지 않게 하고 글자 선택도 막는다.
+// (창이 열릴 때만 그려져서 서버 렌더링 때는 window를 읽지 않는다)
 export function useFloatingWindow() {
   const ref = useRef<HTMLElement>(null);
   const [frame, setFrame] = useState<Frame>(() => fitToViewport(loadFrame()));
@@ -49,8 +48,7 @@ export function useFloatingWindow() {
     start: Offset;
     rect: DOMRect;
   } | null>(null);
-  // 마지막으로 누른 곳이 위쪽 줄(옮기기 손잡이)인지.
-  // 두 번 누르기(dblclick)는 포인터를 창에 묶은 뒤라 대상(target)이 위쪽 줄이 아니라 창 전체로 와서, 누를 때 기록해 둔 값으로 판단한다.
+  // 마지막으로 누른 곳이 위쪽 줄인지. dblclick은 포인터를 묶은 뒤라 target이 창 전체로 와서 미리 기록해 둔다.
   const pressedHandleRef = useRef(false);
 
   // 화면 크기가 바뀌면 화면 안으로 다시 맞춘다.
@@ -106,8 +104,7 @@ export function useFloatingWindow() {
       return;
     }
 
-    // 크기 조절: 끄는 쪽 가장자리만 움직이고 반대쪽은 그 자리에 둔다. 최소·최대와 화면 끝을 넘지 않는다.
-    // 창은 오른쪽·아래가 기준(right·bottom + transform)이라, 오른쪽·아래 가장자리를 끌 때는 늘어난 만큼 offset도 옮긴다.
+    // 크기 조절: 끄는 쪽 가장자리만 움직이고, 오른쪽·아래가 기준이라 그쪽을 끌면 offset도 옮긴다.
     const max = maxSize();
     let { width, height } = rect;
     let { x, y } = start;
@@ -161,8 +158,7 @@ function maxSize(): Size {
   };
 }
 
-// 지금 화면에 맞춘 위치·크기: 크기는 최소~최대 안으로, 창 전체가 화면 안에 들어오도록 위치를 옮긴다.
-// DOM을 읽지 않고 기본 자리(오른쪽 아래 16px)에서 계산하므로 창을 그리기 전(저장값 불러올 때)에도 쓸 수 있다.
+// 지금 화면에 맞춘 위치·크기 (DOM을 읽지 않아서 그리기 전에도 쓸 수 있다)
 function fitToViewport({ offset, size }: Frame): Frame {
   const max = maxSize();
   const fitted = size && {

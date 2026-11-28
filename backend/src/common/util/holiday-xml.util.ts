@@ -8,9 +8,7 @@ const XML_ENTITIES: Record<string, string> = { '&lt;': '<', '&gt;': '>', '&quot;
 const readTag = ( xml: string, tag: string ) => xml.match( new RegExp( `<${tag}>([^<]*)</${tag}>` ) )?.[1].trim();
 
 //* 한국천문연구원 특일 정보(getRestDeInfo) XML 응답 → 공휴일 목록 (날짜순)
-// - 응답 구조가 단순하고 필요한 값이 세 개뿐이라 XML 라이브러리를 추가하지 않는다.
-// - 공공기관 휴일(isHoliday=Y)만 남긴다. 같은 날 공휴일이 겹치면 이름을 합친다.
-// - 정상 응답이 아니면 예외를 던진다. (인증 실패·한도 초과는 returnReasonCode로 온다)
+// 필요한 값이 세 개뿐이라 XML 라이브러리를 쓰지 않는다. 같은 날 공휴일이 겹치면 이름을 합친다.
 export function parseHolidayXml( xml: string ): Holiday[] {
     const resultCode = readTag( xml, 'resultCode' );
     if ( resultCode !== '00' ) {

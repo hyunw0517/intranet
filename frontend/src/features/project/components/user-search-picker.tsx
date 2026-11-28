@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 import type { UserSearchItem } from "@/services/api/users";
 import { useUserSearch } from "../hooks/use-projects";
 
-// 회원 검색·선택 (참여자 추가) - 공용 회원 검색 GET /users/search (재직 중인 승인 회원, 최대 20명)
-// 입력이 멈추고 300ms 뒤에 검색한다. 이미 참여 중인 회원은 고를 수 없게 표시한다.
+// 회원 검색·선택 (참여자 추가, 공용 회원 검색)
+// 입력이 멈추고 300ms 뒤에 검색하고, 이미 참여 중인 회원은 고를 수 없게 표시한다.
 export function UserSearchPicker({
   excludeIds,
   selectedId,

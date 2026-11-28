@@ -57,8 +57,8 @@ export function AdminGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// 관리자 기능별 화면: 그 기능을 가진 ADMIN 또는 SUPER_ADMIN만 (AdminGate 안에서 쓴다)
-// 기능이 없으면 관리자 레이아웃은 유지하고 본문만 안내로 바꾼다. 최종 검증은 백엔드 @RequireAdmin.
+// 관리자 기능별 화면: 그 기능을 가진 ADMIN 또는 SUPER_ADMIN만 (AdminGate 안에서)
+// 기능이 없으면 관리자 레이아웃은 두고 본문만 안내로 바꾼다.
 export function AdminPermissionGate({ permission, children }: { permission: AdminPermission; children: React.ReactNode }) {
   const { user } = useAuth();
 

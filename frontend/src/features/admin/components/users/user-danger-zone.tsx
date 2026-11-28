@@ -45,11 +45,9 @@ function ActionRow({ title, description, action }: { title: React.ReactNode; des
   );
 }
 
-// 로그인 잠금 해제 (서버: 5회 연속 실패마다 10분 → 30분 → 1시간 잠금, 로그인 성공 시 초기화)
-// - 잠겨 있음: [잠금 해제]
-// - 잠겨 있지 않지만 실패 기록이 남아 있음: [실패 기록 초기화] (다음 잠금이 높은 단계부터 시작되지 않도록)
-// - 기록 없음: 버튼 비활성화
-// 해제는 되돌릴 일이 없는 안전한 동작이라 확인 창 없이 바로 처리한다. 성공하면 상세를 다시 불러와 상태를 맞춘다.
+// 로그인 잠금 해제
+// - 잠겨 있으면 [잠금 해제], 실패 기록만 있으면 [실패 기록 초기화], 기록이 없으면 비활성
+// 되돌릴 일이 없는 동작이라 확인 창 없이 바로 처리한다.
 function LoginLockRow({ user }: { user: AdminUserDetail }) {
   const lock = user.loginLock;
   const mutation = useAdminUserMutation(() => unlockLogin(user.id));
@@ -88,9 +86,8 @@ function LoginLockRow({ user }: { user: AdminUserDetail }) {
   );
 }
 
-// 서버가 임시 비밀번호를 만들어 응답으로 한 번만 돌려준다. (DB에는 해시만 저장되어 다시 볼 수 없음)
-// 이 화면에서만 쓰므로 useMutation을 컴포넌트 안에 둔다.
-// 서버가 로그인 잠금도 함께 해제하므로, 성공하면 상세를 다시 불러와 잠금 표시를 맞춘다.
+// 임시 비밀번호는 응답으로 한 번만 온다 (다시 볼 수 없다).
+// 서버가 잠금도 함께 풀어서 성공하면 상세를 다시 불러온다.
 function ResetPasswordRow({ user }: { user: AdminUserDetail }) {
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -168,8 +165,8 @@ function DeleteUserRow({ user, isSelf }: { user: AdminUserDetail; isSelf: boolea
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // 공용 useAdminUserMutation을 쓰지 않는 이유: 성공 후 바로 다시 불러오면 지금 보고 있는 상세가
-  // (삭제된 회원이라) 400이 되어 오류 화면이 잠깐 보인다. 캐시를 만료 표시만 하고 목록으로 이동한다.
+  // 공용 훅을 쓰면 바로 다시 불러와 삭제된 회원 상세가 400 오류로 잠깐 보인다.
+  // 그래서 캐시를 만료 표시만 하고 목록으로 이동한다.
   const mutation = useMutation({
     mutationFn: () => deleteUser(user.id),
     onSuccess: () => {

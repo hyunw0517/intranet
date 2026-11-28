@@ -12,9 +12,8 @@ import type { ChatFileUpload } from "../hooks/use-chat-file-upload";
 import { addMessageToCache, chatKeys } from "../hooks/use-chats";
 
 // 메시지 입력 (Enter 보내기 · Shift+Enter 줄바꿈)
-// - 한글 입력 중(조합 중) Enter는 글자 확정이라 보내지 않는다(isComposing). 안 막으면 마지막 글자가 한 번 더 보내진다.
-// - 보낸 메시지는 응답으로 바로 캐시에 넣는다. 같은 메시지가 소켓으로도 오지만 id로 걸러 한 번만 보인다.
-// - 파일: [클립] 버튼(여러 개 선택 가능) 또는 방 화면에 끌어다 놓기. 보내는 동안 버튼 자리에 스피너, 여러 개면 아래에 "3/7"
+// - 한글 조합 중 Enter는 글자 확정이라 보내지 않는다 (안 막으면 마지막 글자가 한 번 더 간다).
+// - 보낸 메시지는 응답으로 바로 캐시에 넣고, 소켓으로 같은 메시지가 오면 id로 거른다.
 export function ChatComposer({ roomId, readOnly, upload }: { roomId: number; readOnly: boolean; upload: ChatFileUpload }) {
   const queryClient = useQueryClient();
   const [value, setValue] = useState("");

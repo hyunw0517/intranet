@@ -37,8 +37,8 @@ interface TaskFormDialogProps {
 }
 
 // 과제 만들기·수정 창 (참여자 누구나)
-// - 담당자는 현재 참여자만 고를 수 있다. 담당자가 부재(참여자에서 빠짐·퇴사)면 책임자·관리자만 바꿀 수 있다(서버도 403).
-// - 상태 선택은 드래그를 쓰기 어려운 경우(키보드·터치)를 위한 대안이다. 바꾸면 그 컬럼 맨 아래로 이동한다.
+// - 담당자는 현재 참여자만, 담당자가 부재면 책임자·관리자만 바꿀 수 있다 (서버도 403).
+// - 상태 선택은 드래그가 어려운 경우를 위한 것이고, 바꾸면 그 컬럼 맨 아래로 간다.
 export function TaskFormDialog(props: TaskFormDialogProps) {
   const [busy, setBusy] = useState(false);
   return (

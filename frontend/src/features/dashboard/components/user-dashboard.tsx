@@ -19,7 +19,7 @@ import { ScheduleCalendar } from "./schedule-calendar";
 
 const MAX_TASKS = 5;
 
-// 사용자 대시보드: 꺼진 애드온의 카드는 만들지 않는다. (마운트되지 않으면 그 API도 호출되지 않는다)
+// 사용자 대시보드: 꺼진 애드온의 카드는 만들지 않는다 (그 API도 호출되지 않는다)
 export function UserDashboard() {
   const { data: addons, isPending } = useEnabledAddons();
   if (isPending) return null;

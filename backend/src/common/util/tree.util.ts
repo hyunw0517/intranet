@@ -36,8 +36,7 @@ export function toTreeList<T extends TreeItem>(
     getParentId: ( item: T ) => number | null,
     compare: ( a: T, b: T ) => number = bySortOrder as unknown as ( a: T, b: T ) => number,
 ): TreeListItem<T>[] {
-    // 상위 id → 하위 목록
-    // 상위가 없거나 목록에 없으면(삭제 등) 최상위로 취급해 결과에서 빠지지 않게 한다.
+    // 상위 id → 하위 목록 (상위가 목록에 없으면 최상위로 취급해 빠지지 않게)
     const ids = new Set( items.map( ( item ) => item.id ) );
     const childrenMap = new Map<number | null, T[]>();
 

@@ -34,7 +34,7 @@ type Values = ReturnType<typeof toFormValues>;
 type Errors = Partial<Record<keyof Values, string>>;
 
 // 내 정보 수정 (PATCH /users/me)
-// [저장] → 입력값 검증 → 현재 비밀번호 모달 → 확인 시 요청
+// 입력값을 검증한 뒤 현재 비밀번호 모달에서 확인하면 요청한다.
 // 선택 항목을 비우면 빈 문자열을 보내 서버에서 null로 저장된다.
 export function ProfileForm({ user }: { user: CurrentUser }) {
   const { setUser } = useAuth();
@@ -86,9 +86,8 @@ export function ProfileForm({ user }: { user: CurrentUser }) {
     "aria-describedby": `profile-${key}-message`,
   });
 
-  // 저장 요청의 오류는 모두 모달 안에 표시한다.
-  // 현재 비밀번호 불일치와 이메일 중복이 둘 다 400이라 상태 코드로 구분할 수 없기 때문.
-  // 폼을 고쳐야 하는 오류(이메일 중복 등)면 사용자가 [취소]로 닫고 수정한다.
+  // 저장 오류는 모두 모달 안에 표시한다. 비밀번호 불일치와 이메일 중복이 둘 다 400이라 구분할 수 없어서다.
+  // 폼을 고쳐야 하는 오류면 [취소]로 닫고 고친다.
   const dialogError = mutation.error ? getErrorMessage(mutation.error) : null;
 
   const handleDialogOpenChange = (open: boolean) => {

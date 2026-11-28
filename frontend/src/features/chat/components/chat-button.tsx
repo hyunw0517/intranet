@@ -6,9 +6,8 @@ import { badgeCount } from "../chat-display";
 import { useChatUnreadTotal } from "../hooks/use-chats";
 import { useChat } from "./chat-provider";
 
-// 헤더 채팅 버튼 (알림 종 옆) - 누르면 오른쪽에 떠 있는 채팅 창을 열고 닫는다.
-// - 안 읽은 메시지가 있으면 빨간 원 안에 흰 숫자 (100개 이상은 99+). 알림의 빨간 점과 구분된다.
-// - 승인 전(GUEST)이거나 채팅 애드온이 꺼져 있으면 표시하지 않는다.
+// 헤더 채팅 버튼 (누르면 떠 있는 채팅 창을 열고 닫는다)
+// 안 읽은 수는 빨간 원 안의 숫자(99+)로, GUEST이거나 애드온이 꺼져 있으면 표시하지 않는다.
 export function ChatButton() {
   const { enabled, open, toggle } = useChat();
   const unread = useChatUnreadTotal(enabled);

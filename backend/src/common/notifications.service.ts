@@ -36,12 +36,9 @@ const NOTIFICATION_SELECT = {
 } satisfies Prisma.NotificationSelect;
 
 //! 알림 (핵심 - common)
-// - 알림이 필요한 곳(사용자가 정한 곳)에서 send()를 호출한다. 업무 모듈을 모르고, 이동 주소(link)는 보내는 쪽이 정한다.
-// - 받는 사람마다 행 1개.
-// - 업무 쪽 규칙(*-notifier)은 업무 트랜잭션이 **커밋된 뒤** 호출하고, 실패해도 업무를 막지 않는다(bestEffort). (2026-11-09 사용자 결정)
-//   알림은 빠져도 불편에 그치고, 공지처럼 받는 사람이 많으면 트랜잭션이 길어지기 때문. 감사 로그는 반대로 같은 트랜잭션.
-//   tx 인자는 트랜잭션 안에서 꼭 보내야 하는 경우를 위해 남겨 둔다(현재 사용처 없음).
-// - 삭제는 물리 삭제: 본인 삭제 + 보관 기간(90일)이 지난 알림은 하루 1회 배치로 정리.
+// - 받는 사람마다 행 1개. 이동 주소(link)는 보내는 쪽이 정한다.
+// - *-notifier가 커밋 후 호출하고 실패해도 업무를 막지 않는다. 공지처럼 받는 사람이 많으면 트랜잭션이 길어져서다.
+// - 물리 삭제: 본인 삭제 + 90일 지난 알림은 하루 1회 배치로 정리.
 @Injectable()
 export class NotificationsService {
 
@@ -141,7 +138,7 @@ export class NotificationsService {
         }
     }
 
-    //* 읽은 알림 삭제 (본인 알림만, 물리 삭제) - 안 읽은 알림은 실수로 지워지지 않게 남긴다.
+    //* 읽은 알림 삭제 (본인 알림만, 안 읽은 알림은 남긴다)
     async removeRead( userId: number ) {
         const { count } = await this.prisma.notification.deleteMany({
             where: { userId, isRead: true },
@@ -151,8 +148,8 @@ export class NotificationsService {
     }
 
     //* 보관 기간이 지난 알림 정리 (매일 04:00 KST)
-    // - 서버가 여러 대면 각각 실행되지만, 같은 조건의 DELETE라 중복 실행돼도 결과는 같다.
-    // - 규모가 커지면 월별 파티션 + 오래된 파티션 DROP으로 바꾼다. (대량 DELETE의 시간·VACUUM 부담)
+    // 서버가 여러 대여도 같은 조건의 DELETE라 중복 실행돼도 결과는 같다.
+    // 규모가 커지면 월별 파티션 DROP으로 바꾼다 (대량 DELETE의 VACUUM 부담).
     @Cron( '0 0 4 * * *', { name: 'notification-cleanup', timeZone: 'Asia/Seoul' } )
     async deleteExpired() {
         const threshold = new Date( Date.now() - NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000 );

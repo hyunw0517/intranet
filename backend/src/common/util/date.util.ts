@@ -1,6 +1,5 @@
 // 회사 기준 시간대(KST) 날짜 계산
-// 서버(EC2)는 보통 UTC로 동작하므로 setHours(0, 0, 0, 0) 같은 서버 시간대 기준 계산을 쓰지 않는다.
-// 사내 인트라넷이라 시간대는 KST(+09:00) 하나로 고정한다. (일광 절약 시간 없음)
+// 서버는 보통 UTC라 setHours(0, 0, 0, 0) 같은 서버 시간대 계산을 쓰지 않고 KST(+09:00)로 고정한다.
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -16,7 +15,7 @@ export function kstDayStart( date: Date ): Date {
 }
 
 //* 주어진 시각의 KST 연·월 경로 ("2026/11")
-// 업로드 파일 저장 위치(images/2026/11/<uuid>.png)에 쓴다. KST 11월 1일 08시(UTC 10월 31일)도 11월 폴더로 간다.
+// 업로드 저장 위치에 쓴다. KST 11월 1일 08시(UTC 10월 31일)도 11월 폴더로 간다.
 export function kstYearMonthPath( date: Date ): string {
     const kst = new Date( date.getTime() + KST_OFFSET_MS );
     const month = String( kst.getUTCMonth() + 1 ).padStart( 2, '0' );

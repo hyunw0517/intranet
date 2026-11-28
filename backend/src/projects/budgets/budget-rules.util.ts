@@ -1,6 +1,6 @@
 import { Prisma } from "src/generated/prisma/client";
 
-//! 예산·그래프 순수 규칙 (DB 없이 단위 테스트, docs/design/projects.md 5-3장)
+//! 예산·그래프 순수 규칙 (DB 없이 단위 테스트)
 
 export const STATS_MONTHS = 12; // 그래프는 최근 12개월
 
@@ -41,7 +41,7 @@ export function fillMonths( months: string[], rows: { month: string; amount: Pri
 
 type CategoryRef = { id: number; name: string; deleted: boolean };
 
-//* 항목별 예산 대비 지출 (공급가액 기준) - 예산이나 지출이 있는 항목만, 예산 없이 쓴 금액도 초과로 본다
+//* 항목별 예산 대비 지출 (공급가액 기준, 예산 없이 쓴 금액도 초과로 본다)
 export function summarizeCategories(
     budgets: { amount: Prisma.Decimal; category: CategoryRef }[],
     expenses: { supplyAmount: Prisma.Decimal; category: CategoryRef }[],

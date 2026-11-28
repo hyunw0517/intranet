@@ -16,7 +16,7 @@ export interface LineApprover {
   jobTitleName: string | null;
 }
 
-// 결재 한 단계 - 여러 명이면 병렬: 모두 승인해야 다음 단계, 한 명이라도 반려하면 문서 반려 (features.md 7.5)
+// 결재 한 단계 - 여러 명이면 병렬: 모두 승인해야 다음 단계, 한 명이라도 반려하면 반려
 export interface LineStepGroup {
   approvers: LineApprover[];
   stepName?: string | null; // 템플릿 단계명 (결재라인 템플릿만)
@@ -49,8 +49,8 @@ export function groupStepRows<T extends { stepOrder: number }>(rows: T[], toAppr
     .filter((g) => g.approvers.length > 0); // 뺀 결재자 때문에 빈 단계는 없앤다
 }
 
-// 결재선 편집: 단계 순서 = 결재 순서. 단계 추가·위아래 이동·삭제, 단계 안에 결재자 추가·빼기.
-// 검사 규칙(전체 1~10명, 중복·본인 불가, 빈 단계 없음)은 화면에서도 막지만 최종 판단은 서버 (features.md 7.5)
+// 결재선 편집: 단계 순서 = 결재 순서
+// 검사 규칙(1~10명, 중복·본인 불가, 빈 단계 없음)은 화면에서도 막지만 최종 판단은 서버
 export function ApprovalLineEditor({ value, onChange, excludeIds = [], withStepNames = false, labelledBy }: ApprovalLineEditorProps) {
   // 결재자 검색 창의 대상: 새 단계 / 기존 단계 index
   const [picking, setPicking] = useState<"new" | number | null>(null);

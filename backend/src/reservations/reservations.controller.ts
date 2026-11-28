@@ -15,9 +15,8 @@ import { ApiBadRequestResponse, ApiConflictResponse, ApiForbiddenResponse, ApiNo
 
 type Actor = Pick<Users, 'id' | 'role' | 'adminPermissions'>;
 
-//* 시설 예약 - 수정·취소·삭제 권한(본인·관리자, 시작 전/후)은 서비스에서 예약마다 확인한다.
-// 고정 경로(schedule, me, admin, recurring, bulk/cancel, bulk/time, bulk)는 ':id'보다 먼저 선언한다.
-// 모듈의 controllers 배열에서도 이 컨트롤러를 마지막에 둔다. ('reservations/:id'가 'reservations/categories'를 먼저 잡지 않게)
+//* 시설 예약 - 권한(본인·관리자, 시작 전/후)은 서비스가 예약마다 확인한다
+// 고정 경로는 ':id'보다 먼저 선언하고, 모듈에서도 이 컨트롤러를 마지막에 둔다.
 @ApiTags('Reservations (시설 예약)')
 @Controller('reservations')
 export class ReservationsController {
@@ -110,7 +109,7 @@ export class ReservationsController {
         return this.reservationsService.bulkCancel( user, body );
     }
 
-    //* 일괄 시간 변경 - 날짜는 그대로, 시각만 같은 시간대로 맞춘다. 한 건이라도 바꿀 수 없으면 전체 실패
+    //* 일괄 시간 변경 (날짜는 그대로, 한 건이라도 안 되면 전체 실패)
     @Patch('bulk/time')
     @Roles(UserRole.USER)
     @ApiOperation({ summary: '예약 일괄 시간 변경', description: '날짜는 예약마다 그대로 두고 시작·종료 시각(HH:mm, KST)을 모두 같은 시간대로 맞춘다. 최대 100건, 한 건이라도 바꿀 수 없으면 전체 실패. 같은 시설·같은 날짜 예약이 둘 이상 섞이면 반드시 겹치므로 400. 관리자가 바꾼 남의 예약은 예약별로 알린다.' })
@@ -125,7 +124,7 @@ export class ReservationsController {
         return this.reservationsService.bulkChangeTime( user, body );
     }
 
-    //* 일괄 삭제 ('bulk'는 ':id'보다 먼저 선언) - 한 건이라도 삭제할 수 없으면 전체 실패
+    //* 일괄 삭제 ('bulk'는 ':id'보다 먼저, 한 건이라도 안 되면 전체 실패)
     @Delete('bulk')
     @Roles(UserRole.USER)
     @ApiOperation({ summary: '예약 일괄 삭제 (soft delete)', description: '최대 100건, 한 건이라도 삭제할 수 없으면 전체 실패. 본인은 시작 전 예약만, 관리자는 지난 예약도 삭제할 수 있다. 삭제된 예약은 목록에서 숨긴다(DB에는 남음). 관리자가 남의 예약을 삭제하면 예약자에게 알린다.' })

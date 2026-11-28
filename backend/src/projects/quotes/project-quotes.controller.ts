@@ -7,8 +7,8 @@ import { CreateProjectQuoteDto, UpdateProjectQuoteDto } from './dto/project-quot
 import { ProjectQuotesService } from './project-quotes.service';
 import { ApiBadRequestResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-//* 견적서 - 참여자 누구나 (서비스에서 프로젝트 권한 확인, docs/design/projects.md 5-1장)
-// 결재 상신(POST …/versions/:versionId/submit)은 결재가 켜졌을 때만 있는 ProjectsApprovalModule의 컨트롤러에 있다.
+//* 견적서 - 참여자 누구나 (서비스에서 프로젝트 권한 확인)
+// 결재 상신 API는 결재가 켜졌을 때만 있는 ProjectsApprovalModule에 있다.
 @ApiTags('Projects · Quotes (견적서)')
 @Controller('projects/:projectId/quotes')
 export class ProjectQuotesController {

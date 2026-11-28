@@ -7,7 +7,7 @@ import { ChatMessagesService } from './chat-messages.service';
 import { ChatMessageContentDto } from './dto/chat-message.dto';
 import { ApiBadRequestResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-//* 채팅 메시지 (features.md 8.4) - 보내기·수정·삭제는 REST, 실시간 전달은 서버가 소켓으로 푸시
+//* 채팅 메시지 - 보내기·수정·삭제는 REST, 실시간 전달은 서버가 소켓으로 푸시
 @ApiTags('Chats · Messages (채팅 메시지)')
 @Controller('chats/:roomId/messages')
 export class ChatMessagesController {

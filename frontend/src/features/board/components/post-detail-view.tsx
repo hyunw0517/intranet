@@ -45,7 +45,7 @@ export function PostDetailView({ boardId, postId }: { boardId: number; postId: n
     return <ErrorState error={error} onRetry={() => refetch()} />;
   }
 
-  // "(수정됨)"은 editedAt으로 판단한다. updatedAt은 조회수·좋아요·고정 변경(post.update)에도 바뀌어 쓸 수 없다. (docs/frontend/fe-06-posts.md)
+  // "(수정됨)"은 editedAt으로 판단한다 (updatedAt은 조회수·좋아요·고정에도 바뀐다)
 
   return (
     <div className="mx-auto grid max-w-4xl gap-6">
@@ -198,8 +198,8 @@ function PostActions({ boardId, post }: { boardId: number; post: PostDetail }) {
   );
 }
 
-// 좋아요 / 좋아요 취소 (처음 상태는 상세 응답의 liked)
-// 성공하면 상세를 다시 요청하지 않고 liked·likeCount만 고친다. (상세 조회는 조회수를 올린다)
+// 좋아요 / 좋아요 취소
+// 상세를 다시 요청하면 조회수가 올라가서 liked·likeCount만 고친다.
 function LikeButton({ boardId, post }: { boardId: number; post: PostDetail }) {
   const cache = usePostCache(boardId);
   const liked = post.liked;

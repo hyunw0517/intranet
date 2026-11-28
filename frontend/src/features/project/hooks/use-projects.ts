@@ -21,8 +21,8 @@ import { fetchBudgetCategories, fetchProjectBudget, fetchProjectStats, fetchProj
 import { fetchSales } from "@/services/api/project-sales";
 import { searchUsers } from "@/services/api/users";
 
-// 과제 관리 queryKey - 프로젝트·참여자·과제를 바꾸면 all 접두사로 목록·상세·칸반·내 할 일을 함께 다시 조회한다.
-// (진척도가 목록·상세에 함께 보이므로 과제 하나를 옮겨도 목록 숫자가 바뀐다)
+// 과제 관리 queryKey - 바꾸면 all 접두사로 목록·상세·칸반·내 할 일을 함께 다시 조회한다
+// (과제 하나만 옮겨도 목록의 진척도가 바뀌어서)
 export const projectKeys = {
   all: ["projects"] as const,
   list: (query: ProjectListQuery) => [...projectKeys.all, "list", query] as const,
@@ -40,7 +40,7 @@ export const projectKeys = {
   myTasks: () => [...projectKeys.all, "my-tasks"] as const,
 };
 
-// 거래처는 프로젝트와 따로 바뀌므로 다른 접두사 (거래처 이름을 바꾸면 프로젝트 목록도 다시 보도록 둘 다 무효화한다)
+// 거래처는 다른 접두사 (이름을 바꾸면 프로젝트 목록도 같이 무효화한다)
 export const clientKeys = {
   all: ["project-clients"] as const,
   list: (query: ProjectClientListQuery) => [...clientKeys.all, "list", query] as const,

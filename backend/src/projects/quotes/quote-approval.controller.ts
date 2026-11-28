@@ -6,7 +6,7 @@ import type { ProjectActor } from '../project-access.service';
 import { QuoteApprovalService, SubmitQuoteDto } from './quote-approval';
 import { ApiBadRequestResponse, ApiConflictResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-//* POST /projects/:projectId/quotes/:quoteId/versions/:versionId/submit - 참여자 누구나 (결재가 켜졌을 때만 있는 API)
+//* 견적서 결재 상신 - 참여자 누구나 (결재가 켜졌을 때만 있는 API)
 @ApiTags('Projects · Quotes (견적서)')
 @Controller('projects/:projectId/quotes')
 export class QuoteApprovalController {

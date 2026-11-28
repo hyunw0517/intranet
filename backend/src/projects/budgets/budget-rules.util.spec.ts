@@ -1,5 +1,4 @@
 //! budget-rules.util.ts 단위 테스트 (최근 달 목록, 달별 합계, 항목별 예산 대비 지출, 초과 경고)
-// DB를 쓰지 않는다. 규칙은 docs/design/projects.md 5-3장.
 
 import { Prisma } from 'src/generated/prisma/client';
 import { budgetWarning, fillMonths, monthOf, monthRange, recentMonths, summarizeCategories, yearMonths } from './budget-rules.util';

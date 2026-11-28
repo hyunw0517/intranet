@@ -10,9 +10,8 @@ import { FilesService } from "./files.service";
 import { ATTACHMENT_UPLOAD_OPTIONS, IMAGE_UPLOAD_OPTIONS } from "./util/upload-options.util";
 import { ApiBadRequestResponse, ApiBody, ApiConsumes, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiPayloadTooLargeResponse, ApiProduces, ApiTags } from '@nestjs/swagger';
 
-//* 파일 업로드 (먼저 업로드 → 글 저장 시 id로 연결) + 본문 이미지 공개 조회
-// 첨부 다운로드는 여기 두지 않는다. 대상별 권한 확인이 필요하므로 업무 모듈 컨트롤러가 담당한다.
-// (예: GET /boards/:boardId/posts/:postId/files/:fileId)
+//* 파일 업로드 (먼저 올리고 글 저장 시 id로 연결) + 본문 이미지 공개 조회
+// 첨부 다운로드는 대상별 권한 확인이 필요해서 업무 모듈 컨트롤러에 둔다.
 @ApiTags('Files (파일)')
 @Controller('common/files')
 export class FilesController {
@@ -27,7 +26,7 @@ export class FilesController {
     @UseInterceptors(FileInterceptor('file', IMAGE_UPLOAD_OPTIONS))
     @ApiOperation({ summary: '본문 이미지 업로드', description: 'multipart/form-data, 필드명 file, 한 번에 1개. png·jpg·gif·webp, 20MB까지(svg는 스크립트를 담을 수 있어 제외). 확장자를 먼저 보고 저장 후 파일 시그니처로 실제 형식을 다시 확인한다. 썸네일도 만든다. 업로드만으로는 어디에도 연결되지 않고, 게시글·프로필 저장 시 연결된다. 응답의 url은 로그인 없이 열리는 공개 uuid 주소다.' })
     @ApiConsumes('multipart/form-data')
-    @ApiBody({ schema: { type: 'object', required: [ 'file' ], properties: { file: { type: 'string', format: 'binary' } } } }) // multipart는 DTO로 표현되지 않아 직접 적는다 (docs/api.md 3.3 예외)
+    @ApiBody({ schema: { type: 'object', required: [ 'file' ], properties: { file: { type: 'string', format: 'binary' } } } }) // multipart는 DTO로 표현되지 않아 직접 적는다 (docs/api.md 예외)
     @ApiBadRequestResponse({ description: '파일 없음(필드명 file), 허용하지 않는 확장자, 이미지가 아니거나 확장자와 실제 형식이 다름, 손상된 이미지' })
     @ApiPayloadTooLargeResponse({ description: '20MB 초과' })
     uploadImage(
@@ -54,7 +53,7 @@ export class FilesController {
     }
 
     //* 본문 이미지 조회 (공개)
-    // <img src>는 Authorization 헤더를 보낼 수 없으므로 로그인 없이 연다. 추측할 수 없는 uuid 파일명이 사실상의 키다.
+    // <img src>는 Authorization 헤더를 못 보내서 로그인 없이 연다. 추측할 수 없는 uuid 파일명이 키 역할을 한다.
     @Get('images/:storedName')
     @IsPublic()
     @ApiOperation({ summary: '본문 이미지 (공개)', description: '<img src>는 Authorization 헤더를 보낼 수 없어 로그인 없이 연다. 추측할 수 없는 uuid 파일명이 사실상의 키다. 하루 캐시(Cache-Control), nosniff.' })
@@ -67,7 +66,7 @@ export class FilesController {
     ) {
         const { stream, mimeType, size } = await this.filesService.openPublicImage( storedName );
 
-        // 같은 주소의 내용은 바뀌지 않으므로 캐시한다. 삭제된 이미지가 캐시로 계속 보이는 기간을 줄이려고 하루로 둔다.
+        // 같은 주소의 내용은 바뀌지 않아 캐시한다. 삭제된 이미지가 오래 보이지 않게 하루로 둔다.
         res.setHeader( 'Cache-Control', 'public, max-age=86400' );
         // 브라우저가 내용을 보고 형식을 추측(MIME sniffing)하지 않게 한다.
         res.setHeader( 'X-Content-Type-Options', 'nosniff' );
@@ -76,7 +75,6 @@ export class FilesController {
     }
 
     //* 본문 이미지 썸네일 조회 (공개, 원본 저장 파일명으로)
-    // 목록 그리드(앨범)에서 쓴다. 원본과 같은 공개 규칙·캐시 정책.
     @Get('thumbnails/:storedName')
     @IsPublic()
     @ApiOperation({ summary: '본문 이미지 썸네일 (공개)', description: '원본 저장 파일명으로 찾는다. 원본이 삭제되면 404, 썸네일이 없으면(썸네일 기능 이전 업로드 등) 원본을 대신 준다. 캐시 정책은 원본과 같다.' })

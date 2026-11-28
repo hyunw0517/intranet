@@ -39,9 +39,9 @@ interface SortableListProps<T extends SortableItemData> {
 }
 
 // 드래그로 순서를 바꾸는 목록 (@dnd-kit)
-// - 손잡이(⠿)를 잡아야만 끌린다. 행 안의 [수정]·[삭제] 버튼 클릭과 겹치지 않게 하기 위함이다.
-// - 키보드: 손잡이에 포커스 → 스페이스/엔터로 잡기 → ↑↓로 이동 → 스페이스/엔터로 놓기 (ESC 취소)
-// - 순서를 바꾸기만 하고 저장하지 않는다. 저장은 호출한 쪽이 [순서 저장]에서 한다.
+// - 손잡이를 잡아야만 끌린다 (행 안 버튼 클릭과 겹치지 않게).
+// - 키보드: 손잡이에서 스페이스/엔터로 잡고 ↑↓로 옮긴 뒤 다시 스페이스/엔터 (ESC 취소)
+// - 저장은 하지 않는다. 호출한 쪽이 [순서 저장]에서 한다.
 export function SortableList<T extends SortableItemData>({
   items,
   onReorder,
@@ -151,9 +151,8 @@ function SortableItem<T extends SortableItemData>({
   );
 }
 
-// 임시 순서를 지금 서버 목록에 맞춘다. (저장 전에 항목이 추가·삭제·이동되어도 드래그한 순서를 지키기 위함)
-// - 남아 있는 항목은 드래그한 순서 그대로, 사라진 항목은 빼고, 새 항목은 서버 순서대로 끝에 붙인다.
-// - 결과는 항상 지금 서버 목록과 id 구성이 같으므로 순서 저장 API의 "전체 일치" 검사를 통과한다.
+// 임시 순서를 지금 서버 목록에 맞춘다. 남은 항목은 드래그한 순서, 사라진 항목은 빼고, 새 항목은 끝에 붙인다.
+// 결과의 id 구성이 항상 서버 목록과 같아서 순서 저장 API의 "전체 일치" 검사를 통과한다.
 function mergeDraft(draft: number[], serverIds: number[]) {
   const server = new Set(serverIds);
   const kept = draft.filter((id) => server.has(id));
@@ -174,9 +173,8 @@ export function useSortDraft(serverIds: number[]) {
   return { orderedIds, changed, setDraft, reset: () => setDraft(null) };
 }
 
-// 트리(부서·게시판)의 상위별 "저장 전 순서" - 형제 그룹마다 따로 정렬하므로 그룹별로 보관한다.
+// 트리(부서·게시판)의 상위별 "저장 전 순서" (형제 그룹마다 따로 보관)
 // childrenOf: 상위 id(null이면 최상위) → 서버 순서의 하위 목록
-// 다른 그룹으로 옮겨진 항목은 원래 그룹에서 빠지고, 옮겨 간 그룹에서는 끝에 붙는다. (mergeDraft)
 export function useGroupedSortDrafts<T extends { id: number }>(childrenOf: Map<number | null, T[]>) {
   const [drafts, setDrafts] = useState<Map<number | null, number[]>>(new Map());
 

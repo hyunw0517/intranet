@@ -25,8 +25,7 @@ const DIALOG_TEXT: Record<QuickDialogType, { title: string; description: string 
 };
 
 // 회원 목록의 [권한·상태] / [직급·소속] 모달
-// 상세 페이지의 구역 컴포넌트를 그대로 재사용한다. 목록 응답에는 입사일·전체 소속이 없으므로 모달을 열 때 상세를 조회한다.
-// 변경은 같은 useAdminUserMutation을 쓰므로 성공하면 목록·상세 캐시가 함께 갱신된다.
+// 상세 페이지의 구역 컴포넌트를 재사용한다. 목록 응답에 입사일·전체 소속이 없어서 열 때 상세를 조회한다.
 export function UserQuickDialog({ state, onClose }: { state: QuickDialogState | null; onClose: () => void }) {
   const text = state ? DIALOG_TEXT[state.type] : DIALOG_TEXT.account;
 

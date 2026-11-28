@@ -45,22 +45,18 @@ const STATUS_LABEL: Record<ApprovalStatus, string> = {
     DRAFT: '임시저장', CANCELLED: '회수', REQUESTED: '결재요청', IN_PROGRESS: '결재중', APPROVED: '승인', REJECTED: '반려',
 };
 
-//! 전자결재 문서 (features.md 7.3~7.5, 2026-11-10 사용자 결정)
+//! 전자결재 문서
 // 상태 전이:  DRAFT ─상신→ REQUESTED ─첫 승인→ IN_PROGRESS ─마지막 단계 완료→ APPROVED
 //                          ├ 회수(기안자, 아무도 승인하기 전까지) → CANCELLED
 //                          └ 반려(현재 단계 결재자, 의견 필수) ─────────────→ REJECTED
-// - 단계 = 같은 stepOrder의 결재자들. 한 단계에 여러 명이면 병렬: 모두 승인해야 다음 단계, 한 명이라도 반려하면 문서 반려.
-//   currentStepOrder = 지금 단계 번호, 그 단계의 결재자 모두가 PENDING이다.
-// - 결재라인은 상신할 때 검사하고 결재자 정보(이름·주 소속 부서·직급·직책)를 스냅샷으로 저장한다. 이후 인사이동과 무관하다.
-// - 결재자는 자기 차례(PENDING)만 처리한다. 반려·회수된 문서는 고치지 않고 "다시 기안"(복사 → 새 DRAFT)한다.
-// ⭐ 동시 처리: 모든 상태 변경은 같은 순서로 실행한다.
-//   ① 문서 행을 "기대한 상태·단계" 조건으로 UPDATE (행 잠금) → 0행이면 409
-//   ② 단계 행을 "기대한 상태·결재자" 조건으로 UPDATE → 0행이면 409 (트랜잭션 전체 롤백)
-//   승인·반려·회수·결재자 교체가 모두 문서 행을 먼저 잠그므로, 서로 겹쳐도 차례대로 실행되고 교착(deadlock)이 생기지 않는다.
-//   같은 단계의 두 사람이 동시에 승인해도 뒤의 요청은 앞 요청이 커밋된 뒤 남은 인원을 세므로, 마지막 승인자만 다음 단계를 연다.
-//   마지막 방어선: DB exclusion constraint (같은 문서의 PENDING 행은 모두 같은 단계 번호)
-// - 최종 승인·상신 시 문서 유형별 처리기를 같은 tx로 호출한다. (휴가 등 업무 반영이 승인과 함께 커밋·롤백)
-// - 상태가 바뀌는 동작마다 ApprovalDocumentHistory(업무 이력)와 감사 로그를 남기고, 알림은 커밋 후 보낸다.
+// - 단계 = 같은 stepOrder의 결재자들. 여러 명이면 병렬: 모두 승인해야 다음 단계, 한 명이라도 반려하면 반려.
+// - 결재라인은 상신할 때 검사하고 결재자 정보를 스냅샷으로 저장한다 (이후 인사이동과 무관).
+// - 반려·회수된 문서는 고치지 않고 "다시 기안"(새 DRAFT로 복사)한다.
+// - 동시 처리: 모든 상태 변경은 ① 문서 행을 기대한 상태로 UPDATE(잠금) ② 단계 행을 기대한 상태로 UPDATE 순서로 한다.
+//   어느 쪽이든 0행이면 409로 전체 롤백. 문서 행을 먼저 잠그므로 서로 겹쳐도 차례대로 돌고 교착이 없다.
+//   같은 단계 두 사람이 동시에 승인해도 뒤 요청은 앞 커밋 뒤의 인원을 세서 마지막 승인자만 다음 단계를 연다.
+//   마지막 방어선은 DB exclusion constraint (같은 문서의 PENDING 행은 모두 같은 단계 번호).
+// - 상신·최종 승인 때 문서 유형별 처리기를 같은 tx로 부른다 (휴가 반영이 승인과 함께 커밋·롤백).
 @Injectable()
 export class ApprovalDocumentsService {
 
@@ -128,8 +124,8 @@ export class ApprovalDocumentsService {
         );
     }
 
-    //* 결재함 탭 건수 (2026-11-10 사용자 결정) - 확인할 것만 센다
-    // 결재 대기·결재 예정·임시저장 = 목록 전체 개수와 같음 / 기안함 = 결재요청·결재중인 내 문서만 (목록은 완료·반려·회수까지 보임)
+    //* 결재함 탭 건수 - 확인할 것만 센다
+    // 기안함만 목록과 다르게 결재요청·결재중인 문서만 센다
     async counts( user: Actor ){
         const [ pending, upcoming, mine, drafts ] = await Promise.all([
             this.prisma.approvalDocument.count({ where: this.boxWhere( user, ApprovalBox.PENDING ) }),
@@ -140,7 +136,7 @@ export class ApprovalDocumentsService {
         return { pending, upcoming, mine, drafts };
     }
 
-    //* 결재함 조건 (목록·건수 공용 - 같은 조건을 두 곳에 쓰지 않게)
+    //* 결재함 조건 (목록·건수 공용)
     private boxWhere( user: Actor, box: typeof ApprovalBox.PENDING | typeof ApprovalBox.UPCOMING | typeof ApprovalBox.DRAFTS ): Prisma.ApprovalDocumentWhereInput {
         switch ( box ) {
             case ApprovalBox.PENDING:
@@ -201,7 +197,7 @@ export class ApprovalDocumentsService {
             },
         });
 
-        // 남은 단계 결재자가 지금도 결재할 수 있는지 ("결재자 삭제됨" 표시 → 관리자 교체)
+        // 남은 단계 결재자가 지금도 결재할 수 있는지 (아니면 관리자 교체)
         const remaining = doc.steps.filter( ( s ) => s.status === ApprovalStepStatus.PENDING || s.status === ApprovalStepStatus.WAITING );
         const current = await this.approvers.load( remaining.map( ( s ) => s.approverId ) );
 
@@ -247,8 +243,7 @@ export class ApprovalDocumentsService {
         return this.findOne( user, id );
     }
 
-    //* 업무 옵션(휴가 등)용 임시저장: 문서와 업무 데이터(writeData)를 같은 트랜잭션에서 만든다 → 새 문서 id
-    // 결재 본체는 업무 데이터가 무엇인지 모른다. 처리기가 등록된 유형만 만들 수 있다.
+    //* 업무 옵션(휴가 등)용 임시저장: 문서와 업무 데이터를 같은 트랜잭션에서 만든다
     async createWithData( user: Actor, body: CreateApprovalDocumentDto, auditLabel: string, writeData?: DraftDataWriter ){
         this.registry.get( body.documentType );
         if ( body.approvalLineTemplateId ) {
@@ -275,8 +270,7 @@ export class ApprovalDocumentsService {
         return this.findOne( user, id );
     }
 
-    //* 업무 옵션(휴가 등)용 임시저장 수정: 문서와 업무 데이터(writeData)를 같은 트랜잭션에서 고친다
-    // documentType이 다르면 404 (휴가 API로 일반 문서를 고치지 못하게)
+    //* 업무 옵션용 임시저장 수정 (documentType이 다르면 404)
     async updateWithData( user: Actor, id: number, documentType: HandledDocument['documentType'], body: UpdateApprovalDocumentDto, writeData?: DraftDataWriter ){
         const doc = await this.findMyDocument( user, id );
         if ( doc.documentType !== documentType ) {
@@ -336,8 +330,8 @@ export class ApprovalDocumentsService {
         });
     }
 
-    //* 다시 기안: 반려·회수된 문서를 새 DRAFT로 복사 (원래 문서는 그대로 남아 반려 사유가 보존된다)
-    // 지금 결재자로 지정할 수 없는 회원(퇴사 등)은 빼고 복사한다. (그래서 비게 된 단계는 없앤다) → 새 문서 상세
+    //* 다시 기안: 반려·회수된 문서를 새 DRAFT로 복사 (원래 문서는 반려 사유와 함께 남는다)
+    // 지금 결재자로 지정할 수 없는 회원(퇴사 등)은 빼고, 그래서 빈 단계는 없앤다.
     async copy( user: Actor, id: number ){
         const doc = await this.findMyDocument( user, id );
         this.assertStatus( doc, [ ApprovalStatus.REJECTED, ApprovalStatus.CANCELLED ], '반려되거나 회수한 문서만 다시 기안할 수 있습니다.' );
@@ -451,7 +445,6 @@ export class ApprovalDocumentsService {
 
         const result = await this.prisma.$transaction( async ( tx ) => {
             // ① 문서 행 먼저 (회수·다른 승인·결재자 교체와 같은 순서로 잠근다)
-            //    같은 단계의 다른 결재자가 동시에 승인하면 여기서 기다렸다가, 앞 승인이 커밋된 상태를 보고 이어간다.
             const { count } = await tx.approvalDocument.updateMany({
                 where: { id, status: { in: IN_PROGRESS_STATUSES }, currentStepOrder: step.stepOrder, deleted: false },
                 data: { updatedId: user.id },
@@ -487,7 +480,7 @@ export class ApprovalDocumentsService {
                         where: { approvalDocumentId: id, stepOrder: next.nextOrder, status: ApprovalStepStatus.WAITING },
                         data: { status: ApprovalStepStatus.PENDING },
                     });
-                    // 알림 대상은 잠근 뒤 다시 읽는다 (트랜잭션 전에 읽은 값이면 그사이 교체된 결재자에게 알림이 갈 수 있다)
+                    // 알림 대상은 잠근 뒤 다시 읽는다 (그사이 교체된 결재자에게 가지 않게)
                     nextApproverIds = ( await tx.approvalDocumentStep.findMany({
                         where: { approvalDocumentId: id, stepOrder: next.nextOrder },
                         select: { approverId: true },
@@ -550,7 +543,7 @@ export class ApprovalDocumentsService {
         return this.findOne( user, id );
     }
 
-    //* 관리자 결재자 교체: 진행 중 문서의 남은 결재자(PENDING·WAITING) 한 명 (퇴사·휴직·삭제된 결재자 대응)
+    //* 관리자 결재자 교체: 진행 중 문서의 남은 결재자 한 명 (퇴사·휴직 대응)
     async replaceApprover( user: Actor, id: number, stepId: number, body: ReplaceApproverDto ){
         const doc = await this.findDocument( id );
         if ( !IN_PROGRESS_STATUSES.includes( doc.status ) ) {
@@ -647,7 +640,6 @@ export class ApprovalDocumentsService {
     }
 
     // 임시저장 단계 검사 → 저장할 단계 행 (단계 번호 1부터, 같은 단계 = 같은 번호)
-    // 0명 허용, 빈 단계 불가, 전체 최대 10명, 중복·본인 불가, 지정 가능한 회원
     private async checkDraftSteps( user: Actor, groups: number[][] ){
         const error = checkStepGroups( groups, { minSteps: 0, requesterId: user.id } );
         if ( error ) throw new BadRequestException( error );
@@ -662,7 +654,7 @@ export class ApprovalDocumentsService {
         }) ) );
     }
 
-    // 본문 정제 (게시판과 같은 허용 목록, 본문 이미지는 쓰지 않음 - 공개 uuid 주소라 결재 문서에 맞지 않음)
+    // 본문 정제 (본문 이미지는 공개 주소라 결재 문서에서는 쓰지 않는다)
     private toContent( content: string | null | undefined ){
         return sanitizeEditorHtml( content, { allowImage: () => false } ).html;
     }
@@ -685,13 +677,13 @@ export class ApprovalDocumentsService {
         return doc;
     }
 
-    //* 업무 옵션(휴가 등)이 문서에 딸린 업무 데이터를 보여 주기 전에 쓰는 열람 권한 확인 (볼 수 없으면 404)
+    //* 업무 데이터를 보여 주기 전 열람 권한 확인 (볼 수 없으면 404)
     async assertVisible( user: Actor, id: number ){
         const doc = await this.findVisible( user, id );
         return { id: doc.id, documentType: doc.documentType, status: doc.status, requesterId: doc.requesterId };
     }
 
-    //* 볼 수 있는 문서 (기안자 + 결재라인 전원 + 결재라인 관리 기능을 가진 관리자, DRAFT는 기안자만) - 아니면 404
+    //* 볼 수 있는 문서 (기안자·결재라인·결재라인 관리자, DRAFT는 기안자만) - 아니면 404
     private async findVisible( user: Actor, id: number ): Promise<DocumentRow> {
         const doc = await this.findDocument( id );
         const isRequester = doc.requesterId === user.id;
@@ -721,7 +713,7 @@ export class ApprovalDocumentsService {
         }
         const step = doc.steps.find( ( s ) => s.approverId === user.id && s.stepOrder === doc.currentStepOrder );
         if ( !step || step.status !== ApprovalStepStatus.PENDING ) {
-            // 이미 처리한 결재를 다시 누른 경우 (두 탭·연타로 늦게 도착한 요청)
+            // 이미 처리한 결재를 다시 누른 경우 (두 탭·연타)
             if ( doc.steps.some( ( s ) => s.approverId === user.id && ( s.status === ApprovalStepStatus.APPROVED || s.status === ApprovalStepStatus.REJECTED ) ) ) {
                 throw new ConflictException( '이미 처리한 결재입니다.' );
             }

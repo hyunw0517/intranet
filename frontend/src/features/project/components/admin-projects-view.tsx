@@ -19,7 +19,7 @@ import { useBudgetCategories, useProjectMutation, useProjectStats, useProjectSta
 import { BudgetCompareChart, MonthlyAmountChart, TopClientsChart } from "./charts-lazy";
 import { DeletedProjectsView } from "./deleted-projects-view";
 
-// 관리자 - 프로젝트 관리: 전사 통계 / 비용 항목 / 삭제된 프로젝트 (과제 관리 관리자, docs/design/projects.md 5-3장)
+// 관리자 - 프로젝트 관리: 전사 통계 / 비용 항목 / 삭제된 프로젝트
 export function AdminProjectsView() {
   return (
     <Tabs defaultValue="stats">

@@ -18,10 +18,9 @@ import { CalendarMonthGrid } from "./calendar-month-grid";
 
 type CalendarViewMode = "month" | "list";
 
-// 캘린더 게시판 화면: 기본은 월간 달력, [목록]을 누르면 그달 일정 목록
-// - 보고 있는 달·보기 방식은 URL(?month=2026-11&view=list)에 둔다. (상세에서 뒤로 가거나 새로고침해도 유지)
-// - 일정은 달력에 보이는 칸 범위(앞뒤 주 포함)로 한 번에 받는다. 목록은 그중 이번 달과 겹치는 일정만.
-// - 비밀 일정은 서버가 작성자 본인에게만 내려준다.
+// 캘린더 게시판 화면: 기본은 월간 달력, [목록]이면 그달 일정 목록
+// - 달·보기 방식은 URL에 둔다 (뒤로 가기·새로고침해도 유지).
+// - 일정은 달력에 보이는 칸 범위로 한 번에 받는다.
 export function CalendarBoard({ boardId, board }: { boardId: number; board: PostBoardInfo }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -33,8 +32,8 @@ export function CalendarBoard({ boardId, board }: { boardId: number; board: Post
   const range = gridRange(weeks);
   const { data, isPending, isError, error, refetch, isPlaceholderData } = useBoardEvents(boardId, range);
 
-  // 휴가자 표시: 게시판 옵션이 켜져 있고(일정 응답의 showLeaves) 휴가 애드온이 켜져 있을 때만 휴가 API를 부른다.
-  // 게시판(핵심)은 휴가를 모르므로 두 API를 화면에서 합친다. 휴가를 못 받아도 일정은 그대로 보여 준다.
+  // 휴가자 표시는 게시판 옵션과 휴가 애드온이 둘 다 켜져 있을 때만 휴가 API를 부른다.
+  // 게시판(핵심)은 휴가를 몰라서 두 API를 화면에서 합친다.
   const { data: addons } = useEnabledAddons();
   const showLeaves = !!data?.showLeaves && (addons?.enabled.includes("leaves") ?? false);
   const leaves = useLeaveCalendar(range, showLeaves);

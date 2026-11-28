@@ -1,5 +1,5 @@
 // 백엔드 organization/org-chart.controller 대응 - 사용자용 조직도·사원 검색 (USER 이상)
-// 관리자용 /departments·/users와 달리 다른 직원에게 보여도 되는 값만 온다. (이메일·회사 전화 공개, 휴대폰·생일 비공개)
+// 다른 직원에게 보여도 되는 값만 온다 (휴대폰·생일 비공개).
 import { apiFetch } from "@/services/api-client";
 import type { PageResult } from "@/types/pagination";
 

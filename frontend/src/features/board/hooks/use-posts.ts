@@ -12,7 +12,7 @@ export const postKeys = {
   all: [...boardKeys.all, "posts"] as const,
   lists: (boardId: number) => [...postKeys.all, "list", boardId] as const,
   list: (boardId: number, query: PostListQuery) => [...postKeys.lists(boardId), query] as const,
-  // 캘린더 일정은 목록과 응답 모양이 달라 lists 아래에 두지 않는다. (syncListAfterView가 lists 아래를 목록 모양으로 고침)
+  // 캘린더 일정은 응답 모양이 달라 lists 아래에 두지 않는다
   events: (boardId: number) => [...postKeys.all, "events", boardId] as const,
   detail: (boardId: number, postId: number) => [...postKeys.all, "detail", boardId, postId] as const,
   comments: (boardId: number, postId: number) => [...postKeys.all, "comments", boardId, postId] as const,
@@ -35,9 +35,8 @@ export function usePosts(boardId: number, query: PostListQuery) {
   });
 }
 
-// 게시글 상세 - 서버가 조회할 때마다 조회수를 올리므로 다시 요청하는 일을 줄인다.
-// - 좋아요·고정 후에는 invalidate 대신 setQueryData로 캐시만 고친다. (usePostCache)
-// - staleTime: 수정 화면처럼 이미 받은 본문을 다시 쓰는 곳은 Infinity로 넘긴다.
+// 게시글 상세 - 조회할 때마다 조회수가 올라서 다시 요청하는 일을 줄인다.
+// 좋아요·고정 후에는 setQueryData로 캐시만 고치고, 수정 화면처럼 다시 쓰는 곳은 staleTime을 Infinity로 넘긴다.
 export function usePost(boardId: number, postId: number, options?: { staleTime?: number }) {
   const queryClient = useQueryClient();
   return useQuery({
@@ -51,10 +50,9 @@ export function usePost(boardId: number, postId: number, options?: { staleTime?:
   });
 }
 
-// 상세를 조회하면 서버의 조회수가 올라간다. 목록 캐시는 그대로라서 뒤로 가면 이전 조회수가 보인다.
-// 1) 캐시된 목록에서 이 글의 조회수·좋아요 수를 상세 응답 값으로 바로 고치고 (돌아왔을 때 이전 숫자가 깜빡이지 않게)
-// 2) 목록을 오래된 값으로 표시해 목록 화면에 돌아오면 다시 받는다. (다른 사람이 올린 글·댓글 수 반영)
-//    목록은 지금 화면에 없으므로 refetchType: "none" - 바로 요청하지 않고 다음 마운트 때 요청한다.
+// 상세를 보면 서버 조회수가 올라가는데 목록 캐시는 그대로라서,
+// 1) 캐시된 목록의 조회수·좋아요 수를 상세 값으로 바로 고치고
+// 2) 목록을 stale로 표시해 돌아왔을 때 다시 받는다 (refetchType: "none"이라 지금은 요청하지 않는다).
 function syncListAfterView(queryClient: QueryClient, boardId: number, post: PostDetail) {
   queryClient.setQueriesData<PostListResult>({ queryKey: postKeys.lists(boardId) }, (prev) => {
     if (!prev) return prev;
@@ -89,8 +87,7 @@ export function usePostCache(boardId: number) {
         queryClient.invalidateQueries({ queryKey: postKeys.lists(boardId) }),
         queryClient.invalidateQueries({ queryKey: postKeys.events(boardId) }),
       ]),
-    // 수정·삭제 후: 지금 보고 있는 화면에서 바로 다시 요청하지 않고(조회수·404 깜빡임 방지) 오래된 값으로 표시만 한다.
-    // 다음에 상세에 들어올 때 새로 조회한다.
+    // 수정·삭제 후에는 바로 다시 요청하지 않고(조회수·404 깜빡임 방지) stale로만 표시한다.
     markDetailStale: (postId: number) =>
       queryClient.invalidateQueries({ queryKey: postKeys.detail(boardId, postId), refetchType: "none" }),
     invalidateComments: (postId: number) =>
